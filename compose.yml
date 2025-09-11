@@ -1,0 +1,74 @@
+services:
+  db:
+    image: mysql:latest
+    container_name: ${PROJECT_NAME}_db
+    restart: always
+    environment:
+      MYSQL_DATABASE: ${DATABASE_NAME}
+      MYSQL_USER: ${DATABASE_USER}
+      MYSQL_PASSWORD: ${DATABASE_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${DATABASE_ROOT_PASSWORD}
+    env_file:
+      - .env
+    volumes:
+      - mysql_data:/var/lib/mysql
+    ports:
+      - "3306:3306"
+    networks:
+      - internal
+  backend:
+    image: 0noder4/itp_system32:backend_alfa_0.0
+    container_name: ${PROJECT_NAME}_backend
+    build:
+      context: backend
+      target: ${ENV}
+    environment:
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
+      DEBUG: ${DEBUG}
+      DJANGO_LOGLEVEL: ${DJANGO_LOGLEVEL}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS}
+      DATABASE_ENGINE: ${DATABASE_ENGINE}
+      DATABASE_NAME: ${DATABASE_NAME}
+      DATABASE_USERNAME: ${DATABASE_USER}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      DATABASE_HOST: ${DATABASE_HOST}
+      DATABASE_PORT: ${DATABASE_PORT}
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    networks:
+      - internal
+    depends_on:
+      - db
+    volumes:
+      - ./backend:/app
+  frontend:
+    image: 0noder4/itp_system32:frontend_alfa_0.0
+    container_name: ${PROJECT_NAME}_frontend
+    restart: on-failure
+    build:
+      context: frontend
+      target: ${ENV}
+      args:
+        NODE_ENV: ${ENV}
+    environment:
+      NODE_ENV: ${ENV}
+      NODE_TLS_REJECT_UNAUTHORIZED: 0
+    env_file:
+      - .env
+    ports:
+      - 3000:3000
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    networks:
+      - internal
+    depends_on:
+      - backend
+
+volumes:
+  mysql_data:
+networks:
+  internal:

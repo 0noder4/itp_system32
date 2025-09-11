@@ -1,0 +1,21 @@
+*.env
+
+# Ignore nextJS specific
+node_modules/
+.next/
+.swc/
+
+#ignore Python specific
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.sqlite3
+*.db
+*.log
+*.pot
+*.py[cod]
+*$py.class
+
+# Ignore database files
+/mysql_data/**
