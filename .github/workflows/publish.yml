@@ -8,7 +8,7 @@ jobs:
   build-backend:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4\
+      - uses: actions/checkout@v4
       - run: ls
       - name: Load .env file
         uses: xom9ikk/dotenv@v2.3.0
