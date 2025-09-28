@@ -17,7 +17,7 @@ services:
     networks:
       - internal
   backend:
-    image: 0noder4/itp_system32:backend_alfa_0.0
+    image: 0noder4/itp_system32_backend:${backend_version}
     container_name: ${PROJECT_NAME}_backend
     build:
       context: backend
@@ -44,7 +44,7 @@ services:
     volumes:
       - ./backend:/app
   frontend:
-    image: 0noder4/itp_system32:frontend_alfa_0.0
+    image: 0noder4/itp_system32_frontend:${frontend_version}
     container_name: ${PROJECT_NAME}_frontend
     restart: on-failure
     build:

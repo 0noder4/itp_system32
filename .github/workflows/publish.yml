@@ -1,0 +1,13 @@
+name: pipeline
+on:
+  push:
+    branches:
+      - develop
+jobs:
+  build-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dotenv Action
+        uses: falti/dotenv-action@v1.1.4
+      - name: Print env
+        run: echo "${{env.backend_version}}"
