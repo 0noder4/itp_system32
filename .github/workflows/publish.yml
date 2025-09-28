@@ -9,7 +9,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: ls
       - name: setup docker buildx
         uses: docker/setup-buildx-action@v2
       - name: docker login
@@ -21,7 +20,7 @@ jobs:
         id: build-push-backend
         uses: docker/build-push-action@v3
         with:
-          context: ./backend
+          context: "{{defaultContext}}:backend"
           file: Dockerfile
           push: true
           tags: 0noder4/itp_system32_backend:dev_${{ github.run_number }}
