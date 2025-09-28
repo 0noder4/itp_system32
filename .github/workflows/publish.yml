@@ -10,9 +10,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: ls
-      - name: Load .env file
-        uses: xom9ikk/dotenv@v2.3.0
+      - name: setup docker buildx
+        uses: docker/setup-buildx-action@v2
+      - name: docker login
+        uses: docker/login-action@v2
         with:
-          load-mode: strict
-      - name: Print env
-        run: echo "${{env.backend_version}}"
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: build and publish backend image
+        id: build-push-backend
+        uses: docker/build-push-action@v3
+        with:
+          context: ./backend
+          file: Dockerfile
+          push: true
+          tags: 0noder4/itp_system32_backend:dev_${{ github.run_number }}
