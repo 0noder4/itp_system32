@@ -12,7 +12,6 @@ jobs:
       - name: Load .env file
         uses: xom9ikk/dotenv@v2.3.0
         with:
-          mode: development
           load-mode: strict
       - name: Print env
         run: echo "${{env.backend_version}}"
