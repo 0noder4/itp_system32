@@ -85,19 +85,19 @@ CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
 FROM base AS production
 
 # Create non-root user for security
-RUN useradd -m -r appuser && \
-    chown -R appuser /app
+# RUN useradd -m -r appuser && \
+#     chown -R appuser /app
 
-# Create staticfiles directory and set permissions
-RUN mkdir -p /app/staticfiles /app/mediafiles && \
-    chown -R appuser:appuser /app/staticfiles /app/mediafiles
+# # Create staticfiles directory and set permissions
+# RUN mkdir -p /app/staticfiles /app/mediafiles && \
+#     chown -R appuser:appuser /app/staticfiles /app/mediafiles
 
 # Set Django environment to production
 ENV DJANGO_SETTINGS_MODULE=backend.settings
 ENV DEBUG=False
 
 # Switch to non-root user
-USER appuser
+# USER appuser
 
 # Collect static files
 RUN python manage.py collectstatic --noinput
