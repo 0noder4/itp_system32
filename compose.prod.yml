@@ -60,9 +60,14 @@ services:
     image: 0noder4/itp_system32_frontend:${FRONTEND_VERSION:-latest}
     container_name: ${PROJECT_NAME}_frontend
     restart: unless-stopped
+    build:
+      context: frontend
+      target: production
+      args:
+        NEXT_PUBLIC_API_URL: ${API_URL}
     environment:
       NODE_ENV: ${ENV:-production}
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+      NEXT_PUBLIC_API_URL: ${API_URL}
     env_file:
       - .env
     ports:
