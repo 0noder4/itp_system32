@@ -79,11 +79,14 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/3.2/ref/settings/#databases
 
+# Get database engine - handle both formats: 'mysql' or 'django.db.backends.mysql'
+db_engine = os.getenv('DATABASE_ENGINE', 'sqlite3')
+if not db_engine.startswith('django.db.backends.'):
+    db_engine = 'django.db.backends.{}'.format(db_engine)
+
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.{}'.format(
-            os.getenv('DATABASE_ENGINE', 'sqlite3')
-        ),
+        'ENGINE': db_engine,
         'NAME': os.getenv('DATABASE_NAME', 'polls'),
         'USER': os.getenv('DATABASE_USERNAME', 'myprojectuser'),
         'PASSWORD': os.getenv('DATABASE_PASSWORD', 'password'),

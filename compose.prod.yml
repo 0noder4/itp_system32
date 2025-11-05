@@ -37,7 +37,6 @@ services:
       DATABASE_PASSWORD: ${DATABASE_PASSWORD}
       DATABASE_HOST: ${DATABASE_HOST:-db}
       DATABASE_PORT: ${DATABASE_PORT:-3306}
-      DJANGO_SETTINGS_MODULE: backend.settings
     env_file:
       - .env
     ports:
