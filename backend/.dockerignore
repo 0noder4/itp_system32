@@ -1,0 +1,12 @@
+__pycache__/
+migrations/
+
+*.pyc
+*.pyo
+*.pyd
+*.sqlite3
+*.db
+*.log
+*.pot
+*.py[cod]
+*$py.class
