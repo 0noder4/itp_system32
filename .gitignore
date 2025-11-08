@@ -1,4 +1,7 @@
 *.env
+.venv
+.venv/*
+*/migrations/*
 
 # Ignore nextJS specific
 node_modules/
