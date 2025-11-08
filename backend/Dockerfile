@@ -60,7 +60,7 @@ EXPOSE 8000
 
 # Set entrypoint to run migrations before starting the server
 # Using bash explicitly to handle volume mounts that may override permissions
-# ENTRYPOINT ["/bin/bash", "/app/docker-entrypoint.sh"]
+ENTRYPOINT ["/bin/bash", "/app/docker-entrypoint.sh"]
 
 # Stage 3: Development stage
 FROM base AS development

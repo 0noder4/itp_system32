@@ -4,6 +4,7 @@ from .serializers import CompanySerializer
 from django.http import HttpResponse, JsonResponse
 from rest_framework.parsers import JSONParser
 from django.views.decorators.csrf import csrf_exempt
+from django.core.mail import send_mail
 
 from rest_framework import generics
 
