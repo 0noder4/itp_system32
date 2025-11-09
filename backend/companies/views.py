@@ -53,3 +53,9 @@ def company(request, id): #stowrzyc/wyswietlic/usunac/.. FIRMĘ
     elif request.method == "DELETE":
         company.delete()
         return HttpResponse(status=204)
+
+
+from .forms.stage1_form import CompFormStage1, ContPersFormStage1
+#---forms:----
+#TODO: polaczyc dwa formularze do stage1. 
+#najpierw trzeba zapisac company, a potem odczytac contact person, ktoremu przypiszę relację z company i wtedy zapisac CP
