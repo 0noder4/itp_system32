@@ -38,7 +38,7 @@ def get_expiry_time():
     return django.utils.timezone.now() + datetime.timedelta(days=7)
 
 class CompanyInvitation(models.Model):
-    email = models.EmailField
+    email = models.EmailField()
     company_name = models.CharField(max_length=255)
     token = models.UUIDField(default=uuid.uuid4, unique=True)
     created_at = models.DateTimeField(auto_now_add = True)

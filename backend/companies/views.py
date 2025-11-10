@@ -1,6 +1,6 @@
 from django.shortcuts import render
-from .models import Company
-from .serializers import CompanySerializer
+from .models import Company, CompanyInvitation
+from .serializers import CompanySerializer, CompanyInvitationSerializer, CompanyRegistrationSerializer
 from django.http import HttpResponse, JsonResponse
 from rest_framework.parsers import JSONParser
 from django.views.decorators.csrf import csrf_exempt
@@ -54,3 +54,24 @@ def company(request, id): #stowrzyc/wyswietlic/usunac/.. FIRMĘ
     elif request.method == "DELETE":
         company.delete()
         return HttpResponse(status=204)
+
+class CompanyInvitationView(generics.CreateAPIView):
+    serializer_class = CompanyInvitationSerializer
+    queryset = CompanyInvitation.objects.all()
+    authentication_classes = []
+    permission_classes = []
+
+    def perform_create(self, serializer ):
+        invitation = serializer.save()
+        from django.core.mail import send_mail
+        send_mail(
+            "Invitation mail",
+            f"Token{invitation.token}",
+            "bs@bs.com",
+            [invitation.email]
+        )
+
+class CompanyRegistrationView(generics.CreateAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = CompanyRegistrationSerializer
