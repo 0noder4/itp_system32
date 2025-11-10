@@ -332,5 +332,10 @@ jak z wlasna no to details i pytanie co chca od nas
 
 from .forms.stage1_form import CompFormStage1, ContPersFormStage1
 #---forms:----
-#TODO: polaczyc dwa formularze do stage1. 
-#najpierw trzeba zapisac company, a potem odczytac contact person, ktoremu przypiszę relację z company i wtedy zapisac CP
+'''TODO: polaczyc dwa formularze do stage1. 
+najpierw trzeba zapisac company, a potem odczytac contact person, ktoremu przypiszę relację z company i wtedy zapisac CP
+
+forms stage2 :
+jak z wlasna no to details i pytanie co chca od nas 
+
+'''

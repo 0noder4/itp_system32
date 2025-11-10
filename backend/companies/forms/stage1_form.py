@@ -13,7 +13,6 @@ class CompFormStage1(ModelForm):
                     "postal_code",
                     "nip",
                     ]
-        model = ContactPerson
 
 class ContPersFormStage1(ModelForm):
     class Meta:
