@@ -60,6 +60,7 @@ FRONTEND_VERSION=latest
 ### 3. SSH Key Setup
 
 #### On your VPS:
+
 ```bash
 # Create SSH key pair (if not exists)
 ssh-keygen -t rsa -b 4096 -C "github-actions"
@@ -72,16 +73,17 @@ cat ~/.ssh/id_rsa
 ```
 
 #### On GitHub:
+
 1. Go to your repository settings
 2. Navigate to "Secrets and variables" → "Actions"
 3. Add the following secrets:
 
-| Secret Name | Description | Value |
-|-------------|-------------|-------|
-| `VPS_HOST` | Your VPS IP address or domain | `192.168.1.100` or `your-domain.com` |
-| `VPS_USER` | SSH username | `ubuntu` or `root` |
-| `VPS_SSH_PRIVATE_KEY` | SSH private key content | Content of `~/.ssh/id_rsa` |
-| `DISCORD_WEBHOOK_URL` | Discord webhook URL | `https://discord.com/api/webhooks/...` |
+| Secret Name           | Description                   | Value                                  |
+| --------------------- | ----------------------------- | -------------------------------------- |
+| `VPS_HOST`            | Your VPS IP address or domain | `192.168.1.100` or `your-domain.com`   |
+| `VPS_USER`            | SSH username                  | `ubuntu` or `root`                     |
+| `VPS_SSH_PRIVATE_KEY` | SSH private key content       | Content of `~/.ssh/id_rsa`             |
+| `DISCORD_WEBHOOK_URL` | Discord webhook URL           | `https://discord.com/api/webhooks/...` |
 
 ### 4. Deploy
 
@@ -185,6 +187,7 @@ docker-compose logs -f db
 ## 🛡️ Security
 
 ### Firewall:
+
 ```bash
 # Allow necessary ports
 sudo ufw allow 22/tcp   # SSH
@@ -198,6 +201,7 @@ sudo ufw enable
 ```
 
 ### SSL/HTTPS:
+
 1. Obtain SSL certificates (Let's Encrypt recommended)
 2. Update nginx configuration
 3. Uncomment HTTPS server block in `nginx/nginx.conf`
@@ -215,6 +219,7 @@ The system includes automatic backup functionality:
 ```
 
 Backups include:
+
 - Database dump
 - Application files
 - Configuration files
@@ -224,16 +229,19 @@ Backups include:
 ### Common Issues:
 
 1. **SSH Connection Failed**:
+
    - Verify SSH key is correct in GitHub secrets
    - Check VPS firewall settings
    - Ensure SSH service is running
 
 2. **Docker Build Failed**:
+
    - Check Docker and Docker Compose installation
    - Verify .env file configuration
    - Check available disk space
 
 3. **Services Not Starting**:
+
    - Check logs: `docker-compose logs`
    - Verify environment variables
    - Check port conflicts
@@ -265,11 +273,13 @@ For production scaling:
 The complete CI/CD pipeline includes:
 
 1. **Build Pipeline** (`publish.yml`):
+
    - Triggers on push to `develop` branch
    - Builds and pushes Docker images
    - Sends Discord notifications
 
 2. **Deployment Pipeline** (`deploy.yml`):
+
    - Triggers on push to `main`/`production` branch
    - Deploys to VPS
    - Runs health checks
