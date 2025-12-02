@@ -1,13 +1,16 @@
+"use client";
+
 import { RouteGuard } from "@/components/auth/RouteGuard";
 
-export default function FrameLayout({
+export default function PartnerLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
-    <RouteGuard>
+    <RouteGuard allowedUserTypes={["company"]}>
       <div>{children}</div>
     </RouteGuard>
   );
 }
+

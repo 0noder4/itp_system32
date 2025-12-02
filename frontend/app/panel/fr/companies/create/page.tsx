@@ -27,15 +27,15 @@ import { apiClient } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const formInputSchema = z.object({
-  name: z
+  company_name: z
     .string()
     .min(1, "Company name is required.")
-    .max(100, "Company name must be at most 100 characters."),
+    .max(255, "Company name must be at most 255 characters."),
   email: z
     .string()
     .min(1, "Email is required.")
     .email("Please enter a valid email address."),
-  status: z.enum(["main", "partner", "basic"], {
+  company_status: z.enum(["main", "partner", "basic"], {
     message: "Please select a status.",
   }),
 });
@@ -44,25 +44,28 @@ type FormInput = z.infer<typeof formInputSchema>;
 
 export default function Index() {
   const router = useRouter();
+  const [isLoading, setIsLoading] = React.useState(false);
+
   const form = useForm<FormInput>({
     resolver: zodResolver(formInputSchema),
     defaultValues: {
-      name: "",
+      company_name: "",
       email: "",
-      status: "basic",
+      company_status: "basic",
     },
   });
 
   async function onSubmit(data: FormInput) {
+    setIsLoading(true);
     try {
-      const response = await apiClient.post("/api/companies/", {
-        name: data.name,
+      const response = await apiClient.post("/api/invite/", {
+        company_name: data.company_name,
         email: data.email,
-        status: data.status,
+        company_status: data.company_status,
       });
 
-      toast.success("Company created successfully!", {
-        description: `Company "${data.name}" has been created.`,
+      toast.success("Invitation sent successfully!", {
+        description: `An invitation has been sent to ${data.email} for "${data.company_name}".`,
       });
 
       // Navigate back to companies list
@@ -72,42 +75,45 @@ export default function Index() {
         error.response?.data?.message ||
         error.response?.data?.error ||
         Object.values(error.response?.data || {}).flat()[0] ||
-        "Failed to create company. Please try again.";
+        "Failed to send invitation. Please try again.";
 
-      toast.error("Failed to create company", {
+      toast.error("Failed to send invitation", {
         description: errorMessage,
       });
+    } finally {
+      setIsLoading(false);
     }
   }
 
   return (
     <Card className="w-full sm:max-w-md">
       <CardHeader>
-        <CardTitle>Create New Company</CardTitle>
+        <CardTitle>Invite Company</CardTitle>
         <CardDescription>
-          Enter the company details below to create a new company
+          Send an invitation to a company to join the system
         </CardDescription>
       </CardHeader>
       <CardContent>
         <form
-          id="s32-form-create-company"
+          id="s32-form-invite-company"
           onSubmit={form.handleSubmit(onSubmit)}
         >
           <FieldGroup>
             <Controller
-              name="name"
+              name="company_name"
               control={form.control}
               render={({ field, fieldState }) => (
                 <Field data-invalid={fieldState.invalid}>
-                  <FieldLabel htmlFor="s32-form-create-company-name">
+                  <FieldLabel htmlFor="s32-form-invite-company-name">
                     Company Name
                   </FieldLabel>
                   <Input
                     {...field}
-                    id="s32-form-create-company-name"
+                    id="s32-form-invite-company-name"
                     aria-invalid={fieldState.invalid}
                     placeholder="Enter company name"
-                    autoComplete="off"
+                    autoComplete="organization"
+                    disabled={isLoading}
                   />
                   {fieldState.invalid && (
                     <FieldError errors={[fieldState.error]} />
@@ -120,16 +126,17 @@ export default function Index() {
               control={form.control}
               render={({ field, fieldState }) => (
                 <Field data-invalid={fieldState.invalid}>
-                  <FieldLabel htmlFor="s32-form-create-company-email">
+                  <FieldLabel htmlFor="s32-form-invite-company-email">
                     Email
                   </FieldLabel>
                   <Input
                     {...field}
-                    id="s32-form-create-company-email"
+                    id="s32-form-invite-company-email"
                     type="email"
                     aria-invalid={fieldState.invalid}
                     placeholder="company@example.com"
-                    autoComplete="off"
+                    autoComplete="email"
+                    disabled={isLoading}
                   />
                   {fieldState.invalid && (
                     <FieldError errors={[fieldState.error]} />
@@ -138,17 +145,18 @@ export default function Index() {
               )}
             />
             <Controller
-              name="status"
+              name="company_status"
               control={form.control}
               render={({ field, fieldState }) => (
                 <Field data-invalid={fieldState.invalid}>
-                  <FieldLabel htmlFor="s32-form-create-company-status">
+                  <FieldLabel htmlFor="s32-form-invite-company-status">
                     Status
                   </FieldLabel>
                   <select
                     {...field}
-                    id="s32-form-create-company-status"
+                    id="s32-form-invite-company-status"
                     aria-invalid={fieldState.invalid}
+                    disabled={isLoading}
                     className={cn(
                       "file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
                       "focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]",
@@ -170,8 +178,12 @@ export default function Index() {
       </CardContent>
       <CardFooter>
         <Field>
-          <Button type="submit" form="s32-form-create-company">
-            Create Company
+          <Button
+            type="submit"
+            form="s32-form-invite-company"
+            disabled={isLoading}
+          >
+            {isLoading ? "Sending invitation..." : "Send Invitation"}
           </Button>
         </Field>
       </CardFooter>

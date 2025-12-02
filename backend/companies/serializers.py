@@ -35,6 +35,7 @@ class CompanyRegistrationSerializer(serializers.Serializer):
             type = 'company',
             password = password
         )
+
         invitation.is_accepted = True
         invitation.save()
         return user
