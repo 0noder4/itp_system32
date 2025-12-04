@@ -84,9 +84,9 @@ export const getUserInfo = (): {
 export const getUserRoute = (userType: UserType | null): string => {
   switch (userType) {
     case "admin":
-      return "/panel/fr";
+      return "/panel/staff";
     case "staff":
-      return "/panel/fr";
+      return "/panel/staff";
     case "company":
       return "/panel/partner";
     default:
@@ -135,4 +135,65 @@ export const clearTokens = (): void => {
  */
 export const isAuthenticated = (): boolean => {
   return getAccessToken() !== null;
+};
+
+/**
+ * Check if access token is expired or will expire soon
+ * @param bufferSeconds - Number of seconds before expiration to consider token as expired (default: 60)
+ */
+export const isTokenExpired = (bufferSeconds: number = 60): boolean => {
+  const token = getAccessToken();
+  if (!token) return true;
+
+  const decoded = decodeToken(token);
+  if (!decoded || !decoded.exp) return true;
+
+  // Check if token expires within bufferSeconds
+  const expirationTime = decoded.exp * 1000; // Convert to milliseconds
+  const currentTime = Date.now();
+  return currentTime >= expirationTime - bufferSeconds * 1000;
+};
+
+/**
+ * Refresh the access token using the refresh token
+ * @returns Promise with new token response or null if refresh fails
+ */
+export const refreshAccessToken = async (): Promise<TokenResponse | null> => {
+  if (typeof window === "undefined") return null;
+
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) return null;
+
+  try {
+    // Use a plain axios instance to avoid circular dependency with apiClient
+    const axios = (await import("axios")).default;
+    const baseURL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+    const response = await axios.post(
+      `${baseURL}/api/token/refresh/`,
+      { refresh: refreshToken },
+      {
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    // The refresh endpoint returns { access: string } or { access: string, refresh: string }
+    // depending on ROTATE_REFRESH_TOKENS setting
+    // If refresh token is rotated, use the new one; otherwise keep the old one
+    const newTokens: TokenResponse = {
+      access: response.data.access,
+      refresh: response.data.refresh || refreshToken, // Use new refresh token if provided, otherwise keep old one
+    };
+
+    // Update stored tokens
+    storeTokens(newTokens);
+    return newTokens;
+  } catch (error) {
+    console.error("Error refreshing token:", error);
+    // If refresh fails, clear tokens
+    clearTokens();
+    return null;
+  }
 };
