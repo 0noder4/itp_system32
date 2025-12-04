@@ -78,7 +78,14 @@ class CompanyInvitationView(generics.CreateAPIView):
 
     def perform_create(self, serializer ):
         invitation = serializer.save()
-        registration_link = f"{settings.FRONTEND_BASE_URL}/auth/register?token={invitation.token}"
+        if settings.DEBUG:
+            # Backend API endpoint for testing
+            backend_url = "http://localhost:8000"
+            registration_link = f"{backend_url}/api/register/?token={invitation.token}"
+        else:
+            # Frontend URL for production
+            registration_link = f"{settings.FRONTEND_BASE_URL}/auth/register?token={invitation.token}"
+
         message = (
             "You have been invited to join the itp_system32 platform.\n\n"
             f"Company: {invitation.company_name}\n"
