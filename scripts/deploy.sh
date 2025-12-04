@@ -12,7 +12,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 # Configuration
-COMPOSE_FILE="compose.prod.yml"
+COMPOSE_FILE="compose.yml"
 ENV_FILE=".env"
 MAX_WAIT_TIME=120  # Maximum wait time for services to be healthy (seconds)
 HEALTH_CHECK_INTERVAL=5  # Interval between health checks (seconds)

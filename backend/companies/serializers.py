@@ -36,6 +36,13 @@ class CompanyRegistrationSerializer(serializers.Serializer):
             password = password
         )
 
+        company = Company.objects.create(
+            name = invitation.company_name,
+            email = invitation.email,
+            representative = user,
+            status = invitation.company_status
+        )
+
         invitation.is_accepted = True
         invitation.save()
         return user

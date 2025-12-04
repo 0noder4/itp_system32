@@ -1,5 +1,14 @@
-import axios, { AxiosError, InternalAxiosRequestConfig } from "axios";
-import { getAccessToken, clearTokens } from "./auth";
+import axios, {
+  AxiosError,
+  InternalAxiosRequestConfig,
+  AxiosResponse,
+} from "axios";
+import {
+  getAccessToken,
+  clearTokens,
+  refreshAccessToken,
+  isTokenExpired,
+} from "./auth";
 
 // Get API base URL from environment variable or use default
 // For client-side requests, always use the hostname (browser can't access Docker service names)
@@ -37,13 +46,100 @@ export const apiClient = axios.create({
   withCredentials: true, // Important for session authentication
 });
 
-// Request interceptor to add token to headers
-apiClient.interceptors.request.use(
-  (config: InternalAxiosRequestConfig) => {
-    const token = getAccessToken();
-    if (token && config.headers) {
-      config.headers.Authorization = `Bearer ${token}`;
+// Flag to prevent multiple simultaneous refresh attempts
+let isRefreshing = false;
+let refreshPromise: Promise<string | null> | null = null;
+let failedQueue: Array<{
+  resolve: (value?: any) => void;
+  reject: (reason?: any) => void;
+}> = [];
+
+const processQueue = (
+  error: AxiosError | null,
+  token: string | null = null
+) => {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token);
     }
+  });
+  failedQueue = [];
+};
+
+// Request interceptor to add token to headers and refresh if needed
+apiClient.interceptors.request.use(
+  async (config: InternalAxiosRequestConfig) => {
+    // Skip token refresh for refresh endpoint and login endpoint
+    if (
+      config.url?.includes("/api/token/refresh/") ||
+      (config.url?.includes("/api/token/") && config.method === "post")
+    ) {
+      return config;
+    }
+
+    // Check if token is expired or about to expire, refresh proactively
+    if (isTokenExpired(60)) {
+      // Token expires within 60 seconds, try to refresh
+      if (!isRefreshing && !refreshPromise) {
+        isRefreshing = true;
+        refreshPromise = (async () => {
+          try {
+            const newTokens = await refreshAccessToken();
+            if (newTokens) {
+              processQueue(null, newTokens.access);
+              return newTokens.access;
+            } else {
+              // Refresh failed, clear tokens
+              processQueue(null, null);
+              clearTokens();
+              if (
+                typeof window !== "undefined" &&
+                window.location.pathname !== "/auth/login"
+              ) {
+                window.location.href = "/auth/login";
+              }
+              return null;
+            }
+          } catch (error) {
+            processQueue(null, null);
+            clearTokens();
+            if (
+              typeof window !== "undefined" &&
+              window.location.pathname !== "/auth/login"
+            ) {
+              window.location.href = "/auth/login";
+            }
+            return null;
+          } finally {
+            isRefreshing = false;
+            refreshPromise = null;
+          }
+        })();
+      }
+
+      // Wait for ongoing refresh to complete
+      if (refreshPromise) {
+        const newToken = await refreshPromise;
+        if (newToken && config.headers) {
+          config.headers.Authorization = `Bearer ${newToken}`;
+        }
+      } else {
+        // Fallback: use current token if refresh is not in progress
+        const token = getAccessToken();
+        if (token && config.headers) {
+          config.headers.Authorization = `Bearer ${token}`;
+        }
+      }
+    } else {
+      // Token is still valid, use it
+      const token = getAccessToken();
+      if (token && config.headers) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+    }
+
     return config;
   },
   (error) => {
@@ -53,21 +149,83 @@ apiClient.interceptors.request.use(
 
 // Response interceptor to handle token expiration
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response: AxiosResponse) => response,
   async (error: AxiosError) => {
-    if (error.response?.status === 401) {
-      const token = getAccessToken();
-      // Only redirect if we had a token (token expired scenario)
-      // Don't redirect for login failures (no token yet)
-      if (token && typeof window !== "undefined") {
-        // Token expired or invalid, clear tokens
+    const originalRequest = error.config as InternalAxiosRequestConfig & {
+      _retry?: boolean;
+    };
+
+    // Skip refresh logic for refresh endpoint and login endpoint
+    if (
+      originalRequest?.url?.includes("/api/token/refresh/") ||
+      (originalRequest?.url?.includes("/api/token/") &&
+        originalRequest?.method === "post")
+    ) {
+      return Promise.reject(error);
+    }
+
+    if (
+      error.response?.status === 401 &&
+      originalRequest &&
+      !originalRequest._retry
+    ) {
+      // Token expired, try to refresh
+      if (isRefreshing) {
+        // Wait for ongoing refresh
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        })
+          .then((token) => {
+            if (token && originalRequest.headers) {
+              originalRequest.headers.Authorization = `Bearer ${token}`;
+            }
+            return apiClient(originalRequest);
+          })
+          .catch((err) => {
+            return Promise.reject(err);
+          });
+      }
+
+      originalRequest._retry = true;
+      isRefreshing = true;
+
+      try {
+        const newTokens = await refreshAccessToken();
+        if (newTokens) {
+          // Update the original request with new token
+          if (originalRequest.headers) {
+            originalRequest.headers.Authorization = `Bearer ${newTokens.access}`;
+          }
+          processQueue(null, newTokens.access);
+          // Retry the original request
+          return apiClient(originalRequest);
+        } else {
+          // Refresh failed
+          processQueue(error, null);
+          clearTokens();
+          if (
+            typeof window !== "undefined" &&
+            window.location.pathname !== "/auth/login"
+          ) {
+            window.location.href = "/auth/login";
+          }
+          return Promise.reject(error);
+        }
+      } catch (refreshError) {
+        processQueue(refreshError as AxiosError, null);
         clearTokens();
-        // Only redirect if we're not already on the login page
-        if (window.location.pathname !== "/auth/login") {
+        if (
+          typeof window !== "undefined" &&
+          window.location.pathname !== "/auth/login"
+        ) {
           window.location.href = "/auth/login";
         }
+        return Promise.reject(refreshError);
+      } finally {
+        isRefreshing = false;
       }
     }
+
     return Promise.reject(error);
   }
 );
