@@ -28,5 +28,9 @@ __pycache__/
 .cursor/
 .cursorrules
 
+# ignore cursor rules
+.cursor/
+.cursorrules
+
 # ignore vscode specific
 .vscode/
