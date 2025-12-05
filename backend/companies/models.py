@@ -15,13 +15,24 @@ COMPANY_STATUS_CHOICES = [
         (STATUS_BASIC, STATUS_BASIC),
     ]
 
-# Create your models here.
+DAY_OPT =[
+    ('day1', '10.03.2025'),
+    ('day2', '11.03.2025')
+]
+
+SIZE_OPT = [
+    ('podstawowy', '4m2'),
+    ('standardowy', '6m2'),
+    ('rozszerzony', '8m2')
+]
+
 
 
 class Company(models.Model):
     name = models.CharField(max_length=100, unique=True)
     email = models.EmailField()
-    representative = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete = models.CASCADE, null=True) # czy email nie bedzie w User?
+    representative = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete = models.CASCADE, null=True) 
+    fr_resp = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL) 
 
     status = models.CharField(
         max_length=10,
@@ -68,47 +79,95 @@ class CompanyInvitation(models.Model):
         return f'Company name: {self.company} is {self.get_invitation_status}'
 
 
-   #----tutaj leci rozruba: 
     '''blank=True -> pole w formularzu moze byc puste
     null=True -> pole w bazie moze przyjmowac null'''
 
-    #TODO: fr_resp = relacja do frowki
-    #TODO: definicja pakietu??
+class Stand(models.Model): 
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='stand_all')
+    day= models.CharField(max_length=15, choices=DAY_OPT)
+    stand_number =  models.CharField(max_length=10, null=True, default = 'brak')
+    stand_size = models.CharField(max_length=10, choices =SIZE_OPT)
 
-    #-----stage 1------
-    full_name = models.CharField(max_length=255, verbose_name="pełna nazwa firmy", blank=False, null=True) 
-    street = models.CharField(max_length=255, verbose_name="ulica", blank=False, null=True)
-    home_number = models.CharField(max_length=10, verbose_name="numer domu", blank=False, null=True)
-    apt_number = models.CharField(max_length=10, verbose_name="numer lokalu", blank=True, null=True) #optional
-    city = models.CharField(max_length=100, verbose_name="miasto", blank=False, null=True)
-    country = models.CharField(max_length=100, verbose_name="kraj", blank=False, null=True)
-    postal_code = models.CharField(max_length=20, verbose_name="kod pocztowy",blank=False, null=True)
-    nip = models.CharField(max_length=20, verbose_name="nip firmy",blank= False, null=True)
+#FORMULARZE:
+class BasicData(models.Model):
+    company = models.OneToOneField(Company, on_delete=models.CASCADE, related_name='basic_data')
+    full_name = models.CharField(max_length=255, verbose_name="pełna nazwa firmy") 
+    nip = models.CharField(max_length=20, verbose_name="nip firmy")
 
-    #uzupelniane przez fr?? - to są imo dane bardzo ważne bo zwiazne czysto z pieniędzmi, więc uwazam ze musi byc kontrola
-    day1= models.BooleanField(default = False)
-    day2 = models.BooleanField(default = False)
-    stand_number_day1 = models.CharField(max_length=10, null=True)
-    stand_number_day2 =  models.CharField(max_length=10, null=True)
-    stand_size = models.CharField(max_length=10, null=True) # 4/6/8 m2 ?? ->to wlasnie nwm czy tutaj czy do wyboru
-
-    #---stage 2 form---- 
-    # parametry stoiska:
+class Adress(models.Model):
+    form = models.OneToOneField(BasicData, on_delete=models, related_name='adress')
+    street = models.CharField(max_length=255, verbose_name="ulica")
+    home_number = models.CharField(max_length=10, verbose_name="numer domu")
+    apt_number = models.CharField(max_length=10, verbose_name="numer lokalu", blank = True) #optional
+    city = models.CharField(max_length=100, verbose_name="miasto")
+    country = models.CharField(max_length=100, verbose_name="kraj")
+    postal_code = models.CharField(max_length=20, verbose_name="kod pocztowy")
+    
+class Person (models.Model):
+    name = models.CharField(max_length=100, verbose_name="Imię") 
+    surname = models.CharField(max_length=100, verbose_name="Nazwisko") 
+    phone_number = models.CharField(max_length=20, verbose_name="Numer telefonu")
+    
+class ContactPerson(Person): 
+    form = models.ForeignKey(BasicData, on_delete =models.CASCADE, related_name='contact_person')
+    email = models.EmailField(verbose_name="Adres email")
+    
+class StandDetails(models.Model):
     self_construction = models.BooleanField(verbose_name="własna zabudowa", default = False) 
-    sc_details = models.CharField(max_length = 255, verbose_name= "z czego się składa własna zabudowa", blank = False, null=True)
-    #jak wlasna zabudowa to i tak mozliwosc wziecia od nas equipment??
-    name_sign_text = models.CharField(max_length=255, verbose_name = "napis na fryz", blank = False, null=True)
-    logo_sign_file = models.FileField('''TODO:upload_to ='hmmmmmm???''', verbose_name = "Logotyp na fryz", blank = False, null=True)
+    sc_details = models.CharField(max_length = 255, verbose_name= "z czego się składa własna zabudowa", blank = True)
+    name_sign_text = models.CharField(max_length=255, verbose_name = "napis na fryz", blank = True) # trzeba zrobic walidację z basic equipment
+    logo_sign_file = models.FileField(upload_to ='logos', verbose_name = "Logotyp na fryz", blank = True) # jak wyzej
   
+class BasicEquipment(models.Model):
+    form = models.OneToOneField(StandDetails,on_delete =models.CASCADE, related_name='basic_equipment' )
+    chair = models.IntegerField(verbose_name=" ilość krzeseł", default =2)
+    counter = models.BooleanField(verbose_name="lada zwykła", default= True) 
+    trashbin = models.BooleanField(verbose_name="śmietnik", default = True) 
+    hanger = models.BooleanField(verbose_name="wieszak", default = True) 
+    name_sign = models.BooleanField(verbose_name="fryz podłużny z nazwą", default=True) 
+    logo_sign = models.BooleanField(verbose_name="fryz poprzeczny z logotypem", default = True) 
+
+class ExtendedEqupment(models.Model):
+    form = models.OneToOneField(StandDetails, on_delete =models.CASCADE, related_name='ext_equipment' )
+    counter = models.IntegerField(verbose_name="lada zwykła")
+    arched_counter = models.IntegerField(verbose_name="lada łukowa")
+    tv = models.IntegerField(verbose_name="telewizor")
+    chair = models.IntegerField(verbose_name="krzesło")
+    bar_table = models.IntegerField(verbose_name="stół barowy")
+    bar_stool = models.IntegerField(verbose_name="krzesło barowe")
+    leaflet_stand = models.IntegerField(verbose_name="stojak na ulotki")
+    carpet_color = models.CharField(max_length=20, verbose_name="kolor wykładziny")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#tutaj niewazne: 
+
+
     #---stage 3 form----
 #if wlasna zabudowa:
-    fire_cert = models.FileField('''TODO:upload_to ='hmmmmmm???''', verbose_name = "certyfikat o niepalności", blank = False, null=True)
+'''    
+    fire_cert = models.FileField(uploadto, verbose_name = "certyfikat o niepalności", blank = False, null=True)
     gg_parking = models.BooleanField(verbose_name="czy potrzebny wjazd na gg?", default = False) 
     
-    ''' Potrzebne info niby, ale imo niepotrzebne w bazie
-    - Którego dnia przyjeżdżają z własną zabudową?
-    - Kiedy odbierają zabudowę (data)
-    - godzina przyjazdu/wyjazdu'''
+  
 
 #else: 
     el_devices = models.CharField(max_length=255, verbose_name="przyniesiona elektronika", blank = False, null=True)
@@ -143,24 +202,24 @@ class BasicEquipment(models.Model):
     CHAIR_CHOICES = {"ZERO":'0 szt', "ONE": '1 szt', "TWO": '2 szt'}
 
     chair = models.CharField(max_length=5, verbose_name="krzesła", choices=CHAIR_CHOICES, default = "TWO")
-    counter = models.BooleanField(verbose_name="lada zwykła", deafult = True) 
-    trashbin = models.BooleanField(verbose_name="śmietnik", deafult = True) 
-    hanger = models.BooleanField(verbose_name="wieszak", deafult = True) 
+    counter = models.BooleanField(verbose_name="lada zwykła", default = True) 
+    trashbin = models.BooleanField(verbose_name="śmietnik", default = True) 
+    hanger = models.BooleanField(verbose_name="wieszak", default = True) 
     name_sign = models.BooleanField(verbose_name="fryz podłużny z nazwą", default=True) 
-    logo_sign = models.BooleanField(verbose_name="fryz poprzeczny z logotypem", deafult = True) 
+    logo_sign = models.BooleanField(verbose_name="fryz poprzeczny z logotypem", default = True) 
 
 class ExtendedEquipment(models.Model): #jezu a co jak ktos bedzie chciał dwa telewizory
     company = models.OneToOneField(Company, on_delete=models.CASCADE, related_name='extended_equipment' )
-    counter = models.BooleanField(verbose_name="lada zwykła", deafult = False)
-    arched_counter = models.BooleanField(verbose_name="lada łukowa", deafult = False)
-    square_table = models.BooleanField(verbose_name="stolik kwadratowy", deafult = False)
-    tv = models.BooleanField(verbose_name="telewizor", deafult = False)
-    chair = models.BooleanField(verbose_name="krzesło", deafult = False)
-    bar_table = models.BooleanField(verbose_name="stół barowy", deafult = False)
-    bar_stool = models.BooleanField(verbose_name="krzesło barowe", deafult = False)
-    leaflet_stand = models.BooleanField(verbose_name="stojak na ulotki", deafult = False)
-    #??? jobwall = models.BooleanField(verbose_name="krzesło", deafult = False)
-    #??? workshop = models.BooleanField(verbose_name="krzesło", deafult = False)
+    counter = models.BooleanField(verbose_name="lada zwykła", default = False)
+    arched_counter = models.BooleanField(verbose_name="lada łukowa", default = False)
+    square_table = models.BooleanField(verbose_name="stolik kwadratowy", default = False)
+    tv = models.BooleanField(verbose_name="telewizor", default = False)
+    chair = models.BooleanField(verbose_name="krzesło", default = False)
+    bar_table = models.BooleanField(verbose_name="stół barowy", default = False)
+    bar_stool = models.BooleanField(verbose_name="krzesło barowe", default = False)
+    leaflet_stand = models.BooleanField(verbose_name="stojak na ulotki", default = False)
+    #??? jobwall = models.BooleanField(verbose_name="krzesło", default = False)
+    #??? workshop = models.BooleanField(verbose_name="krzesło", default = False)
 
 #-----stage 3---
 class CarData(ContactPerson):
@@ -175,5 +234,6 @@ class PDIAttendee(ContactPerson):
 class Exhibitor(ContactPerson): 
     #jakie dane tu wymagane?
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='exhibitor') # company.contact_people.all() -odwolanie dla obiektu company
+'''
   
      
