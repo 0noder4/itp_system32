@@ -4,6 +4,7 @@ import * as React from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 import * as z from "zod";
 
 import { Button } from "@/components/ui/button";
@@ -22,43 +23,61 @@ import {
   FieldLabel,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { apiClient } from "@/lib/api";
+import { storeTokens, getUserRoute, type UserType } from "@/lib/auth";
 
 const formSchema = z.object({
-  title: z
-    .string()
-    .min(5, "Bug title must be at least 5 characters.")
-    .max(32, "Bug title must be at most 32 characters."),
-  description: z
-    .string()
-    .min(20, "Description must be at least 20 characters.")
-    .max(100, "Description must be at most 100 characters."),
+  username: z.string().min(1, "Username is required."),
+  password: z.string().min(1, "Password is required."),
 });
 
 export default function Index() {
+  const router = useRouter();
+  const [isLoading, setIsLoading] = React.useState(false);
+
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      title: "",
-      description: "",
+      username: "",
+      password: "",
     },
   });
 
-  function onSubmit(data: z.infer<typeof formSchema>) {
-    console.log(data);
-    toast("You submitted the following values:", {
-      description: (
-        <pre className="bg-code text-code-foreground mt-2 w-[320px] overflow-x-auto rounded-md p-4">
-          <code>{JSON.stringify(data, null, 2)}</code>
-        </pre>
-      ),
-      position: "bottom-right",
-      classNames: {
-        content: "flex flex-col gap-2",
-      },
-      style: {
-        "--border-radius": "calc(var(--radius)  + 4px)",
-      } as React.CSSProperties,
-    });
+  async function onSubmit(data: z.infer<typeof formSchema>) {
+    setIsLoading(true);
+    try {
+      const response = await apiClient.post("/api/token/", {
+        username: data.username,
+        password: data.password,
+      });
+
+      // Store tokens
+      storeTokens(response.data);
+
+      // Get user type from response or decode from token
+      const userType: UserType | null = response.data.user_type || null;
+      const route = getUserRoute(userType);
+
+      toast.success("Login successful!", {
+        description: "Redirecting to your dashboard...",
+      });
+
+      // Redirect to appropriate panel based on user type
+      router.push(route);
+    } catch (error: any) {
+      // Prevent any default form submission behavior
+      const errorMessage =
+        error.response?.data?.detail ||
+        error.response?.data?.message ||
+        Object.values(error.response?.data || {}).flat()[0] ||
+        "Invalid username or password. Please try again.";
+
+      toast.error("Login failed", {
+        description: errorMessage,
+      });
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   return (
@@ -70,22 +89,30 @@ export default function Index() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form id="s32-form-login" onSubmit={form.handleSubmit(onSubmit)}>
+        <form
+          id="s32-form-login"
+          onSubmit={(e) => {
+            e.preventDefault();
+            form.handleSubmit(onSubmit)(e);
+          }}
+        >
           <FieldGroup>
             <Controller
-              name="title"
+              name="username"
               control={form.control}
               render={({ field, fieldState }) => (
                 <Field data-invalid={fieldState.invalid}>
                   <FieldLabel htmlFor="s32-form-login-username">
-                    Login
+                    Username
                   </FieldLabel>
                   <Input
                     {...field}
                     id="s32-form-login-username"
+                    type="text"
                     aria-invalid={fieldState.invalid}
-                    placeholder="company name"
-                    autoComplete="off"
+                    placeholder="Enter your username"
+                    autoComplete="username"
+                    disabled={isLoading}
                   />
                   {fieldState.invalid && (
                     <FieldError errors={[fieldState.error]} />
@@ -94,7 +121,7 @@ export default function Index() {
               )}
             />
             <Controller
-              name="description"
+              name="password"
               control={form.control}
               render={({ field, fieldState }) => (
                 <Field data-invalid={fieldState.invalid}>
@@ -112,9 +139,11 @@ export default function Index() {
                   <Input
                     {...field}
                     id="s32-form-login-password"
+                    type="password"
                     aria-invalid={fieldState.invalid}
-                    placeholder="password"
-                    autoComplete="off"
+                    placeholder="Enter your password"
+                    autoComplete="current-password"
+                    disabled={isLoading}
                   />
                   {fieldState.invalid && (
                     <FieldError errors={[fieldState.error]} />
@@ -127,8 +156,8 @@ export default function Index() {
       </CardContent>
       <CardFooter>
         <Field>
-          <Button type="submit" form="s32-form-login">
-            Submit
+          <Button type="submit" form="s32-form-login" disabled={isLoading}>
+            {isLoading ? "Logging in..." : "Login"}
           </Button>
         </Field>
       </CardFooter>

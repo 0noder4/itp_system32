@@ -48,33 +48,6 @@ echo -e "${YELLOW}📁 Creating project directory...${NC}"
 sudo mkdir -p /opt/itp_system32
 sudo chown $USER:$USER /opt/itp_system32
 
-# Create environment file template
-echo -e "${YELLOW}📝 Creating environment file template...${NC}"
-cat > /opt/itp_system32/.env.template << 'EOF'
-# Project Configuration
-PROJECT_NAME=itp_system32
-ENV=production
-
-# Database Configuration
-DATABASE_NAME=itp_system32_db
-DATABASE_USER=itp_user
-DATABASE_PASSWORD=your_secure_password_here
-DATABASE_ROOT_PASSWORD=your_root_password_here
-DATABASE_HOST=db
-DATABASE_PORT=3306
-DATABASE_ENGINE=django.db.backends.mysql
-
-# Django Configuration
-DJANGO_SECRET_KEY=your_secret_key_here
-DEBUG=False
-DJANGO_LOGLEVEL=INFO
-DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,your_domain.com
-
-# Docker Image Versions
-BACKEND_VERSION=latest
-FRONTEND_VERSION=latest
-EOF
-
 # Create systemd service for auto-start (optional)
 echo -e "${YELLOW}⚙️  Creating systemd service...${NC}"
 sudo tee /etc/systemd/system/itp-system32.service > /dev/null << 'EOF'

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Deployment script for ITP System32
+# Deployment script for ITP System32 Production
 # This script handles the deployment process on the VPS
 
 set -e
@@ -12,11 +12,12 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 # Configuration
-PROJECT_DIR="/opt/itp_system32"
 COMPOSE_FILE="compose.yml"
 ENV_FILE=".env"
+MAX_WAIT_TIME=120  # Maximum wait time for services to be healthy (seconds)
+HEALTH_CHECK_INTERVAL=5  # Interval between health checks (seconds)
 
-echo -e "${GREEN}🚀 Starting deployment process...${NC}"
+echo -e "${GREEN}🚀 Starting production deployment process...${NC}"
 
 # Check if we're in the right directory
 if [ ! -f "$COMPOSE_FILE" ]; then
@@ -26,72 +27,98 @@ fi
 
 # Check if .env file exists
 if [ ! -f "$ENV_FILE" ]; then
-    echo -e "${YELLOW}⚠️  Warning: $ENV_FILE not found. Make sure to create it with proper configuration.${NC}"
-fi
-
-# Stop existing containers gracefully
-echo -e "${YELLOW}🛑 Stopping existing containers...${NC}"
-docker-compose down || true
-
-# Remove old images to free up space (optional)
-echo -e "${YELLOW}🧹 Cleaning up old Docker images...${NC}"
-docker image prune -f || true
-
-# Pull latest images if using registry
-echo -e "${YELLOW}📥 Pulling latest images...${NC}"
-docker-compose pull || echo -e "${YELLOW}⚠️  Could not pull images (may be building locally)${NC}"
-
-# Build and start containers
-echo -e "${YELLOW}🔨 Building and starting containers...${NC}"
-docker-compose up -d --build
-
-# Wait for services to be ready
-echo -e "${YELLOW}⏳ Waiting for services to start...${NC}"
-sleep 15
-
-# Check if services are running
-echo -e "${YELLOW}🔍 Checking service status...${NC}"
-docker-compose ps
-
-# Verify services are healthy
-echo -e "${YELLOW}🏥 Health checking services...${NC}"
-
-# Check backend health
-if curl -f http://localhost:8000/health/ > /dev/null 2>&1; then
-    echo -e "${GREEN}✅ Backend is healthy${NC}"
-else
-    echo -e "${RED}❌ Backend health check failed${NC}"
-    docker-compose logs backend
-fi
-
-# Check frontend health
-if curl -f http://localhost:3000 > /dev/null 2>&1; then
-    echo -e "${GREEN}✅ Frontend is healthy${NC}"
-else
-    echo -e "${RED}❌ Frontend health check failed${NC}"
-    docker-compose logs frontend
-fi
-
-# Run database migrations (if backend is running)
-echo -e "${YELLOW}🗄️  Running database migrations...${NC}"
-docker-compose exec -T backend python manage.py migrate --noinput || echo -e "${YELLOW}⚠️  Migrations failed or backend not ready${NC}"
-
-# Collect static files (if backend is running)
-echo -e "${YELLOW}📁 Collecting static files...${NC}"
-docker-compose exec -T backend python manage.py collectstatic --noinput || echo -e "${YELLOW}⚠️  Static collection failed or backend not ready${NC}"
-
-# Final status check
-echo -e "${YELLOW}📊 Final status check...${NC}"
-if docker-compose ps | grep -q "Up"; then
-    echo -e "${GREEN}✅ Deployment completed successfully!${NC}"
-    echo -e "${GREEN}🌐 Services available at:${NC}"
-    echo -e "   • Frontend: http://localhost:3000"
-    echo -e "   • Backend: http://localhost:8000"
-    echo -e "   • Database: localhost:3306"
-else
-    echo -e "${RED}❌ Some services failed to start${NC}"
-    docker-compose logs --tail=50
+    echo -e "${RED}❌ Error: $ENV_FILE not found. Please create it with proper configuration.${NC}"
     exit 1
 fi
 
-echo -e "${GREEN}🎉 Deployment process completed!${NC}"
+# Function to wait for service health
+wait_for_health() {
+    local service=$1
+    local elapsed=0
+    
+    echo -e "${YELLOW}⏳ Waiting for $service to be healthy...${NC}"
+    while [ $elapsed -lt $MAX_WAIT_TIME ]; do
+        if docker-compose -f "$COMPOSE_FILE" ps "$service" | grep -q "healthy"; then
+            echo -e "${GREEN}✅ $service is healthy${NC}"
+            return 0
+        fi
+        sleep $HEALTH_CHECK_INTERVAL
+        elapsed=$((elapsed + HEALTH_CHECK_INTERVAL))
+    done
+    
+    echo -e "${RED}❌ $service failed to become healthy within ${MAX_WAIT_TIME}s${NC}"
+    docker-compose -f "$COMPOSE_FILE" logs --tail=50 "$service"
+    return 1
+}
+
+# Stop existing containers gracefully
+echo -e "${YELLOW}🛑 Stopping existing containers...${NC}"
+docker-compose -f "$COMPOSE_FILE" down || true
+
+# Remove old images to free up space
+echo -e "${YELLOW}🧹 Cleaning up old Docker images...${NC}"
+docker image prune -f || true
+
+# Pull latest images from registry
+echo -e "${YELLOW}📥 Pulling latest images...${NC}"
+if ! docker-compose -f "$COMPOSE_FILE" pull; then
+    echo -e "${RED}❌ Failed to pull images. Please check your Docker registry configuration.${NC}"
+    exit 1
+fi
+
+# Start containers
+echo -e "${YELLOW}🔨 Starting containers...${NC}"
+if ! docker-compose -f "$COMPOSE_FILE" up -d; then
+    echo -e "${RED}❌ Failed to start containers${NC}"
+    docker-compose -f "$COMPOSE_FILE" logs --tail=50
+    exit 1
+fi
+
+# Wait for database to be healthy
+if ! wait_for_health "db"; then
+    echo -e "${RED}❌ Database failed to start. Aborting deployment.${NC}"
+    docker-compose -f "$COMPOSE_FILE" logs db
+    exit 1
+fi
+
+# Wait for backend to be healthy
+if ! wait_for_health "backend"; then
+    echo -e "${RED}❌ Backend failed to start. Aborting deployment.${NC}"
+    docker-compose -f "$COMPOSE_FILE" logs backend
+    exit 1
+fi
+
+# Run database migrations
+echo -e "${YELLOW}🗄️  Running database migrations...${NC}"
+if ! docker-compose -f "$COMPOSE_FILE" exec -T backend python manage.py migrate --noinput; then
+    echo -e "${RED}❌ Database migrations failed${NC}"
+    docker-compose -f "$COMPOSE_FILE" logs backend
+    exit 1
+fi
+
+# Collect static files
+echo -e "${YELLOW}📁 Collecting static files...${NC}"
+if ! docker-compose -f "$COMPOSE_FILE" exec -T backend python manage.py collectstatic --noinput; then
+    echo -e "${RED}❌ Static file collection failed${NC}"
+    docker-compose -f "$COMPOSE_FILE" logs backend
+    exit 1
+fi
+
+# Wait for frontend to be healthy (optional, may not have healthcheck)
+echo -e "${YELLOW}⏳ Waiting for frontend to start...${NC}"
+sleep 10
+
+# Check service status
+echo -e "${YELLOW}🔍 Checking service status...${NC}"
+docker-compose -f "$COMPOSE_FILE" ps
+
+# Final verification
+echo -e "${YELLOW}📊 Final status check...${NC}"
+if docker-compose -f "$COMPOSE_FILE" ps | grep -q "Up"; then
+    echo -e "${GREEN}✅ Deployment completed successfully!${NC}"
+    echo -e "${GREEN}🎉 All services are running${NC}"
+else
+    echo -e "${RED}❌ Some services failed to start${NC}"
+    docker-compose -f "$COMPOSE_FILE" logs --tail=50
+    exit 1
+fi

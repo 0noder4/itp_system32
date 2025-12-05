@@ -7,19 +7,18 @@ on:
   workflow_dispatch:
     inputs:
       environment:
-        description: 'Environment to deploy to'
+        description: "Environment to deploy to"
         required: true
-        default: 'production'
+        default: "production"
         type: choice
         options:
-        - production
-        - staging
+          - production
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     environment: ${{ github.event.inputs.environment || 'production' }}
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -64,12 +63,6 @@ jobs:
             # Check if services are running
             docker-compose ps
             
-            # Optional: Run database migrations
-            # docker-compose exec backend python manage.py migrate
-            
-            # Optional: Collect static files
-            # docker-compose exec backend python manage.py collectstatic --noinput
-            
             echo 'Deployment completed successfully!'
           "
 
@@ -106,18 +99,18 @@ jobs:
         with:
           args: |
             🚀 **Deployment Successful**
-            
+
             **Repository:** ${{ github.repository }}
             **Branch:** ${{ github.ref_name }}
             **Environment:** ${{ github.event.inputs.environment || 'production' }}
             **Author:** ${{ github.actor }}
             **Commit:** ${{ github.sha }}
-            
+
             🌐 **Services Deployed:**
             • Backend API
             • Frontend Application
             • Database
-            
+
             🔗 **View Details:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
       - name: Notify Discord - Deployment Failure
@@ -128,13 +121,13 @@ jobs:
         with:
           args: |
             ❌ **Deployment Failed**
-            
+
             **Repository:** ${{ github.repository }}
             **Branch:** ${{ github.ref_name }}
             **Environment:** ${{ github.event.inputs.environment || 'production' }}
             **Author:** ${{ github.actor }}
             **Commit:** ${{ github.sha }}
-            
+
             🔍 **Check the logs for more details**
-            
+
             🔗 **View Details:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

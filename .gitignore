@@ -2,6 +2,7 @@
 .venv
 .venv/*
 */migrations/*
+data/*
 
 # Ignore nextJS specific
 node_modules/
@@ -22,3 +23,7 @@ __pycache__/
 
 # Ignore database files
 /mysql_data/**
+
+# ignore cursor rules
+.cursor/
+.cursorrules
