@@ -168,6 +168,8 @@ docker compose exec db mysql -u itp_user -p itp_system32_db
 docker compose exec db mysqldump -u itp_user -p itp_system32_db > backup.sql
 ```
 
+For a full reset of the database (and Mailpit storage), follow the steps in `docs/DATABASE_CLEAR.md`.
+
 ### Backend Commands
 
 ```bash
