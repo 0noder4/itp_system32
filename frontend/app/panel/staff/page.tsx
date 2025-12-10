@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import * as z from "zod";
 import { fetcher, apiClient } from "@/lib/api";
 import { Company } from "@/lib/types";
+import { useTranslation } from "@/lib/i18n";
 import {
   Table,
   TableBody,
@@ -36,14 +37,21 @@ import {
   FieldGroup,
   FieldLabel,
 } from "@/components/ui/field";
-
-const invitationFormSchema = z.object({
-  email: z.string().email("Please enter a valid email address."),
-  company_name: z.string().min(1, "Company name is required."),
-  company_status: z.enum(["main", "partner", "basic"]),
-});
+import { LanguageSelector } from "@/components/layout/LanguageSelector/LanguageSelector";
 
 export default function Index() {
+  const { t, locale } = useTranslation();
+
+  const invitationFormSchema = React.useMemo(
+    () =>
+      z.object({
+        email: z.string().email(t("auth.validation.emailRequired")),
+        company_name: z.string().min(1, t("auth.validation.companyNameRequired")),
+        company_status: z.enum(["main", "partner", "basic"]),
+      }),
+    [t]
+  );
+
   const {
     data: companies,
     error,
@@ -73,8 +81,10 @@ export default function Index() {
     setIsSubmitting(true);
     try {
       await apiClient.post("/api/invite/", data);
-      toast.success("Invitation sent successfully!", {
-        description: `An invitation has been sent to ${data.email}`,
+      toast.success(t("companies.invite.success"), {
+        description: t("companies.invite.successDescription", {
+          email: data.email,
+        }),
       });
       setIsInviteDialogOpen(false);
       invitationForm.reset();
@@ -85,8 +95,8 @@ export default function Index() {
         error.response?.data?.detail ||
         error.response?.data?.message ||
         Object.values(error.response?.data || {}).flat()[0] ||
-        "Failed to send invitation. Please try again.";
-      toast.error("Invitation failed", {
+        t("companies.invite.errorDescription");
+      toast.error(t("companies.invite.error"), {
         description: errorMessage,
       });
     } finally {
@@ -95,11 +105,14 @@ export default function Index() {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
+    return new Date(dateString).toLocaleDateString(
+      locale === "pl" ? "pl-PL" : "en-US",
+      {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      }
+    );
   };
 
   const getStatusBadge = (status: string) => {
@@ -109,14 +122,14 @@ export default function Index() {
         "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
       basic: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200",
     };
+    const statusKey = status as "main" | "partner" | "basic";
     return (
       <span
         className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-          statusColors[status as keyof typeof statusColors] ||
-          statusColors.basic
+          statusColors[statusKey] || statusColors.basic
         }`}
       >
-        {status.charAt(0).toUpperCase() + status.slice(1)}
+        {t(`companies.status.${statusKey}`)}
       </span>
     );
   };
@@ -145,19 +158,25 @@ export default function Index() {
     });
   }, [companies, searchQuery, statusFilter]);
 
+  const getStatusLabel = (status: "all" | "main" | "partner" | "basic") => {
+    if (status === "all") return t("common.all");
+    return t(`companies.status.${status}`);
+  };
+
   return (
     <div className="flex h-screen flex-col overflow-hidden p-6">
       <div className="mb-6 shrink-0">
-        <h1 className="text-2xl font-bold mb-2">Staff Dashboard</h1>
-        <p className="text-muted-foreground">
-          Manage companies and system settings from here.
-        </p>
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold mb-2">{t("dashboard.staff.title")}</h1>
+          <LanguageSelector />
+        </div>
+        <p className="text-muted-foreground">{t("dashboard.staff.description")}</p>
       </div>
 
       <Card className="flex flex-1 flex-col overflow-hidden">
         <CardHeader className="shrink-0">
           <div className="flex items-center justify-between">
-            <CardTitle>Companies</CardTitle>
+            <CardTitle>{t("companies.title")}</CardTitle>
             <Dialog
               open={isInviteDialogOpen}
               onOpenChange={setIsInviteDialogOpen}
@@ -165,15 +184,14 @@ export default function Index() {
               <DialogTrigger asChild>
                 <Button>
                   <UserPlus className="mr-2 h-4 w-4" />
-                  Invite New
+                  {t("companies.invite.button")}
                 </Button>
               </DialogTrigger>
               <DialogContent className="sm:max-w-[500px]">
                 <DialogHeader>
-                  <DialogTitle>Invite New Company</DialogTitle>
+                  <DialogTitle>{t("companies.invite.title")}</DialogTitle>
                   <DialogDescription>
-                    Send an invitation to a new company. They will receive an
-                    email with a registration link.
+                    {t("companies.invite.description")}
                   </DialogDescription>
                 </DialogHeader>
                 <form
@@ -187,13 +205,13 @@ export default function Index() {
                       render={({ field, fieldState }) => (
                         <Field data-invalid={fieldState.invalid}>
                           <FieldLabel htmlFor="invite-email">
-                            Email Address
+                            {t("companies.invite.emailLabel")}
                           </FieldLabel>
                           <Input
                             {...field}
                             id="invite-email"
                             type="email"
-                            placeholder="company@example.com"
+                            placeholder={t("companies.invite.emailPlaceholder")}
                             aria-invalid={fieldState.invalid}
                             disabled={isSubmitting}
                           />
@@ -209,13 +227,15 @@ export default function Index() {
                       render={({ field, fieldState }) => (
                         <Field data-invalid={fieldState.invalid}>
                           <FieldLabel htmlFor="invite-company-name">
-                            Company Name
+                            {t("companies.invite.companyNameLabel")}
                           </FieldLabel>
                           <Input
                             {...field}
                             id="invite-company-name"
                             type="text"
-                            placeholder="Enter company name"
+                            placeholder={t(
+                              "companies.invite.companyNamePlaceholder"
+                            )}
                             aria-invalid={fieldState.invalid}
                             disabled={isSubmitting}
                           />
@@ -231,7 +251,7 @@ export default function Index() {
                       render={({ field, fieldState }) => (
                         <Field data-invalid={fieldState.invalid}>
                           <FieldLabel htmlFor="invite-company-status">
-                            Company Status
+                            {t("companies.invite.companyStatusLabel")}
                           </FieldLabel>
                           <select
                             {...field}
@@ -240,9 +260,15 @@ export default function Index() {
                             disabled={isSubmitting}
                             className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-xs transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
                           >
-                            <option value="basic">Basic</option>
-                            <option value="partner">Partner</option>
-                            <option value="main">Main</option>
+                            <option value="basic">
+                              {t("companies.status.basic")}
+                            </option>
+                            <option value="partner">
+                              {t("companies.status.partner")}
+                            </option>
+                            <option value="main">
+                              {t("companies.status.main")}
+                            </option>
                           </select>
                           {fieldState.invalid && (
                             <FieldError errors={[fieldState.error]} />
@@ -258,14 +284,16 @@ export default function Index() {
                     onClick={() => setIsInviteDialogOpen(false)}
                     disabled={isSubmitting}
                   >
-                    Cancel
+                    {t("common.cancel")}
                   </Button>
                   <Button
                     type="submit"
                     form="invite-company-form"
                     disabled={isSubmitting}
                   >
-                    {isSubmitting ? "Sending..." : "Send Invitation"}
+                    {isSubmitting
+                      ? t("companies.invite.submitting")
+                      : t("companies.invite.submit")}
                   </Button>
                 </DialogFooter>
               </DialogContent>
@@ -280,7 +308,7 @@ export default function Index() {
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   type="text"
-                  placeholder="Search by name, email, or ID..."
+                  placeholder={t("companies.searchPlaceholder")}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-9 pr-9"
@@ -300,7 +328,7 @@ export default function Index() {
               {/* Status Filter */}
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-sm text-muted-foreground">
-                  Filter by status:
+                  {t("companies.filterByStatus")}
                 </span>
                 <div className="flex gap-2">
                   {(["all", "main", "partner", "basic"] as const).map(
@@ -312,9 +340,8 @@ export default function Index() {
                         }
                         size="sm"
                         onClick={() => setStatusFilter(status)}
-                        className="capitalize"
                       >
-                        {status === "all" ? "All" : status}
+                        {getStatusLabel(status)}
                       </Button>
                     )
                   )}
@@ -329,15 +356,17 @@ export default function Index() {
                     }}
                     className="ml-auto"
                   >
-                    Clear filters
+                    {t("common.clearFilters")}
                   </Button>
                 )}
               </div>
 
               {/* Results count */}
               <div className="text-sm text-muted-foreground">
-                Showing {filteredCompanies.length} of {companies.length}{" "}
-                companies
+                {t("companies.showingResults", {
+                  filtered: filteredCompanies.length,
+                  total: companies.length,
+                })}
               </div>
             </div>
           )}
@@ -351,19 +380,21 @@ export default function Index() {
               </div>
             ) : error ? (
               <div className="text-center py-8 text-muted-foreground">
-                <p>Failed to load companies. Please try again later.</p>
+                <p>{t("companies.loadError")}</p>
               </div>
             ) : filteredCompanies && filteredCompanies.length > 0 ? (
               <div className="rounded-md border">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>ID</TableHead>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Representative ID</TableHead>
-                      <TableHead>Created At</TableHead>
+                      <TableHead>{t("companies.table.id")}</TableHead>
+                      <TableHead>{t("companies.table.name")}</TableHead>
+                      <TableHead>{t("companies.table.status")}</TableHead>
+                      <TableHead>{t("companies.table.email")}</TableHead>
+                      <TableHead>
+                        {t("companies.table.representativeId")}
+                      </TableHead>
+                      <TableHead>{t("companies.table.createdAt")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -388,11 +419,11 @@ export default function Index() {
               </div>
             ) : companies && companies.length > 0 ? (
               <div className="text-center py-8 text-muted-foreground">
-                <p>No companies match your search criteria.</p>
+                <p>{t("companies.noCompaniesMatch")}</p>
               </div>
             ) : (
               <div className="text-center py-8 text-muted-foreground">
-                <p>No companies found.</p>
+                <p>{t("companies.noCompaniesFound")}</p>
               </div>
             )}
           </div>

@@ -25,26 +25,36 @@ import {
 import { Input } from "@/components/ui/input";
 import { apiClient } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "@/lib/i18n";
 
-const formInputSchema = z.object({
-  company_name: z
-    .string()
-    .min(1, "Company name is required.")
-    .max(255, "Company name must be at most 255 characters."),
-  email: z
-    .string()
-    .min(1, "Email is required.")
-    .email("Please enter a valid email address."),
-  company_status: z.enum(["main", "partner", "basic"], {
-    message: "Please select a status.",
-  }),
-});
-
-type FormInput = z.infer<typeof formInputSchema>;
+type FormInput = {
+  company_name: string;
+  email: string;
+  company_status: "main" | "partner" | "basic";
+};
 
 export default function Index() {
   const router = useRouter();
+  const { t } = useTranslation();
   const [isLoading, setIsLoading] = React.useState(false);
+
+  const formInputSchema = React.useMemo(
+    () =>
+      z.object({
+        company_name: z
+          .string()
+          .min(1, t("auth.validation.companyNameRequired"))
+          .max(255, t("auth.validation.companyNameRequired")),
+        email: z
+          .string()
+          .min(1, t("auth.validation.emailRequired"))
+          .email(t("auth.validation.emailRequired")),
+        company_status: z.enum(["main", "partner", "basic"], {
+          message: t("auth.validation.companyNameRequired"),
+        }),
+      }),
+    [t]
+  );
 
   const form = useForm<FormInput>({
     resolver: zodResolver(formInputSchema),
@@ -58,14 +68,16 @@ export default function Index() {
   async function onSubmit(data: FormInput) {
     setIsLoading(true);
     try {
-      const response = await apiClient.post("/api/invite/", {
+      await apiClient.post("/api/invite/", {
         company_name: data.company_name,
         email: data.email,
         company_status: data.company_status,
       });
 
-      toast.success("Invitation sent successfully!", {
-        description: `An invitation has been sent to ${data.email} for "${data.company_name}".`,
+      toast.success(t("companies.invite.success"), {
+        description: t("companies.invite.successDescription", {
+          email: data.email,
+        }),
       });
 
       // Navigate back to companies list
@@ -75,9 +87,9 @@ export default function Index() {
         error.response?.data?.message ||
         error.response?.data?.error ||
         Object.values(error.response?.data || {}).flat()[0] ||
-        "Failed to send invitation. Please try again.";
+        t("companies.invite.errorDescription");
 
-      toast.error("Failed to send invitation", {
+      toast.error(t("companies.invite.error"), {
         description: errorMessage,
       });
     } finally {
@@ -88,10 +100,8 @@ export default function Index() {
   return (
     <Card className="w-full sm:max-w-md">
       <CardHeader>
-        <CardTitle>Invite Company</CardTitle>
-        <CardDescription>
-          Send an invitation to a company to join the system
-        </CardDescription>
+        <CardTitle>{t("companies.invite.title")}</CardTitle>
+        <CardDescription>{t("companies.invite.description")}</CardDescription>
       </CardHeader>
       <CardContent>
         <form
@@ -105,13 +115,13 @@ export default function Index() {
               render={({ field, fieldState }) => (
                 <Field data-invalid={fieldState.invalid}>
                   <FieldLabel htmlFor="s32-form-invite-company-name">
-                    Company Name
+                    {t("companies.invite.companyNameLabel")}
                   </FieldLabel>
                   <Input
                     {...field}
                     id="s32-form-invite-company-name"
                     aria-invalid={fieldState.invalid}
-                    placeholder="Enter company name"
+                    placeholder={t("companies.invite.companyNamePlaceholder")}
                     autoComplete="organization"
                     disabled={isLoading}
                   />
@@ -127,14 +137,14 @@ export default function Index() {
               render={({ field, fieldState }) => (
                 <Field data-invalid={fieldState.invalid}>
                   <FieldLabel htmlFor="s32-form-invite-company-email">
-                    Email
+                    {t("companies.invite.emailLabel")}
                   </FieldLabel>
                   <Input
                     {...field}
                     id="s32-form-invite-company-email"
                     type="email"
                     aria-invalid={fieldState.invalid}
-                    placeholder="company@example.com"
+                    placeholder={t("companies.invite.emailPlaceholder")}
                     autoComplete="email"
                     disabled={isLoading}
                   />
@@ -150,7 +160,7 @@ export default function Index() {
               render={({ field, fieldState }) => (
                 <Field data-invalid={fieldState.invalid}>
                   <FieldLabel htmlFor="s32-form-invite-company-status">
-                    Status
+                    {t("companies.invite.companyStatusLabel")}
                   </FieldLabel>
                   <select
                     {...field}
@@ -163,9 +173,11 @@ export default function Index() {
                       "aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive"
                     )}
                   >
-                    <option value="basic">Basic</option>
-                    <option value="partner">Partner</option>
-                    <option value="main">Main</option>
+                    <option value="basic">{t("companies.status.basic")}</option>
+                    <option value="partner">
+                      {t("companies.status.partner")}
+                    </option>
+                    <option value="main">{t("companies.status.main")}</option>
                   </select>
                   {fieldState.invalid && (
                     <FieldError errors={[fieldState.error]} />
@@ -183,7 +195,9 @@ export default function Index() {
             form="s32-form-invite-company"
             disabled={isLoading}
           >
-            {isLoading ? "Sending invitation..." : "Send Invitation"}
+            {isLoading
+              ? t("companies.invite.submitting")
+              : t("companies.invite.submit")}
           </Button>
         </Field>
       </CardFooter>

@@ -25,14 +25,21 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { apiClient } from "@/lib/api";
-
-const formSchema = z.object({
-  email: z.string().email("Please enter a valid email address."),
-});
+import { useTranslation } from "@/lib/i18n";
+import { LanguageSelector } from "@/components/layout/LanguageSelector/LanguageSelector";
 
 export default function ResetPasswordPage() {
   const router = useRouter();
+  const { t } = useTranslation();
   const [isLoading, setIsLoading] = React.useState(false);
+
+  const formSchema = React.useMemo(
+    () =>
+      z.object({
+        email: z.string().email(t("auth.validation.emailRequired")),
+      }),
+    [t]
+  );
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -48,9 +55,8 @@ export default function ResetPasswordPage() {
         email: data.email,
       });
 
-      toast.success("Reset link sent!", {
-        description:
-          "If the email exists, a password reset link has been sent to your inbox.",
+      toast.success(t("auth.resetPassword.success"), {
+        description: t("auth.resetPassword.successDescription"),
       });
 
       // Optionally redirect to login after a delay
@@ -60,9 +66,8 @@ export default function ResetPasswordPage() {
     } catch (error: any) {
       // Always show success message for security (don't reveal if email exists)
       // The backend already returns a generic message, so we show success
-      toast.success("Reset link sent!", {
-        description:
-          "If the email exists, a password reset link has been sent to your inbox.",
+      toast.success(t("auth.resetPassword.success"), {
+        description: t("auth.resetPassword.successDescription"),
       });
 
       // Still redirect to login
@@ -77,11 +82,11 @@ export default function ResetPasswordPage() {
   return (
     <Card className="w-full sm:max-w-md">
       <CardHeader>
-        <CardTitle>Reset your password</CardTitle>
-        <CardDescription>
-          Enter your email address and we'll send you a link to reset your
-          password.
-        </CardDescription>
+        <div className="flex items-center justify-between">
+          <CardTitle>{t("auth.resetPassword.title")}</CardTitle>
+          <LanguageSelector />
+        </div>
+        <CardDescription>{t("auth.resetPassword.description")}</CardDescription>
       </CardHeader>
       <CardContent>
         <form
@@ -98,14 +103,14 @@ export default function ResetPasswordPage() {
               render={({ field, fieldState }) => (
                 <Field data-invalid={fieldState.invalid}>
                   <FieldLabel htmlFor="s32-form-reset-password-email">
-                    Email
+                    {t("auth.resetPassword.email")}
                   </FieldLabel>
                   <Input
                     {...field}
                     id="s32-form-reset-password-email"
                     type="email"
                     aria-invalid={fieldState.invalid}
-                    placeholder="Enter your email address"
+                    placeholder={t("auth.resetPassword.emailPlaceholder")}
                     autoComplete="email"
                     disabled={isLoading}
                   />
@@ -126,7 +131,9 @@ export default function ResetPasswordPage() {
             className="w-full"
             disabled={isLoading}
           >
-            {isLoading ? "Sending..." : "Send reset link"}
+            {isLoading
+              ? t("auth.resetPassword.submitting")
+              : t("auth.resetPassword.submit")}
           </Button>
         </Field>
         <div className="text-center text-sm">
@@ -134,11 +141,10 @@ export default function ResetPasswordPage() {
             href="/auth/login"
             className="text-muted-foreground underline-offset-4 hover:underline"
           >
-            Back to login
+            {t("common.backToLogin")}
           </Link>
         </div>
       </CardFooter>
     </Card>
   );
 }
-

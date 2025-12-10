@@ -26,6 +26,40 @@ class CurrentUserView(APIView):
                 "username": user.username,
                 "email": user.email,
                 "user_type": user.type,
+                "language": user.language,
+                "is_active": user.is_active,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class UpdateLanguageView(APIView):
+    """
+    API endpoint to update user's language preference.
+    Accepts {"language": "en" | "pl"}
+    """
+    permission_classes = [IsAuthenticated]
+
+    def put(self, request):
+        user = request.user
+        language = request.data.get('language')
+
+        if language not in ['en', 'pl']:
+            return Response(
+                {"detail": "Invalid language. Supported languages: 'en', 'pl'"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user.language = language
+        user.save(update_fields=['language'])
+
+        return Response(
+            {
+                "id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "user_type": user.type,
+                "language": user.language,
                 "is_active": user.is_active,
             },
             status=status.HTTP_200_OK,

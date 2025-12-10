@@ -1,0 +1,160 @@
+{
+  "common": {
+    "appName": "System 32",
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "cancel": "Cancel",
+    "save": "Save",
+    "delete": "Delete",
+    "edit": "Edit",
+    "create": "Create",
+    "search": "Search",
+    "filter": "Filter",
+    "clearFilters": "Clear filters",
+    "noResults": "No results found",
+    "all": "All",
+    "actions": "Actions",
+    "backToLogin": "Back to login"
+  },
+  "language": {
+    "title": "Language",
+    "english": "English",
+    "polish": "Polish"
+  },
+  "auth": {
+    "login": {
+      "title": "Login to your account",
+      "description": "Enter your username and password below",
+      "username": "Username",
+      "usernamePlaceholder": "Enter your username",
+      "password": "Password",
+      "passwordPlaceholder": "Enter your password",
+      "forgotPassword": "Forgot your password?",
+      "submit": "Login",
+      "submitting": "Logging in...",
+      "success": "Login successful!",
+      "successDescription": "Redirecting to your dashboard...",
+      "error": "Login failed",
+      "errorDescription": "Invalid username or password. Please try again."
+    },
+    "register": {
+      "title": "Complete your registration",
+      "description": "Set a password for {companyName} ({email})",
+      "password": "Password",
+      "passwordPlaceholder": "Enter a strong password",
+      "confirmPassword": "Confirm Password",
+      "confirmPasswordPlaceholder": "Re-enter your password",
+      "submit": "Create account",
+      "submitting": "Creating account...",
+      "success": "Account created!",
+      "successDescription": "You can now log in with your credentials.",
+      "error": "Registration failed",
+      "errorDescription": "Failed to complete registration. Please try again.",
+      "loadingInvitation": "Loading invitation...",
+      "invitationNotFound": "Invitation not found",
+      "invitationNotFoundDescription": "This invitation is invalid or has expired.",
+      "missingToken": "Missing token",
+      "missingTokenDescription": "Registration link is invalid. Please contact support.",
+      "invalidInvitation": "Invalid invitation",
+      "invalidInvitationDescription": "Invitation is invalid or expired. Please request a new invitation."
+    },
+    "resetPassword": {
+      "title": "Reset your password",
+      "description": "Enter your email address and we'll send you a link to reset your password.",
+      "email": "Email",
+      "emailPlaceholder": "Enter your email address",
+      "submit": "Send reset link",
+      "submitting": "Sending...",
+      "success": "Reset link sent!",
+      "successDescription": "If the email exists, a password reset link has been sent to your inbox."
+    },
+    "resetPasswordConfirm": {
+      "title": "Set new password",
+      "description": "Enter a new password for {email}",
+      "newPassword": "New Password",
+      "newPasswordPlaceholder": "Enter a strong password",
+      "confirmPassword": "Confirm Password",
+      "confirmPasswordPlaceholder": "Re-enter your password",
+      "submit": "Reset password",
+      "submitting": "Resetting password...",
+      "success": "Password reset successful!",
+      "successDescription": "You can now log in with your new password.",
+      "error": "Password reset failed",
+      "errorDescription": "Failed to reset password. Please try again.",
+      "validating": "Validating token...",
+      "invalidLink": "Invalid reset link",
+      "invalidLinkDescription": "This password reset link is invalid or has expired.",
+      "requestNew": "Request new reset link",
+      "missingToken": "Missing token",
+      "missingTokenDescription": "Password reset link is invalid. Please request a new one.",
+      "invalidToken": "Invalid token",
+      "invalidTokenDescription": "Token is invalid or expired. Please request a new password reset link."
+    },
+    "validation": {
+      "usernameRequired": "Username is required.",
+      "passwordRequired": "Password is required.",
+      "passwordMin": "Password must be at least 8 characters.",
+      "passwordMax": "Password must be at most 128 characters.",
+      "confirmPasswordRequired": "Please confirm your password.",
+      "passwordsDoNotMatch": "Passwords do not match.",
+      "emailRequired": "Please enter a valid email address.",
+      "companyNameRequired": "Company name is required."
+    }
+  },
+  "dashboard": {
+    "staff": {
+      "title": "Staff Dashboard",
+      "description": "Manage companies and system settings from here."
+    },
+    "partner": {
+      "title": "Company Dashboard",
+      "description": "Welcome to your company panel. This is your dedicated workspace."
+    }
+  },
+  "companies": {
+    "title": "Companies",
+    "searchPlaceholder": "Search by name, email, or ID...",
+    "filterByStatus": "Filter by status:",
+    "showingResults": "Showing {filtered} of {total} companies",
+    "noCompaniesMatch": "No companies match your search criteria.",
+    "noCompaniesFound": "No companies found.",
+    "loadError": "Failed to load companies. Please try again later.",
+    "table": {
+      "id": "ID",
+      "name": "Name",
+      "status": "Status",
+      "email": "Email",
+      "representativeId": "Representative ID",
+      "createdAt": "Created At"
+    },
+    "status": {
+      "main": "Main",
+      "partner": "Partner",
+      "basic": "Basic"
+    },
+    "invite": {
+      "button": "Invite New",
+      "title": "Invite New Company",
+      "description": "Send an invitation to a new company. They will receive an email with a registration link.",
+      "emailLabel": "Email Address",
+      "emailPlaceholder": "company@example.com",
+      "companyNameLabel": "Company Name",
+      "companyNamePlaceholder": "Enter company name",
+      "companyStatusLabel": "Company Status",
+      "submit": "Send Invitation",
+      "submitting": "Sending...",
+      "success": "Invitation sent successfully!",
+      "successDescription": "An invitation has been sent to {email}",
+      "error": "Invitation failed",
+      "errorDescription": "Failed to send invitation. Please try again."
+    }
+  },
+  "navigation": {
+    "companyManagement": "Company management",
+    "companyList": "Company List",
+    "createCompany": "Create company",
+    "panel": "Panel"
+  }
+}
+

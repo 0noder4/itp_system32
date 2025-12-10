@@ -25,26 +25,19 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { apiClient } from "@/lib/api";
+import { useTranslation } from "@/lib/i18n";
+import { LanguageSelector } from "@/components/layout/LanguageSelector/LanguageSelector";
 
-const formSchema = z
-  .object({
-    password: z
-      .string()
-      .min(8, "Password must be at least 8 characters.")
-      .max(128, "Password must be at most 128 characters."),
-    confirmPassword: z.string().min(1, "Please confirm your password."),
-  })
-  .refine((data) => data.password === data.confirmPassword, {
-    message: "Passwords do not match.",
-    path: ["confirmPassword"],
-  });
-
-type FormInput = z.infer<typeof formSchema>;
+type FormInput = {
+  password: string;
+  confirmPassword: string;
+};
 
 export default function ResetPasswordConfirmPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
+  const { t } = useTranslation();
 
   const [userInfo, setUserInfo] = React.useState<{
     email: string;
@@ -53,6 +46,25 @@ export default function ResetPasswordConfirmPage() {
   } | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
   const [isFetching, setIsFetching] = React.useState(true);
+
+  const formSchema = React.useMemo(
+    () =>
+      z
+        .object({
+          password: z
+            .string()
+            .min(8, t("auth.validation.passwordMin"))
+            .max(128, t("auth.validation.passwordMax")),
+          confirmPassword: z
+            .string()
+            .min(1, t("auth.validation.confirmPasswordRequired")),
+        })
+        .refine((data) => data.password === data.confirmPassword, {
+          message: t("auth.validation.passwordsDoNotMatch"),
+          path: ["confirmPassword"],
+        }),
+    [t]
+  );
 
   const form = useForm<FormInput>({
     resolver: zodResolver(formSchema),
@@ -64,8 +76,8 @@ export default function ResetPasswordConfirmPage() {
 
   React.useEffect(() => {
     if (!token) {
-      toast.error("Missing token", {
-        description: "Password reset link is invalid. Please request a new one.",
+      toast.error(t("auth.resetPasswordConfirm.missingToken"), {
+        description: t("auth.resetPasswordConfirm.missingTokenDescription"),
       });
       setIsFetching(false);
       return;
@@ -81,8 +93,8 @@ export default function ResetPasswordConfirmPage() {
         const errorMessage =
           error.response?.data?.detail ||
           error.response?.data?.token?.[0] ||
-          "Token is invalid or expired. Please request a new password reset link.";
-        toast.error("Invalid token", {
+          t("auth.resetPasswordConfirm.invalidTokenDescription");
+        toast.error(t("auth.resetPasswordConfirm.invalidToken"), {
           description: errorMessage,
         });
       } finally {
@@ -91,12 +103,12 @@ export default function ResetPasswordConfirmPage() {
     };
 
     fetchTokenInfo();
-  }, [token]);
+  }, [token, t]);
 
   const handleSubmit = async (data: FormInput) => {
     if (!token) {
-      toast.error("Missing token", {
-        description: "Password reset link is invalid. Please request a new one.",
+      toast.error(t("auth.resetPasswordConfirm.missingToken"), {
+        description: t("auth.resetPasswordConfirm.missingTokenDescription"),
       });
       return;
     }
@@ -108,8 +120,8 @@ export default function ResetPasswordConfirmPage() {
         password: data.password,
       });
 
-      toast.success("Password reset successful!", {
-        description: "You can now log in with your new password.",
+      toast.success(t("auth.resetPasswordConfirm.success"), {
+        description: t("auth.resetPasswordConfirm.successDescription"),
       });
 
       router.push("/auth/login");
@@ -118,9 +130,9 @@ export default function ResetPasswordConfirmPage() {
         error.response?.data?.password?.[0] ||
         error.response?.data?.token?.[0] ||
         error.response?.data?.detail ||
-        "Failed to reset password. Please try again.";
+        t("auth.resetPasswordConfirm.errorDescription");
 
-      toast.error("Password reset failed", {
+      toast.error(t("auth.resetPasswordConfirm.error"), {
         description: errorMessage,
       });
     } finally {
@@ -131,7 +143,9 @@ export default function ResetPasswordConfirmPage() {
   if (isFetching) {
     return (
       <div className="flex min-h-[400px] items-center justify-center">
-        <p className="text-sm text-muted-foreground">Validating token...</p>
+        <p className="text-sm text-muted-foreground">
+          {t("auth.resetPasswordConfirm.validating")}
+        </p>
       </div>
     );
   }
@@ -141,9 +155,12 @@ export default function ResetPasswordConfirmPage() {
       <div className="flex min-h-[400px] items-center justify-center">
         <Card className="w-full sm:max-w-md">
           <CardHeader>
-            <CardTitle>Invalid reset link</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle>{t("auth.resetPasswordConfirm.invalidLink")}</CardTitle>
+              <LanguageSelector />
+            </div>
             <CardDescription>
-              This password reset link is invalid or has expired.
+              {t("auth.resetPasswordConfirm.invalidLinkDescription")}
             </CardDescription>
           </CardHeader>
           <CardFooter className="flex flex-col gap-4">
@@ -151,14 +168,14 @@ export default function ResetPasswordConfirmPage() {
               onClick={() => router.push("/auth/reset-password")}
               className="w-full"
             >
-              Request new reset link
+              {t("auth.resetPasswordConfirm.requestNew")}
             </Button>
             <div className="text-center text-sm">
               <Link
                 href="/auth/login"
                 className="text-muted-foreground underline-offset-4 hover:underline"
               >
-                Back to login
+                {t("common.backToLogin")}
               </Link>
             </div>
           </CardFooter>
@@ -170,9 +187,12 @@ export default function ResetPasswordConfirmPage() {
   return (
     <Card className="w-full sm:max-w-md">
       <CardHeader>
-        <CardTitle>Set new password</CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle>{t("auth.resetPasswordConfirm.title")}</CardTitle>
+          <LanguageSelector />
+        </div>
         <CardDescription>
-          Enter a new password for {userInfo.email}
+          {t("auth.resetPasswordConfirm.description", { email: userInfo.email })}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -187,14 +207,14 @@ export default function ResetPasswordConfirmPage() {
               render={({ field, fieldState }) => (
                 <Field data-invalid={fieldState.invalid}>
                   <FieldLabel htmlFor="s32-form-reset-confirm-password">
-                    New Password
+                    {t("auth.resetPasswordConfirm.newPassword")}
                   </FieldLabel>
                   <Input
                     {...field}
                     id="s32-form-reset-confirm-password"
                     type="password"
                     aria-invalid={fieldState.invalid}
-                    placeholder="Enter a strong password"
+                    placeholder={t("auth.resetPasswordConfirm.newPasswordPlaceholder")}
                     autoComplete="new-password"
                     disabled={isLoading}
                   />
@@ -210,14 +230,14 @@ export default function ResetPasswordConfirmPage() {
               render={({ field, fieldState }) => (
                 <Field data-invalid={fieldState.invalid}>
                   <FieldLabel htmlFor="s32-form-reset-confirm-confirm-password">
-                    Confirm Password
+                    {t("auth.resetPasswordConfirm.confirmPassword")}
                   </FieldLabel>
                   <Input
                     {...field}
                     id="s32-form-reset-confirm-confirm-password"
                     type="password"
                     aria-invalid={fieldState.invalid}
-                    placeholder="Re-enter your password"
+                    placeholder={t("auth.resetPasswordConfirm.confirmPasswordPlaceholder")}
                     autoComplete="new-password"
                     disabled={isLoading}
                   />
@@ -238,7 +258,9 @@ export default function ResetPasswordConfirmPage() {
             className="w-full"
             disabled={isLoading}
           >
-            {isLoading ? "Resetting password..." : "Reset password"}
+            {isLoading
+              ? t("auth.resetPasswordConfirm.submitting")
+              : t("auth.resetPasswordConfirm.submit")}
           </Button>
         </Field>
         <div className="text-center text-sm">
@@ -246,11 +268,10 @@ export default function ResetPasswordConfirmPage() {
             href="/auth/login"
             className="text-muted-foreground underline-offset-4 hover:underline"
           >
-            Back to login
+            {t("common.backToLogin")}
           </Link>
         </div>
       </CardFooter>
     </Card>
   );
 }
-

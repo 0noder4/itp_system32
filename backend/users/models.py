@@ -11,10 +11,19 @@ class User(AbstractUser):
         ('staff', 'STAFF'),
         ('company', 'COMPANY'),
     ]
+    LANGUAGE_CHOICES = [
+        ('en', 'English'),
+        ('pl', 'Polish'),
+    ]
     type = models.CharField(
         max_length=10,
         choices=USER_TYPES,
         default="company"
+    )
+    language = models.CharField(
+        max_length=5,
+        choices=LANGUAGE_CHOICES,
+        default="en"
     )
     created_at = models.DateTimeField(auto_now_add = True)
     updated_at = models.DateTimeField(auto_now = True)

@@ -1,7 +1,4 @@
 __pycache__/
-migrations/*
-!migrations/__init__.py
-!migrations/*_initial.py
 
 *.pyc
 *.pyo

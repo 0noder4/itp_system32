@@ -1,0 +1,160 @@
+{
+  "common": {
+    "appName": "System 32",
+    "loading": "Ładowanie...",
+    "error": "Błąd",
+    "success": "Sukces",
+    "cancel": "Anuluj",
+    "save": "Zapisz",
+    "delete": "Usuń",
+    "edit": "Edytuj",
+    "create": "Utwórz",
+    "search": "Szukaj",
+    "filter": "Filtruj",
+    "clearFilters": "Wyczyść filtry",
+    "noResults": "Brak wyników",
+    "all": "Wszystkie",
+    "actions": "Akcje",
+    "backToLogin": "Powrót do logowania"
+  },
+  "language": {
+    "title": "Język",
+    "english": "Angielski",
+    "polish": "Polski"
+  },
+  "auth": {
+    "login": {
+      "title": "Zaloguj się do swojego konta",
+      "description": "Wprowadź swoją nazwę użytkownika i hasło poniżej",
+      "username": "Nazwa użytkownika",
+      "usernamePlaceholder": "Wprowadź nazwę użytkownika",
+      "password": "Hasło",
+      "passwordPlaceholder": "Wprowadź hasło",
+      "forgotPassword": "Zapomniałeś hasła?",
+      "submit": "Zaloguj",
+      "submitting": "Logowanie...",
+      "success": "Zalogowano pomyślnie!",
+      "successDescription": "Przekierowywanie do panelu...",
+      "error": "Logowanie nieudane",
+      "errorDescription": "Nieprawidłowa nazwa użytkownika lub hasło. Spróbuj ponownie."
+    },
+    "register": {
+      "title": "Dokończ rejestrację",
+      "description": "Ustaw hasło dla {companyName} ({email})",
+      "password": "Hasło",
+      "passwordPlaceholder": "Wprowadź silne hasło",
+      "confirmPassword": "Potwierdź hasło",
+      "confirmPasswordPlaceholder": "Wprowadź hasło ponownie",
+      "submit": "Utwórz konto",
+      "submitting": "Tworzenie konta...",
+      "success": "Konto utworzone!",
+      "successDescription": "Możesz teraz zalogować się swoimi danymi.",
+      "error": "Rejestracja nieudana",
+      "errorDescription": "Nie udało się dokończyć rejestracji. Spróbuj ponownie.",
+      "loadingInvitation": "Ładowanie zaproszenia...",
+      "invitationNotFound": "Nie znaleziono zaproszenia",
+      "invitationNotFoundDescription": "To zaproszenie jest nieprawidłowe lub wygasło.",
+      "missingToken": "Brak tokenu",
+      "missingTokenDescription": "Link rejestracyjny jest nieprawidłowy. Skontaktuj się z pomocą techniczną.",
+      "invalidInvitation": "Nieprawidłowe zaproszenie",
+      "invalidInvitationDescription": "Zaproszenie jest nieprawidłowe lub wygasło. Poproś o nowe zaproszenie."
+    },
+    "resetPassword": {
+      "title": "Zresetuj hasło",
+      "description": "Wprowadź swój adres e-mail, a wyślemy Ci link do zresetowania hasła.",
+      "email": "E-mail",
+      "emailPlaceholder": "Wprowadź swój adres e-mail",
+      "submit": "Wyślij link resetowania",
+      "submitting": "Wysyłanie...",
+      "success": "Link wysłany!",
+      "successDescription": "Jeśli adres e-mail istnieje w systemie, link do resetowania hasła został wysłany."
+    },
+    "resetPasswordConfirm": {
+      "title": "Ustaw nowe hasło",
+      "description": "Wprowadź nowe hasło dla {email}",
+      "newPassword": "Nowe hasło",
+      "newPasswordPlaceholder": "Wprowadź silne hasło",
+      "confirmPassword": "Potwierdź hasło",
+      "confirmPasswordPlaceholder": "Wprowadź hasło ponownie",
+      "submit": "Zresetuj hasło",
+      "submitting": "Resetowanie hasła...",
+      "success": "Hasło zresetowane!",
+      "successDescription": "Możesz teraz zalogować się nowym hasłem.",
+      "error": "Reset hasła nieudany",
+      "errorDescription": "Nie udało się zresetować hasła. Spróbuj ponownie.",
+      "validating": "Weryfikacja tokenu...",
+      "invalidLink": "Nieprawidłowy link resetowania",
+      "invalidLinkDescription": "Ten link resetowania hasła jest nieprawidłowy lub wygasł.",
+      "requestNew": "Poproś o nowy link",
+      "missingToken": "Brak tokenu",
+      "missingTokenDescription": "Link resetowania hasła jest nieprawidłowy. Poproś o nowy.",
+      "invalidToken": "Nieprawidłowy token",
+      "invalidTokenDescription": "Token jest nieprawidłowy lub wygasł. Poproś o nowy link resetowania hasła."
+    },
+    "validation": {
+      "usernameRequired": "Nazwa użytkownika jest wymagana.",
+      "passwordRequired": "Hasło jest wymagane.",
+      "passwordMin": "Hasło musi mieć co najmniej 8 znaków.",
+      "passwordMax": "Hasło może mieć maksymalnie 128 znaków.",
+      "confirmPasswordRequired": "Proszę potwierdzić hasło.",
+      "passwordsDoNotMatch": "Hasła nie są zgodne.",
+      "emailRequired": "Proszę wprowadzić prawidłowy adres e-mail.",
+      "companyNameRequired": "Nazwa firmy jest wymagana."
+    }
+  },
+  "dashboard": {
+    "staff": {
+      "title": "Panel pracownika",
+      "description": "Zarządzaj firmami i ustawieniami systemu."
+    },
+    "partner": {
+      "title": "Panel firmy",
+      "description": "Witaj w panelu swojej firmy. To jest Twoja dedykowana przestrzeń robocza."
+    }
+  },
+  "companies": {
+    "title": "Firmy",
+    "searchPlaceholder": "Szukaj po nazwie, e-mailu lub ID...",
+    "filterByStatus": "Filtruj według statusu:",
+    "showingResults": "Wyświetlanie {filtered} z {total} firm",
+    "noCompaniesMatch": "Żadne firmy nie pasują do kryteriów wyszukiwania.",
+    "noCompaniesFound": "Nie znaleziono firm.",
+    "loadError": "Nie udało się załadować firm. Spróbuj ponownie później.",
+    "table": {
+      "id": "ID",
+      "name": "Nazwa",
+      "status": "Status",
+      "email": "E-mail",
+      "representativeId": "ID przedstawiciela",
+      "createdAt": "Data utworzenia"
+    },
+    "status": {
+      "main": "Główna",
+      "partner": "Partner",
+      "basic": "Podstawowa"
+    },
+    "invite": {
+      "button": "Zaproś nową",
+      "title": "Zaproś nową firmę",
+      "description": "Wyślij zaproszenie do nowej firmy. Otrzymają e-mail z linkiem rejestracyjnym.",
+      "emailLabel": "Adres e-mail",
+      "emailPlaceholder": "firma@example.com",
+      "companyNameLabel": "Nazwa firmy",
+      "companyNamePlaceholder": "Wprowadź nazwę firmy",
+      "companyStatusLabel": "Status firmy",
+      "submit": "Wyślij zaproszenie",
+      "submitting": "Wysyłanie...",
+      "success": "Zaproszenie wysłane!",
+      "successDescription": "Zaproszenie zostało wysłane na adres {email}",
+      "error": "Wysyłanie zaproszenia nieudane",
+      "errorDescription": "Nie udało się wysłać zaproszenia. Spróbuj ponownie."
+    }
+  },
+  "navigation": {
+    "companyManagement": "Zarządzanie firmami",
+    "companyList": "Lista firm",
+    "createCompany": "Utwórz firmę",
+    "panel": "Panel"
+  }
+}
+
