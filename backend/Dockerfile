@@ -92,22 +92,21 @@ CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
 FROM base AS production
 
 # Create non-root user for security
-# RUN useradd -m -r appuser && \
-#     chown -R appuser /app
+RUN useradd -m -r -u 1001 appuser
 
-# # Create staticfiles directory and set permissions
-# RUN mkdir -p /app/staticfiles /app/mediafiles && \
-#     chown -R appuser:appuser /app/staticfiles /app/mediafiles
+# Create staticfiles and mediafiles directories and set permissions
+RUN mkdir -p /app/staticfiles /app/mediafiles && \
+    chown -R appuser:appuser /app/staticfiles /app/mediafiles /app
 
 # Set Django environment to production
 ENV DJANGO_SETTINGS_MODULE=backend.settings
 ENV DEBUG=False
 
-# Switch to non-root user
-# USER appuser
-
-# Collect static files
+# Collect static files before switching user
 RUN python manage.py collectstatic --noinput
+
+# Switch to non-root user
+USER appuser
 
 # Production command - Gunicorn WSGI server
 CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "3", "--timeout", "60", "--keep-alive", "2", "backend.wsgi:application"]
