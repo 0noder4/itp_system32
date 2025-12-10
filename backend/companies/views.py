@@ -143,3 +143,14 @@ class CompanyRegistrationView(APIView):
             {"message": "Registration successful."},
             status=status.HTTP_201_CREATED,
         )
+
+#from .forms.stage1_form import CompFormStage1, ContPersFormStage1
+#---forms:----
+'''
+TODO: polaczyc dwa formularze do stage1. 
+najpierw trzeba zapisac company, a potem odczytac contact person, ktoremu przypiszę relację z company i wtedy zapisac CP
+
+forms stage2 :
+jak z wlasna no to details i pytanie co chca od nas 
+
+'''
