@@ -10,31 +10,6 @@ from .serializers import (
     PasswordResetConfirmSerializer
 )
 
-# Create your views here.
-
-class HealthCheckView(APIView):
-    """
-    Health check endpoint for monitoring and container orchestration.
-    """
-    permission_classes = []
-
-    def get(self, request):
-        try:
-            # Check database connection
-            with connection.cursor() as cursor:
-                cursor.execute("SELECT 1")
-            db_status = "healthy"
-        except Exception:
-            db_status = "unhealthy"
-
-        return Response(
-            {
-                "status": "healthy" if db_status == "healthy" else "degraded",
-                "database": db_status,
-            },
-            status=status.HTTP_200_OK if db_status == "healthy" else status.HTTP_503_SERVICE_UNAVAILABLE,
-        )
-
 class CurrentUserView(APIView):
     """
     API endpoint to get current authenticated user information.
@@ -83,6 +58,7 @@ class PasswordResetConfirmView(APIView):
     def get(self, request):
         """Validate token and return user info"""
         from users.models import PasswordResetRequest
+        import uuid
 
         token = request.query_params.get("token")
         if not token:
@@ -91,11 +67,25 @@ class PasswordResetConfirmView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Validate UUID format before querying database
         try:
-            reset_request = PasswordResetRequest.objects.get(token=token, is_used=False)
-            if reset_request.is_expired():
+            token_uuid = uuid.UUID(token)
+        except (ValueError, TypeError):
+            return Response(
+                {"token": ["Invalid token format."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            reset_request = PasswordResetRequest.objects.get(token=token_uuid, is_used=False)
+            if not reset_request.is_valid():
+                if reset_request.is_expired():
+                    return Response(
+                        {"detail": "Token has expired."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
                 return Response(
-                    {"detail": "Token has expired."},
+                    {"detail": "Token has already been used."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
         except PasswordResetRequest.DoesNotExist:
@@ -109,20 +99,19 @@ class PasswordResetConfirmView(APIView):
                 "email": reset_request.user.email,
                 "username": reset_request.user.username,
                 "expires_at": reset_request.expires_at,
-            }
+            },
+            status=status.HTTP_200_OK,
         )
 
     def post(self, request):
         """Reset password with token"""
+        # Get token from request body or query params
         token = request.data.get("token") or request.query_params.get("token")
-        if not token:
-            return Response(
-                {"token": ["Token is required."]},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
+        
+        # Prepare data for serializer
         data = request.data.copy()
-        data["token"] = token
+        if token:
+            data["token"] = token
 
         serializer = PasswordResetConfirmSerializer(data=data)
         if serializer.is_valid():

@@ -5,6 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import * as z from "zod";
 
 import { Button } from "@/components/ui/button";
@@ -129,12 +130,12 @@ export default function Index() {
                     <FieldLabel htmlFor="s32-form-login-password">
                       Password
                     </FieldLabel>
-                    <a
-                      href="#"
+                    <Link
+                      href="/auth/reset-password"
                       className="ml-auto inline-block text-sm underline-offset-4 hover:underline"
                     >
                       Forgot your password?
-                    </a>
+                    </Link>
                   </div>
                   <Input
                     {...field}
