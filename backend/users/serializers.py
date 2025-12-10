@@ -56,14 +56,7 @@ class PasswordResetRequestSerializer(serializers.Serializer):
 
             reset_request = PasswordResetRequest.objects.create(user=user)
 
-            if settings.DEBUG:
-                # Backend API endpoint for testing
-                backend_url = "http://localhost:8000"
-                reset_link = f"{backend_url}/api/password-reset/confirm/?token={reset_request.token}"
-            else:
-                # Frontend URL for production
-                frontend_url = settings.FRONTEND_BASE_URL
-                reset_link = f"{frontend_url}/auth/reset-password?token={reset_request.token}"
+            reset_link = f"{settings.FRONTEND_BASE_URL}/auth/reset-password?token={reset_request.token}"
 
 
             subject = "Reset hasła - System32"
