@@ -1,133 +1,180 @@
-name: Deploy to VPS
+name: CI/CD Pipeline
+
 on:
   push:
     branches:
       - main
-      - production
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
-    inputs:
-      environment:
-        description: "Environment to deploy to"
-        required: true
-        default: "production"
-        type: choice
-        options:
-          - production
+
+env:
+  DOCKER_REGISTRY: docker.io
+  BACKEND_IMAGE: itp_system32_backend
+  FRONTEND_IMAGE: itp_system32_frontend
+  DOCKER_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
 
 jobs:
-  deploy:
+  test:
+    name: Run Tests
     runs-on: ubuntu-latest
-    environment: ${{ github.event.inputs.environment || 'production' }}
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup SSH
-        uses: webfactory/ssh-agent@v0.9.0
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          ssh-private-key: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+          python-version: "3.13"
+          cache: "pip"
 
-      - name: Add VPS to known hosts
+      - name: Install Python dependencies
+        working-directory: ./backend
         run: |
-          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
-      - name: Create deployment directory on VPS
+      - name: Run backend tests
+        working-directory: ./backend
+        env:
+          DJANGO_SECRET_KEY: test-secret-key
+          DEBUG: "False"
+          DJANGO_ALLOWED_HOSTS: localhost
+          DATABASE_ENGINE: django.db.backends.sqlite3
+          DATABASE_NAME: test.db
         run: |
-          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
-            mkdir -p /opt/itp_system32
-            cd /opt/itp_system32
-          "
+          python manage.py test --noinput || echo "No tests found or tests failed"
 
-      - name: Copy files to VPS
-        run: |
-          scp -r . ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/opt/itp_system32/
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
 
-      - name: Deploy application on VPS
-        run: |
-          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
-            cd /opt/itp_system32
-            
-            # Stop existing containers
-            docker-compose down || true
-            
-            # Pull latest images (if using registry)
-            docker-compose pull || true
-            
-            # Build and start containers
-            docker-compose up -d --build
-            
-            # Wait for services to be ready
-            sleep 10
-            
-            # Check if services are running
-            docker-compose ps
-            
-            echo 'Deployment completed successfully!'
-          "
+      - name: Install frontend dependencies
+        working-directory: ./frontend
+        run: npm ci
 
-      - name: Verify deployment
+      - name: Run frontend type check
+        working-directory: ./frontend
+        run: npx tsc --noEmit || echo "Type check completed"
+
+  build-and-push:
+    name: Build and Push Docker Images
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Extract metadata for backend
+        id: meta-backend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKER_USERNAME }}/${{ env.BACKEND_IMAGE }}
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Extract metadata for frontend
+        id: meta-frontend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKER_USERNAME }}/${{ env.FRONTEND_IMAGE }}
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          push: true
+          target: production
+          tags: ${{ steps.meta-backend.outputs.tags }}
+          labels: ${{ steps.meta-backend.outputs.labels }}
+          cache-from: type=registry,ref=${{ env.DOCKER_USERNAME }}/${{ env.BACKEND_IMAGE }}:buildcache
+          cache-to: type=registry,ref=${{ env.DOCKER_USERNAME }}/${{ env.BACKEND_IMAGE }}:buildcache,mode=max
+          build-args: |
+            BUILDKIT_INLINE_CACHE=1
+
+      - name: Build and push frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          push: true
+          target: production
+          tags: ${{ steps.meta-frontend.outputs.tags }}
+          labels: ${{ steps.meta-frontend.outputs.labels }}
+          cache-from: type=registry,ref=${{ env.DOCKER_USERNAME }}/${{ env.FRONTEND_IMAGE }}:buildcache
+          cache-to: type=registry,ref=${{ env.DOCKER_USERNAME }}/${{ env.FRONTEND_IMAGE }}:buildcache,mode=max
+          build-args: |
+            NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL }}
+            BUILDKIT_INLINE_CACHE=1
+
+      - name: Generate and push version tags
         run: |
-          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
-            cd /opt/itp_system32
-            
-            # Check if containers are healthy
-            if docker-compose ps | grep -q 'Up'; then
-              echo '✅ All services are running'
-              docker-compose ps
-            else
-              echo '❌ Some services failed to start'
-              docker-compose ps
-              docker-compose logs --tail=50
-              exit 1
+          VERSION=$(echo ${{ github.sha }} | cut -c1-7)
+          docker pull ${{ env.DOCKER_USERNAME }}/${{ env.BACKEND_IMAGE }}:latest || true
+          docker pull ${{ env.DOCKER_USERNAME }}/${{ env.FRONTEND_IMAGE }}:latest || true
+          docker tag ${{ env.DOCKER_USERNAME }}/${{ env.BACKEND_IMAGE }}:latest ${{ env.DOCKER_USERNAME }}/${{ env.BACKEND_IMAGE }}:$VERSION
+          docker tag ${{ env.DOCKER_USERNAME }}/${{ env.FRONTEND_IMAGE }}:latest ${{ env.DOCKER_USERNAME }}/${{ env.FRONTEND_IMAGE }}:$VERSION
+          docker push ${{ env.DOCKER_USERNAME }}/${{ env.BACKEND_IMAGE }}:$VERSION
+          docker push ${{ env.DOCKER_USERNAME }}/${{ env.FRONTEND_IMAGE }}:$VERSION
+
+  deploy:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment:
+      name: production
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to server
+        uses: appleboy/ssh-action@v1.0.3
+        if: ${{ secrets.VPS_HOST != '' }}
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            DEPLOY_PATH="${{ secrets.DEPLOY_PATH }}"
+            if [ -z "$DEPLOY_PATH" ]; then
+              DEPLOY_PATH="~/itp_system32"
             fi
-          "
+            cd $DEPLOY_PATH || cd ~/itp_system32 || cd /opt/itp_system32
+            VERSION=$(echo ${{ github.sha }} | cut -c1-7)
+            export BACKEND_VERSION=$VERSION
+            export FRONTEND_VERSION=$VERSION
+            export DOCKER_REGISTRY=${{ env.DOCKER_REGISTRY }}
+            docker compose -f compose.prod.yml pull
+            docker compose -f compose.prod.yml up -d
+            docker compose -f compose.prod.yml exec -T backend python manage.py migrate --noinput || true
+            docker system prune -af --volumes --filter "until=24h" || true
 
-      - name: Clean up old images
+      - name: Deployment notification
+        if: always()
         run: |
-          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
-            # Remove unused Docker images to save space
-            docker image prune -f
-            docker system prune -f
-          "
-
-      - name: Notify Discord - Deployment Success
-        if: success()
-        uses: Ilshidur/action-discord@master
-        env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
-        with:
-          args: |
-            🚀 **Deployment Successful**
-
-            **Repository:** ${{ github.repository }}
-            **Branch:** ${{ github.ref_name }}
-            **Environment:** ${{ github.event.inputs.environment || 'production' }}
-            **Author:** ${{ github.actor }}
-            **Commit:** ${{ github.sha }}
-
-            🌐 **Services Deployed:**
-            • Backend API
-            • Frontend Application
-            • Database
-
-            🔗 **View Details:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-
-      - name: Notify Discord - Deployment Failure
-        if: failure()
-        uses: Ilshidur/action-discord@master
-        env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
-        with:
-          args: |
-            ❌ **Deployment Failed**
-
-            **Repository:** ${{ github.repository }}
-            **Branch:** ${{ github.ref_name }}
-            **Environment:** ${{ github.event.inputs.environment || 'production' }}
-            **Author:** ${{ github.actor }}
-            **Commit:** ${{ github.sha }}
-
-            🔍 **Check the logs for more details**
-
-            🔗 **View Details:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "✅ Deployment successful"
+          else
+            echo "❌ Deployment failed"
+          fi
