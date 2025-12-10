@@ -1,111 +1,73 @@
 services:
   db:
-    image: mysql:8.0
+    image: mysql:latest
     container_name: ${PROJECT_NAME}_db
-    restart: unless-stopped
+    restart: always
     environment:
       MYSQL_DATABASE: ${DATABASE_NAME}
       MYSQL_USER: ${DATABASE_USER}
       MYSQL_PASSWORD: ${DATABASE_PASSWORD}
       MYSQL_ROOT_PASSWORD: ${DATABASE_ROOT_PASSWORD}
     volumes:
-      - mysql_data:/var/lib/mysql
-      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
-    ports:
-      - "${DATABASE_PORT:-3306}:3306"
+      - data:/var/lib/mysql
     networks:
       - internal
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DATABASE_ROOT_PASSWORD}"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 30s
 
   backend:
-    image: 0noder4/itp_system32_backend:${BACKEND_VERSION:-latest}
+    image: ${DOCKER_REGISTRY}/itp_system32_backend:${BACKEND_VERSION}
     container_name: ${PROJECT_NAME}_backend
-    restart: unless-stopped
+    restart: always
     environment:
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
-      DEBUG: ${DEBUG:-False}
-      DJANGO_LOGLEVEL: ${DJANGO_LOGLEVEL:-INFO}
+      DEBUG: ${DEBUG}
+      DJANGO_LOGLEVEL: ${DJANGO_LOGLEVEL}
       DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS}
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
-      DATABASE_ENGINE: ${DATABASE_ENGINE:-django.db.backends.mysql}
+      DATABASE_ENGINE: ${DATABASE_ENGINE}
       DATABASE_NAME: ${DATABASE_NAME}
       DATABASE_USERNAME: ${DATABASE_USER}
       DATABASE_PASSWORD: ${DATABASE_PASSWORD}
-      DATABASE_HOST: ${DATABASE_HOST:-db}
-      DATABASE_PORT: ${DATABASE_PORT:-3306}
-    ports:
-      - "${BACKEND_PORT:-8000}:8000"
+      DATABASE_HOST: ${DATABASE_HOST}
+      DATABASE_PORT: ${DATABASE_PORT}
+      EMAIL_HOST: ${EMAIL_HOST}
+      EMAIL_PORT: ${EMAIL_PORT}
+      EMAIL_HOST_USER: ${EMAIL_HOST_USER}
+      EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
     networks:
       - internal
     depends_on:
       db:
         condition: service_healthy
-    volumes:
-      - static_files:/app/staticfiles
-      - media_files:/app/mediafiles
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-
   frontend:
-    image: 0noder4/itp_system32_frontend:${FRONTEND_VERSION:-latest}
+    image: ${DOCKER_REGISTRY}/itp_system32_frontend:${FRONTEND_VERSION}
     container_name: ${PROJECT_NAME}_frontend
-    restart: unless-stopped
+    restart: always
     environment:
       NODE_ENV: production
       NEXT_PUBLIC_API_URL: ${API_URL}
-    ports:
-      - "${FRONTEND_PORT:-3000}:3000"
     networks:
       - internal
     depends_on:
       backend:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000 || exit 1"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000 || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 30s
-
-  nginx:
-    image: nginx:alpine
-    container_name: ${PROJECT_NAME}_nginx
-    restart: unless-stopped
-    ports:
-      - "${NGINX_HTTP_PORT:-80}:80"
-      - "${NGINX_HTTPS_PORT:-443}:443"
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - static_files:/var/www/static:ro
-      - media_files:/var/www/media:ro
-    networks:
-      - internal
-    depends_on:
-      - frontend
-      - backend
-    healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost/health/ || exit 1"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
+      start_period: 40s
 
 volumes:
-  mysql_data:
-    driver: local
-  static_files:
-    driver: local
-  media_files:
+  data:
     driver: local
 
 networks:
   internal:
     driver: bridge
+
