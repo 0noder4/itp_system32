@@ -122,10 +122,9 @@ class Stand(models.Model):
 class Deadline(models.Model):
     dl = models.DateTimeField()
 
-
 class Feedback(models.Model):
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name = "feedback")
-    form = models.CharField(max_length=50, verbose_name="etap formularza")
+    form = models.CharField(max_length=50, verbose_name="etap formularza") # lista etapów?
     status = models.CharField(max_length=30, choices=STATE_OPT, default='pending')
     comment = models.TextField(verbose_name= "komentarz", blank =True)
     
@@ -135,7 +134,7 @@ class BasicData(models.Model):
     company = models.OneToOneField(Company, on_delete=models.CASCADE, related_name='basic_data')
     full_name = models.CharField(max_length=255, verbose_name="pełna nazwa firmy") 
     nip = models.CharField(max_length=20, verbose_name="nip firmy")
-    dl =models.OneToOneField(Deadline, on_delete=models.CASCADE, related_name ="deadline" )
+    dl =models.OneToOneField(Deadline, on_delete=models.SET_NULL, null=True)
 
 
 class Adress(models.Model):
@@ -165,7 +164,8 @@ class StandDetails(models.Model):
     sc_details = models.CharField(max_length = 255, verbose_name= "z czego się składa własna zabudowa", blank = True)
     name_sign_text = models.CharField(max_length=255, verbose_name = "napis na fryz", blank = True) # trzeba zrobic walidację z basic equipment
     logo_sign_file = models.FileField(upload_to ='logos', verbose_name = "Logotyp na fryz", blank = True) # jak wyzej
-  
+    dl =models.OneToOneField(Deadline, on_delete=models.SET_NULL, null=True)
+
 class BasicEquipment(models.Model):
     form = models.OneToOneField(StandDetails,on_delete =models.CASCADE, related_name='basic_equipment' )
     chair = models.IntegerField(verbose_name=" ilość krzeseł", default =2)
@@ -196,15 +196,18 @@ class Jobwall(models.Model):
     benefits = models.TextField(verbose_name= "co jest oferowane")
     requirements = models.TextField(verbose_name= "wymagania")
     url = models.URLField()
+    dl =models.OneToOneField(Deadline, on_delete=models.SET_NULL, null=True)
 
 class Workshop(models.Model):
     company = models.OneToOneField(Company, on_delete=models.CASCADE, related_name='workshops')
     workshop = models.BooleanField(verbose_name ="Poprowadzenie warsztatów", default= False )
     notes = models.TextField(verbose_name="dodatkowe uwagi", blank = True )
+    dl =models.OneToOneField(Deadline, on_delete=models.SET_NULL, null=True)
 
 class Description(models.Model):
     company = models.OneToOneField(Company, on_delete=models.CASCADE, related_name='description')
     descr = models.TextField(verbose_name="opis firmy")
+    dl =models.OneToOneField(Deadline, on_delete=models.SET_NULL, null=True)
 
 class FinalData(models.Model):
     company = models.OneToOneField(Company, on_delete=models.CASCADE, related_name='finaldata')
@@ -212,6 +215,7 @@ class FinalData(models.Model):
     gg_parking = models.BooleanField(verbose_name="czy potrzebny wyjazd na parking")
     el_devices = models.CharField(max_length=255, verbose_name="urządzenia elektryczne w trakcie targów")
     el_power =  models.CharField(max_length=255, verbose_name="łączna moc urządzeń")
+    dl =models.OneToOneField(Deadline, on_delete=models.SET_NULL, null=True)
 
 class Lunch(models.Model):
     form = models.ForeignKey(FinalData, on_delete=models.CASCADE, related_name = "lunches")
