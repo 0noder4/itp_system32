@@ -10,20 +10,13 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
+import { useTranslation } from "@/lib/i18n";
 
 type Routes = {
   title: string;
   url: string;
   items: { title: string; url: string }[];
 }[];
-
-// Route title mapping for breadcrumbs
-const routeTitleMap: Record<string, string> = {
-  panel: "Panel",
-  fr: "FR",
-  companies: "Companies",
-  create: "Create",
-};
 
 type BreadcrumbNavigationProps = {
   routes: Routes;
@@ -34,6 +27,16 @@ export function BreadcrumbNavigation({
   routes,
   pathname,
 }: BreadcrumbNavigationProps) {
+  const { t } = useTranslation();
+
+  // Route title mapping for breadcrumbs (using translations)
+  const routeTitleMap: Record<string, string> = {
+    panel: t("navigation.panel"),
+    fr: "FR",
+    companies: t("companies.title"),
+    create: t("common.create"),
+  };
+
   // Generate breadcrumb items from pathname
   const generateBreadcrumbs = (): Array<{
     title: string;

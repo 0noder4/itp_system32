@@ -24,26 +24,19 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { apiClient } from "@/lib/api";
+import { useTranslation } from "@/lib/i18n";
+import { LanguageSelector } from "@/components/layout/LanguageSelector/LanguageSelector";
 
-const formSchema = z
-  .object({
-    password: z
-      .string()
-      .min(8, "Password must be at least 8 characters.")
-      .max(128, "Password must be at most 128 characters."),
-    confirmPassword: z.string().min(1, "Please confirm your password."),
-  })
-  .refine((data) => data.password === data.confirmPassword, {
-    message: "Passwords do not match.",
-    path: ["confirmPassword"],
-  });
-
-type FormInput = z.infer<typeof formSchema>;
+type FormInput = {
+  password: string;
+  confirmPassword: string;
+};
 
 export default function Index() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
+  const { t } = useTranslation();
 
   const [invitationInfo, setInvitationInfo] = React.useState<{
     company_name: string;
@@ -52,6 +45,25 @@ export default function Index() {
   } | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
   const [isFetching, setIsFetching] = React.useState(true);
+
+  const formSchema = React.useMemo(
+    () =>
+      z
+        .object({
+          password: z
+            .string()
+            .min(8, t("auth.validation.passwordMin"))
+            .max(128, t("auth.validation.passwordMax")),
+          confirmPassword: z
+            .string()
+            .min(1, t("auth.validation.confirmPasswordRequired")),
+        })
+        .refine((data) => data.password === data.confirmPassword, {
+          message: t("auth.validation.passwordsDoNotMatch"),
+          path: ["confirmPassword"],
+        }),
+    [t]
+  );
 
   const form = useForm<FormInput>({
     resolver: zodResolver(formSchema),
@@ -63,8 +75,8 @@ export default function Index() {
 
   React.useEffect(() => {
     if (!token) {
-      toast.error("Missing token", {
-        description: "Registration link is invalid. Please contact support.",
+      toast.error(t("auth.register.missingToken"), {
+        description: t("auth.register.missingTokenDescription"),
       });
       setIsFetching(false);
       return;
@@ -79,8 +91,8 @@ export default function Index() {
       } catch (error: any) {
         const errorMessage =
           error.response?.data?.detail ||
-          "Invitation is invalid or expired. Please request a new invitation.";
-        toast.error("Invalid invitation", {
+          t("auth.register.invalidInvitationDescription");
+        toast.error(t("auth.register.invalidInvitation"), {
           description: errorMessage,
         });
       } finally {
@@ -89,12 +101,12 @@ export default function Index() {
     };
 
     fetchInvitation();
-  }, [token]);
+  }, [token, t]);
 
   const handleSubmit = async (data: FormInput) => {
     if (!token) {
-      toast.error("Missing token", {
-        description: "Registration link is invalid. Please contact support.",
+      toast.error(t("auth.register.missingToken"), {
+        description: t("auth.register.missingTokenDescription"),
       });
       return;
     }
@@ -106,17 +118,17 @@ export default function Index() {
         password: data.password,
       });
 
-      toast.success("Account created!", {
-        description: "You can now log in with your credentials.",
+      toast.success(t("auth.register.success"), {
+        description: t("auth.register.successDescription"),
       });
       router.push("/auth/login");
     } catch (error: any) {
       const errorMessage =
         error.response?.data?.password?.[0] ||
         error.response?.data?.detail ||
-        "Failed to complete registration. Please try again.";
+        t("auth.register.errorDescription");
 
-      toast.error("Registration failed", {
+      toast.error(t("auth.register.error"), {
         description: errorMessage,
       });
     } finally {
@@ -127,7 +139,9 @@ export default function Index() {
   if (isFetching) {
     return (
       <div className="flex min-h-[400px] items-center justify-center">
-        <p className="text-sm text-muted-foreground">Loading invitation...</p>
+        <p className="text-sm text-muted-foreground">
+          {t("auth.register.loadingInvitation")}
+        </p>
       </div>
     );
   }
@@ -137,14 +151,17 @@ export default function Index() {
       <div className="flex min-h-[400px] items-center justify-center">
         <Card className="w-full sm:max-w-md">
           <CardHeader>
-            <CardTitle>Invitation not found</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle>{t("auth.register.invitationNotFound")}</CardTitle>
+              <LanguageSelector />
+            </div>
             <CardDescription>
-              This invitation is invalid or has expired.
+              {t("auth.register.invitationNotFoundDescription")}
             </CardDescription>
           </CardHeader>
           <CardFooter>
             <Button onClick={() => router.push("/auth/login")}>
-              Back to login
+              {t("common.backToLogin")}
             </Button>
           </CardFooter>
         </Card>
@@ -155,10 +172,15 @@ export default function Index() {
   return (
     <Card className="w-full sm:max-w-md">
       <CardHeader>
-        <CardTitle>Complete your registration</CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle>{t("auth.register.title")}</CardTitle>
+          <LanguageSelector />
+        </div>
         <CardDescription>
-          Set a password for {invitationInfo.company_name} (
-          {invitationInfo.email})
+          {t("auth.register.description", {
+            companyName: invitationInfo.company_name,
+            email: invitationInfo.email,
+          })}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -170,14 +192,14 @@ export default function Index() {
               render={({ field, fieldState }) => (
                 <Field data-invalid={fieldState.invalid}>
                   <FieldLabel htmlFor="s32-form-register-password">
-                    Password
+                    {t("auth.register.password")}
                   </FieldLabel>
                   <Input
                     {...field}
                     id="s32-form-register-password"
                     type="password"
                     aria-invalid={fieldState.invalid}
-                    placeholder="Enter a strong password"
+                    placeholder={t("auth.register.passwordPlaceholder")}
                     autoComplete="new-password"
                     disabled={isLoading}
                   />
@@ -193,14 +215,14 @@ export default function Index() {
               render={({ field, fieldState }) => (
                 <Field data-invalid={fieldState.invalid}>
                   <FieldLabel htmlFor="s32-form-register-confirm-password">
-                    Confirm Password
+                    {t("auth.register.confirmPassword")}
                   </FieldLabel>
                   <Input
                     {...field}
                     id="s32-form-register-confirm-password"
                     type="password"
                     aria-invalid={fieldState.invalid}
-                    placeholder="Re-enter your password"
+                    placeholder={t("auth.register.confirmPasswordPlaceholder")}
                     autoComplete="new-password"
                     disabled={isLoading}
                   />
@@ -221,7 +243,9 @@ export default function Index() {
             className="w-full"
             disabled={isLoading}
           >
-            {isLoading ? "Creating account..." : "Create account"}
+            {isLoading
+              ? t("auth.register.submitting")
+              : t("auth.register.submit")}
           </Button>
         </Field>
       </CardFooter>

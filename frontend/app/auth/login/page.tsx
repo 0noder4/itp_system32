@@ -26,15 +26,22 @@ import {
 import { Input } from "@/components/ui/input";
 import { apiClient } from "@/lib/api";
 import { storeTokens, getUserRoute, type UserType } from "@/lib/auth";
-
-const formSchema = z.object({
-  username: z.string().min(1, "Username is required."),
-  password: z.string().min(1, "Password is required."),
-});
+import { useTranslation } from "@/lib/i18n";
+import { LanguageSelector } from "@/components/layout/LanguageSelector/LanguageSelector";
 
 export default function Index() {
   const router = useRouter();
+  const { t } = useTranslation();
   const [isLoading, setIsLoading] = React.useState(false);
+
+  const formSchema = React.useMemo(
+    () =>
+      z.object({
+        username: z.string().min(1, t("auth.validation.usernameRequired")),
+        password: z.string().min(1, t("auth.validation.passwordRequired")),
+      }),
+    [t]
+  );
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -59,8 +66,8 @@ export default function Index() {
       const userType: UserType | null = response.data.user_type || null;
       const route = getUserRoute(userType);
 
-      toast.success("Login successful!", {
-        description: "Redirecting to your dashboard...",
+      toast.success(t("auth.login.success"), {
+        description: t("auth.login.successDescription"),
       });
 
       // Redirect to appropriate panel based on user type
@@ -71,9 +78,9 @@ export default function Index() {
         error.response?.data?.detail ||
         error.response?.data?.message ||
         Object.values(error.response?.data || {}).flat()[0] ||
-        "Invalid username or password. Please try again.";
+        t("auth.login.errorDescription");
 
-      toast.error("Login failed", {
+      toast.error(t("auth.login.error"), {
         description: errorMessage,
       });
     } finally {
@@ -84,10 +91,11 @@ export default function Index() {
   return (
     <Card className="w-full sm:max-w-md">
       <CardHeader>
-        <CardTitle>Login to your account</CardTitle>
-        <CardDescription>
-          Enter your username and password below
-        </CardDescription>
+        <div className="flex items-center justify-between">
+          <CardTitle>{t("auth.login.title")}</CardTitle>
+          <LanguageSelector />
+        </div>
+        <CardDescription>{t("auth.login.description")}</CardDescription>
       </CardHeader>
       <CardContent>
         <form
@@ -104,14 +112,14 @@ export default function Index() {
               render={({ field, fieldState }) => (
                 <Field data-invalid={fieldState.invalid}>
                   <FieldLabel htmlFor="s32-form-login-username">
-                    Username
+                    {t("auth.login.username")}
                   </FieldLabel>
                   <Input
                     {...field}
                     id="s32-form-login-username"
                     type="text"
                     aria-invalid={fieldState.invalid}
-                    placeholder="Enter your username"
+                    placeholder={t("auth.login.usernamePlaceholder")}
                     autoComplete="username"
                     disabled={isLoading}
                   />
@@ -128,13 +136,13 @@ export default function Index() {
                 <Field data-invalid={fieldState.invalid}>
                   <div className="flex items-center">
                     <FieldLabel htmlFor="s32-form-login-password">
-                      Password
+                      {t("auth.login.password")}
                     </FieldLabel>
                     <Link
                       href="/auth/reset-password"
                       className="ml-auto inline-block text-sm underline-offset-4 hover:underline"
                     >
-                      Forgot your password?
+                      {t("auth.login.forgotPassword")}
                     </Link>
                   </div>
                   <Input
@@ -142,7 +150,7 @@ export default function Index() {
                     id="s32-form-login-password"
                     type="password"
                     aria-invalid={fieldState.invalid}
-                    placeholder="Enter your password"
+                    placeholder={t("auth.login.passwordPlaceholder")}
                     autoComplete="current-password"
                     disabled={isLoading}
                   />
@@ -158,7 +166,7 @@ export default function Index() {
       <CardFooter>
         <Field>
           <Button type="submit" form="s32-form-login" disabled={isLoading}>
-            {isLoading ? "Logging in..." : "Login"}
+            {isLoading ? t("auth.login.submitting") : t("auth.login.submit")}
           </Button>
         </Field>
       </CardFooter>

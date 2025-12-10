@@ -1,5 +1,7 @@
 // Token storage utilities for JWT authentication
 
+import { setLanguageFromProfile, type Locale } from "./i18n";
+
 const ACCESS_TOKEN_KEY = "access_token";
 const REFRESH_TOKEN_KEY = "refresh_token";
 
@@ -9,6 +11,7 @@ export interface TokenResponse {
   user_type?: string;
   username?: string;
   email?: string;
+  language?: Locale;
 }
 
 export type UserType = "admin" | "staff" | "company";
@@ -17,6 +20,7 @@ export interface DecodedToken {
   user_type: UserType;
   username: string;
   email: string;
+  language: Locale;
   exp: number;
   iat: number;
   [key: string]: any;
@@ -95,13 +99,18 @@ export const getUserRoute = (userType: UserType | null): string => {
 };
 
 /**
- * Store tokens in localStorage
+ * Store tokens in localStorage and apply user language preference
  */
 export const storeTokens = (tokens: TokenResponse): void => {
   if (typeof window === "undefined") return;
 
   localStorage.setItem(ACCESS_TOKEN_KEY, tokens.access);
   localStorage.setItem(REFRESH_TOKEN_KEY, tokens.refresh);
+
+  // Apply language preference if provided
+  if (tokens.language) {
+    setLanguageFromProfile(tokens.language);
+  }
 };
 
 /**
