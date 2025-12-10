@@ -147,9 +147,24 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Check if deployment secrets are configured
+        id: check-deploy
+        run: |
+          if [ -n "$VPS_HOST" ] && [ -n "$VPS_USER" ] && [ -n "$VPS_SSH_KEY" ]; then
+            echo "deploy=true" >> $GITHUB_OUTPUT
+            echo "✅ Deployment secrets configured"
+          else
+            echo "deploy=false" >> $GITHUB_OUTPUT
+            echo "⚠️ Deployment secrets not configured, skipping deployment"
+          fi
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+
       - name: Deploy to server
+        if: steps.check-deploy.outputs.deploy == 'true'
         uses: appleboy/ssh-action@v1.0.3
-        if: ${{ secrets.VPS_HOST != '' }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
