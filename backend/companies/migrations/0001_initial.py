@@ -97,7 +97,7 @@ class Migration(migrations.Migration):
             },
         ),
         migrations.CreateModel(
-            name='ExtendedEqupment',
+            name='ExtendedEquipment',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('counter', models.IntegerField(verbose_name='lada zwykła')),
@@ -200,7 +200,7 @@ class Migration(migrations.Migration):
             ],
         ),
         migrations.CreateModel(
-            name='Adress',
+            name='Address',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('street', models.CharField(max_length=255, verbose_name='ulica')),

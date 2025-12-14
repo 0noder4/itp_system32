@@ -111,7 +111,7 @@ class Migration(migrations.Migration):
             field=models.OneToOneField(null=True, on_delete=django.db.models.deletion.SET_NULL, to='companies.deadline'),
         ),
         migrations.AddField(
-            model_name='extendedequpment',
+            model_name='extendedequipment',
             name='form',
             field=models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='ext_equipment', to='companies.standdetails'),
         ),
