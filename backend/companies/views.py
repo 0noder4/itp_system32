@@ -8,8 +8,10 @@ from .serializers import (
 from django.http import HttpResponse, JsonResponse
 from rest_framework.parsers import JSONParser
 from django.views.decorators.csrf import csrf_exempt
-from django.core.mail import send_mail
+from django.core.mail import EmailMultiAlternatives
 from django.conf import settings
+from django.template.loader import render_to_string
+import os
 
 from rest_framework import generics, status
 from rest_framework.views import APIView
@@ -76,30 +78,65 @@ class CompanyInvitationView(generics.CreateAPIView):
     queryset = CompanyInvitation.objects.all()
     permission_classes = [IsAuthenticated, IsAdminOrStaff]
 
-    def perform_create(self, serializer ):
+    def perform_create(self, serializer):
         invitation = serializer.save()
-        if settings.DEBUG:
-            # Backend API endpoint for testing
-            backend_url = "http://localhost:8000"
-            registration_link = f"{backend_url}/api/register/?token={invitation.token}"
-        else:
-            # Frontend URL for production
-            registration_link = f"{settings.FRONTEND_BASE_URL}/auth/register?token={invitation.token}"
+        
+        # Get language from invitation model (default to English)
+        language = invitation.language or 'en'
+        if language not in ['en', 'pl']:
+            language = 'en'
+        
+        # Get registration link with language parameter
+        registration_link = f"{settings.FRONTEND_BASE_URL}/auth/register?token={invitation.token}&lang={language}"
+        # Use backend URL for static files (logo is hosted on backend)
+        backend_url = os.environ.get('BACKEND_BASE_URL', 'http://localhost:8000')
+        logo_url = f"{backend_url}{settings.STATIC_URL}images/ITP_LOGO_horizontal_black.png"
 
-        message = (
-            "You have been invited to join the itp_system32 platform.\n\n"
-            f"Company: {invitation.company_name}\n"
-            f"Status: {invitation.company_status}\n\n"
-            "To complete your registration, please click the link below and set your password:\n"
-            f"{registration_link}\n\n"
-            "This link will expire in 7 days."
+        # Select template based on language
+        template_name = f"emails/invitation_{language}.html"
+
+        # Subject and plain text based on language
+        if language == 'pl':
+            subject = "Zaproszenie do firmy - ITP System"
+            plain_message = f"""Zostałeś zaproszony do platformy ITP System.
+
+Firma: {invitation.company_name}
+
+Aby dokończyć rejestrację, kliknij poniższy link i ustaw hasło:
+{registration_link}
+
+Link do zaproszenia wygaśnie za 7 dni.
+
+Jeśli nie spodziewałeś się tego zaproszenia, możesz zignorować tę wiadomość."""
+        else:
+            subject = "Company Invitation - ITP System"
+            plain_message = f"""You have been invited to join the ITP System platform.
+
+Company: {invitation.company_name}
+
+To complete your registration, click the link below and set your password:
+{registration_link}
+
+This invitation link will expire in 7 days.
+
+If you did not expect this invitation, you can safely ignore this email."""
+
+        # Render HTML template
+        html_content = render_to_string(template_name, {
+            'company_name': invitation.company_name,
+            'registration_link': registration_link,
+            'logo_url': logo_url,
+        })
+
+        # Send email with HTML and plain text alternatives
+        email_message = EmailMultiAlternatives(
+            subject=subject,
+            body=plain_message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[invitation.email],
         )
-        send_mail(
-            "Your company invitation",
-            message,
-            "bs@bs.com",
-            [invitation.email]
-        )
+        email_message.attach_alternative(html_content, "text/html")
+        email_message.send()
 
 
 class CompanyRegistrationView(APIView):

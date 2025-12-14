@@ -11,7 +11,7 @@ class CompanySerializer(serializers.ModelSerializer):
 class CompanyInvitationSerializer(serializers.ModelSerializer):
     class Meta:
         model = CompanyInvitation
-        fields = ("id", "email", "company_name", "created_at", "updated_at", "expires_at", "is_accepted", "company_status")
+        fields = ("id", "email", "company_name", "created_at", "updated_at", "expires_at", "is_accepted", "company_status", "language")
 
 
 class CompanyRegistrationSerializer(serializers.Serializer):
@@ -33,7 +33,8 @@ class CompanyRegistrationSerializer(serializers.Serializer):
             username = invitation.company_name,
             email = invitation.email,
             type = 'company',
-            password = password
+            password = password,
+            language = invitation.language or 'en'
         )
 
         company = Company.objects.create(

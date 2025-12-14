@@ -38,6 +38,11 @@ def get_expiry_time():
     return django.utils.timezone.now() + datetime.timedelta(days=7)
 
 class CompanyInvitation(models.Model):
+    LANGUAGE_CHOICES = [
+        ('en', 'English'),
+        ('pl', 'Polish'),
+    ]
+    
     email = models.EmailField()
     company_name = models.CharField(max_length=255)
     token = models.UUIDField(default=uuid.uuid4, unique=True)
@@ -45,6 +50,11 @@ class CompanyInvitation(models.Model):
     updated_at = models.DateTimeField(auto_now = True)
     expires_at = models.DateTimeField(blank=True, default=get_expiry_time())
     is_accepted = models.BooleanField(default=False)
+    language = models.CharField(
+        max_length=5,
+        choices=LANGUAGE_CHOICES,
+        default='en',
+    )
 
     company_status = models.CharField(
         max_length=10,

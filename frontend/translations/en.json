@@ -134,7 +134,7 @@
       "basic": "Basic"
     },
     "invite": {
-      "button": "Invite New",
+      "button": "Invite",
       "title": "Invite New Company",
       "description": "Send an invitation to a new company. They will receive an email with a registration link.",
       "emailLabel": "Email Address",
@@ -142,6 +142,7 @@
       "companyNameLabel": "Company Name",
       "companyNamePlaceholder": "Enter company name",
       "companyStatusLabel": "Company Status",
+      "languageLabel": "Language",
       "submit": "Send Invitation",
       "submitting": "Sending...",
       "success": "Invitation sent successfully!",
