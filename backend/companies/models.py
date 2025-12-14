@@ -55,7 +55,14 @@ CONTRACT_OPT = [
     ('uos', 'umowa o staż/praktyki'),
 ]
 
-
+STAGE_CHOICES = [
+    ('stage_1', 'Dane podstawowe'),
+    ('stage_2', 'Wyposażenie'),
+    ('stage_3', 'Warsztaty'),
+    ('stage_4', 'Jobwall'),
+    ('stage_5', 'Inne dane'),
+    ('completed', 'Zakończone'),
+]
 
 class Company(models.Model):
     name = models.CharField(max_length=100, unique=True)
