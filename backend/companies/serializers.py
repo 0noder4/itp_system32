@@ -5,11 +5,11 @@ from .models import (
     Form,
     Feedback,
     BasicData,
-    Adress,
+    Address,
     ContactPerson,
     StandDetails,
     BasicEquipment,
-    ExtendedEqupment,
+    ExtendedEquipment,
     Jobwall,
     Workshop,
     Description,
@@ -86,9 +86,9 @@ class BasicDataSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
-class AdressSerializer(serializers.ModelSerializer):
+class AddressSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Adress
+        model = Address
         exclude = ('form',)
 
 
@@ -114,7 +114,7 @@ class BasicEquipmentSerializer(serializers.ModelSerializer):
 
 class ExtendedEquipmentSerializer(serializers.ModelSerializer):
     class Meta:
-        model = ExtendedEqupment
+        model = ExtendedEquipment
         fields = '__all__'
 
 
@@ -183,7 +183,7 @@ class FeedbackSerializer(serializers.ModelSerializer):
 # Etap 1, 2, 5
 class Stage1Serializer(serializers.Serializer):
     basic_data = BasicDataSerializer()
-    address = AdressSerializer()
+    address = AddressSerializer()
     contact_person = ContactPersonSerializer()
 
     def create(self, validated_data):
@@ -194,7 +194,7 @@ class Stage1Serializer(serializers.Serializer):
         basic_data_obj = BasicData.objects.create(**basic_data_data)
 
         address_data['form'] = basic_data_obj
-        address_obj = Adress.objects.create(**address_data)
+        address_obj = Address.objects.create(**address_data)
 
         contact_person_data['form'] = basic_data_obj
         contact_person_obj = ContactPerson.objects.create(**contact_person_data)
@@ -248,7 +248,7 @@ class Stage2Serializer(serializers.Serializer):
         extended_equipment_obj = None
         if extended_equipment_data:
             extended_equipment_data['stand_details'] = stand_details_obj
-            extended_equipment_obj = ExtendedEqupment.objects.create(**extended_equipment_data)
+            extended_equipment_obj = ExtendedEquipment.objects.create(**extended_equipment_data)
 
         return {
             'stand_details': stand_details_obj,

@@ -137,6 +137,32 @@ class CompanyInvitation(models.Model):
     # blank=True -> pole w formularzu moze byc puste
     # null=True -> pole w bazie moze przyjmowac null
 
+class Form(models.Model):
+    company = models.OneToOneField(Company, on_delete=models.CASCADE, related_name='form')
+    current_stage = models.CharField(max_length=20, choices=STAGE_CHOICES, default='stage_1')
+    stage_1_completed = models.BooleanField(default=False)
+    stage_2_completed = models.BooleanField(default=False)
+    stage_3_completed = models.BooleanField(default=False)
+    stage_4_completed = models.BooleanField(default=False)
+    stage_5_completed = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def can_access_stage_2(self):
+        return self.stage_1_completed
+
+    def can_access_stage_3(self):
+        return self.stage_1_completed and self.stage_2_completed
+
+    def can_access_stage_4(self):
+        return self.stage_1_completed and self.stage_2_completed and self.stage_3_completed
+
+    def can_access_stage_5(self):
+        return self.stage_1_completed and self.stage_2_completed and self.stage_3_completed and self.stage_4_completed
+
+    def __str__(self):
+        return f'Form for {self.company.name} - Stage: {self.current_stage}'
+
 class Stand(models.Model):
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='stand_all')
     day = models.CharField(max_length=15, choices=DAY_OPT)
