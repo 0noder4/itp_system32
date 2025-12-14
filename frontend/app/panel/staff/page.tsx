@@ -46,8 +46,11 @@ export default function Index() {
     () =>
       z.object({
         email: z.string().email(t("auth.validation.emailRequired")),
-        company_name: z.string().min(1, t("auth.validation.companyNameRequired")),
+        company_name: z
+          .string()
+          .min(1, t("auth.validation.companyNameRequired")),
         company_status: z.enum(["main", "partner", "basic"]),
+        language: z.enum(["en", "pl"]),
       }),
     [t]
   );
@@ -72,6 +75,7 @@ export default function Index() {
       email: "",
       company_name: "",
       company_status: "basic",
+      language: "pl",
     },
   });
 
@@ -167,10 +171,14 @@ export default function Index() {
     <div className="flex h-screen flex-col overflow-hidden p-6">
       <div className="mb-6 shrink-0">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold mb-2">{t("dashboard.staff.title")}</h1>
+          <h1 className="text-2xl font-bold mb-2">
+            {t("dashboard.staff.title")}
+          </h1>
           <LanguageSelector />
         </div>
-        <p className="text-muted-foreground">{t("dashboard.staff.description")}</p>
+        <p className="text-muted-foreground">
+          {t("dashboard.staff.description")}
+        </p>
       </div>
 
       <Card className="flex flex-1 flex-col overflow-hidden">
@@ -269,6 +277,30 @@ export default function Index() {
                             <option value="main">
                               {t("companies.status.main")}
                             </option>
+                          </select>
+                          {fieldState.invalid && (
+                            <FieldError errors={[fieldState.error]} />
+                          )}
+                        </Field>
+                      )}
+                    />
+                    <Controller
+                      name="language"
+                      control={invitationForm.control}
+                      render={({ field, fieldState }) => (
+                        <Field data-invalid={fieldState.invalid}>
+                          <FieldLabel htmlFor="invite-company-language">
+                            {t("companies.invite.languageLabel")}
+                          </FieldLabel>
+                          <select
+                            {...field}
+                            id="invite-company-language"
+                            aria-invalid={fieldState.invalid}
+                            disabled={isSubmitting}
+                            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-xs transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
+                          >
+                            <option value="en">{t("language.english")}</option>
+                            <option value="pl">{t("language.polish")}</option>
                           </select>
                           {fieldState.invalid && (
                             <FieldError errors={[fieldState.error]} />

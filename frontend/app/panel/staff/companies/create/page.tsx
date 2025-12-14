@@ -31,6 +31,7 @@ type FormInput = {
   company_name: string;
   email: string;
   company_status: "main" | "partner" | "basic";
+  language: "en" | "pl";
 };
 
 export default function Index() {
@@ -52,6 +53,9 @@ export default function Index() {
         company_status: z.enum(["main", "partner", "basic"], {
           message: t("auth.validation.companyNameRequired"),
         }),
+        language: z.enum(["en", "pl"], {
+          message: t("auth.validation.emailRequired"),
+        }),
       }),
     [t]
   );
@@ -62,6 +66,7 @@ export default function Index() {
       company_name: "",
       email: "",
       company_status: "basic",
+      language: "en",
     },
   });
 
@@ -72,6 +77,7 @@ export default function Index() {
         company_name: data.company_name,
         email: data.email,
         company_status: data.company_status,
+        language: data.language,
       });
 
       toast.success(t("companies.invite.success"), {
@@ -178,6 +184,34 @@ export default function Index() {
                       {t("companies.status.partner")}
                     </option>
                     <option value="main">{t("companies.status.main")}</option>
+                  </select>
+                  {fieldState.invalid && (
+                    <FieldError errors={[fieldState.error]} />
+                  )}
+                </Field>
+              )}
+            />
+            <Controller
+              name="language"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <Field data-invalid={fieldState.invalid}>
+                  <FieldLabel htmlFor="s32-form-invite-company-language">
+                    {t("companies.invite.languageLabel")}
+                  </FieldLabel>
+                  <select
+                    {...field}
+                    id="s32-form-invite-company-language"
+                    aria-invalid={fieldState.invalid}
+                    disabled={isLoading}
+                    className={cn(
+                      "file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
+                      "focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]",
+                      "aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive"
+                    )}
+                  >
+                    <option value="en">{t("language.english")}</option>
+                    <option value="pl">{t("language.polish")}</option>
                   </select>
                   {fieldState.invalid && (
                     <FieldError errors={[fieldState.error]} />

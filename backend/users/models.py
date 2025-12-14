@@ -23,7 +23,7 @@ class User(AbstractUser):
     language = models.CharField(
         max_length=5,
         choices=LANGUAGE_CHOICES,
-        default="en"
+        default="pl"
     )
     created_at = models.DateTimeField(auto_now_add = True)
     updated_at = models.DateTimeField(auto_now = True)

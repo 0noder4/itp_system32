@@ -134,7 +134,7 @@
       "basic": "Podstawowa"
     },
     "invite": {
-      "button": "Zaproś nową",
+      "button": "Zaproś",
       "title": "Zaproś nową firmę",
       "description": "Wyślij zaproszenie do nowej firmy. Otrzymają e-mail z linkiem rejestracyjnym.",
       "emailLabel": "Adres e-mail",
@@ -142,6 +142,7 @@
       "companyNameLabel": "Nazwa firmy",
       "companyNamePlaceholder": "Wprowadź nazwę firmy",
       "companyStatusLabel": "Status firmy",
+      "languageLabel": "Język",
       "submit": "Wyślij zaproszenie",
       "submitting": "Wysyłanie...",
       "success": "Zaproszenie wysłane!",

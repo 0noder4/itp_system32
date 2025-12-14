@@ -1,8 +1,8 @@
 "use client";
 
 import * as React from "react";
-import enMessages from "@/messages/en.json";
-import plMessages from "@/messages/pl.json";
+import enMessages from "@/translations/en.json";
+import plMessages from "@/translations/pl.json";
 
 export type Locale = "en" | "pl";
 
@@ -130,6 +130,3 @@ export function getStoredLanguage(): Locale {
   const stored = localStorage.getItem(STORAGE_KEY);
   return stored === "pl" ? "pl" : "en";
 }
-
-
-

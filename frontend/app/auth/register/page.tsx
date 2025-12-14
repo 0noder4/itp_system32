@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { apiClient } from "@/lib/api";
-import { useTranslation } from "@/lib/i18n";
+import { useTranslation, useLanguage } from "@/lib/i18n";
 import { LanguageSelector } from "@/components/layout/LanguageSelector/LanguageSelector";
 
 type FormInput = {
@@ -36,7 +36,16 @@ export default function Index() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
+  const langParam = searchParams.get("lang");
   const { t } = useTranslation();
+  const { setLocale } = useLanguage();
+
+  // Set language from URL parameter if provided
+  React.useEffect(() => {
+    if (langParam === "en" || langParam === "pl") {
+      setLocale(langParam);
+    }
+  }, [langParam, setLocale]);
 
   const [invitationInfo, setInvitationInfo] = React.useState<{
     company_name: string;

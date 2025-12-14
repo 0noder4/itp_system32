@@ -1,6 +1,8 @@
-from django.core.mail import send_mail
+from django.core.mail import EmailMultiAlternatives
 from django.conf import settings
 from django.contrib.auth.password_validation import validate_password
+from django.template.loader import render_to_string
+import os
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView
@@ -58,25 +60,55 @@ class PasswordResetRequestSerializer(serializers.Serializer):
 
             reset_request = PasswordResetRequest.objects.create(user=user)
 
-            reset_link = f"{settings.FRONTEND_BASE_URL}/auth/reset-password?token={reset_request.token}"
+            # Determine language (default to Polish)
+            language = getattr(user, 'language', 'pl') or 'pl'
+            
+            reset_link = f"{settings.FRONTEND_BASE_URL}/auth/reset-password/confirm?token={reset_request.token}&lang={language}"
+            # Use backend URL for static files (logo is hosted on backend)
+            backend_url = os.environ.get('BACKEND_BASE_URL', 'http://localhost:8000')
+            logo_url = f"{backend_url}{settings.STATIC_URL}images/ITP_LOGO_horizontal_black.png"
 
+            # Select template based on language
+            template_name = f"emails/password_reset_{language}.html"
 
-            subject = "Reset hasła - System32"
-            message = f"""
-Cześć {user.username},
+            # Subject based on language
+            if language == 'en':
+                subject = "Password Reset - ITP System"
+                plain_message = f"""Hello {user.username},
 
-Aby ustawić nowe hasło, kliknij poniższy link:
+We received a request to reset your password. Click the link below to set a new password:
 {reset_link}
 
-            """
+This link will expire in 24 hours.
 
-            send_mail(
-                subject,
-                message,
-                settings.DEFAULT_FROM_EMAIL,
-                [email],
-                fail_silently=False,
+If you did not request a password reset, you can safely ignore this email."""
+            else:
+                subject = "Reset hasła - ITP System"
+                plain_message = f"""Cześć {user.username},
+
+Otrzymaliśmy prośbę o reset hasła. Kliknij poniższy link, aby ustawić nowe hasło:
+{reset_link}
+
+Link wygaśnie za 24 godziny.
+
+Jeśli nie prosiłeś o reset hasła, możesz zignorować tę wiadomość."""
+
+            # Render HTML template
+            html_content = render_to_string(template_name, {
+                'username': user.username,
+                'reset_link': reset_link,
+                'logo_url': logo_url,
+            })
+
+            # Send email with HTML and plain text alternatives
+            email_message = EmailMultiAlternatives(
+                subject=subject,
+                body=plain_message,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                to=[email],
             )
+            email_message.attach_alternative(html_content, "text/html")
+            email_message.send(fail_silently=False)
 
         except User.DoesNotExist:
             pass

@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { apiClient } from "@/lib/api";
-import { useTranslation } from "@/lib/i18n";
+import { useTranslation, useLanguage } from "@/lib/i18n";
 import { LanguageSelector } from "@/components/layout/LanguageSelector/LanguageSelector";
 
 type FormInput = {
@@ -37,7 +37,16 @@ export default function ResetPasswordConfirmPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
+  const langParam = searchParams.get("lang");
   const { t } = useTranslation();
+  const { setLocale } = useLanguage();
+
+  // Set language from URL parameter if provided
+  React.useEffect(() => {
+    if (langParam === "en" || langParam === "pl") {
+      setLocale(langParam);
+    }
+  }, [langParam, setLocale]);
 
   const [userInfo, setUserInfo] = React.useState<{
     email: string;
@@ -156,7 +165,9 @@ export default function ResetPasswordConfirmPage() {
         <Card className="w-full sm:max-w-md">
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle>{t("auth.resetPasswordConfirm.invalidLink")}</CardTitle>
+              <CardTitle>
+                {t("auth.resetPasswordConfirm.invalidLink")}
+              </CardTitle>
               <LanguageSelector />
             </div>
             <CardDescription>
@@ -192,7 +203,9 @@ export default function ResetPasswordConfirmPage() {
           <LanguageSelector />
         </div>
         <CardDescription>
-          {t("auth.resetPasswordConfirm.description", { email: userInfo.email })}
+          {t("auth.resetPasswordConfirm.description", {
+            email: userInfo.email,
+          })}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -214,7 +227,9 @@ export default function ResetPasswordConfirmPage() {
                     id="s32-form-reset-confirm-password"
                     type="password"
                     aria-invalid={fieldState.invalid}
-                    placeholder={t("auth.resetPasswordConfirm.newPasswordPlaceholder")}
+                    placeholder={t(
+                      "auth.resetPasswordConfirm.newPasswordPlaceholder"
+                    )}
                     autoComplete="new-password"
                     disabled={isLoading}
                   />
@@ -237,7 +252,9 @@ export default function ResetPasswordConfirmPage() {
                     id="s32-form-reset-confirm-confirm-password"
                     type="password"
                     aria-invalid={fieldState.invalid}
-                    placeholder={t("auth.resetPasswordConfirm.confirmPasswordPlaceholder")}
+                    placeholder={t(
+                      "auth.resetPasswordConfirm.confirmPasswordPlaceholder"
+                    )}
                     autoComplete="new-password"
                     disabled={isLoading}
                   />
