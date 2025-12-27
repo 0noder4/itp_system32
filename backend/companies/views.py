@@ -198,6 +198,7 @@ class CompanyRegistrationView(APIView):
                 return Response({"detail": "Invitation has expired"}, status=status.HTTP_400_BAD_REQUEST)
             return Response({
                 "company_name": invitation.company_name,
+                "username": invitation.company_name,
                 "email": invitation.email,
                 "company_status": invitation.company_status
             })
@@ -691,3 +692,66 @@ class CompanyFeedbackListView(APIView):
         except Exception as e:
             logger.error(f"Error in CompanyFeedbackListView.get: {e}", exc_info=True)
             return Response({"detail": "An error occurred while retrieving feedbacks"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class FormStatusView(APIView):
+    """
+    Get form status for a company - returns completion flags and latest feedback per stage.
+    Used by exhibitor panel to display stage overview.
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, company_id):
+        try:
+            validate_company_id(company_id)
+            company = Company.objects.get(id=company_id)
+            # Allow access for company representative or FR responsible
+            if company.representative != request.user and company.fr_resp != request.user:
+                return Response({"detail": "You don't have permission to view this company's form status"}, status=status.HTTP_403_FORBIDDEN)
+            
+            # Get or create the Form object
+            form, _ = Form.objects.get_or_create(company=company)
+            
+            # Get all feedbacks for this company, grouped by stage
+            feedbacks = Feedback.objects.filter(company=company).order_by('-id')
+            
+            # Get latest feedback per stage
+            stage_feedbacks = {}
+            for i in range(1, 6):
+                stage_key = f'stage_{i}'
+                stage_feedback = feedbacks.filter(form=stage_key).first()
+                if stage_feedback:
+                    stage_feedbacks[stage_key] = {
+                        'status': stage_feedback.status,
+                        'comment': stage_feedback.comment,
+                    }
+            
+            # Check if stage data exists
+            stage_data_exists = {
+                'stage_1': BasicData.objects.filter(company=company).exists(),
+                'stage_2': StandDetails.objects.filter(company=company).exists(),
+                'stage_3': Workshop.objects.filter(company=company).exists(),
+                'stage_4': Jobwall.objects.filter(company=company).exists(),
+                'stage_5': Description.objects.filter(company=company).exists() and FinalData.objects.filter(company=company).exists(),
+            }
+            
+            return Response({
+                'form': {
+                    'id': form.id,
+                    'current_stage': form.current_stage,
+                    'stage_1_completed': form.stage_1_completed,
+                    'stage_2_completed': form.stage_2_completed,
+                    'stage_3_completed': form.stage_3_completed,
+                    'stage_4_completed': form.stage_4_completed,
+                    'stage_5_completed': form.stage_5_completed,
+                },
+                'feedbacks': stage_feedbacks,
+                'data_exists': stage_data_exists,
+            })
+        except ValidationError as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except Company.DoesNotExist:
+            return Response({"detail": "Company not found"}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"Error in FormStatusView.get: {e}", exc_info=True)
+            return Response({"detail": "An error occurred while retrieving form status"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

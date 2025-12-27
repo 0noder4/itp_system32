@@ -23,9 +23,22 @@ from users.models import User
 from django.contrib.auth.password_validation import validate_password
 
 class CompanySerializer(serializers.ModelSerializer):
+    representative_name = serializers.SerializerMethodField()
+    representative_surname = serializers.SerializerMethodField()
+    
     class Meta:
         model = Company
-        fields = ("id", "name", "status", "email", "representative", "created_at", "updated_at")
+        fields = ("id", "name", "status", "email", "representative", "representative_name", "representative_surname", "created_at", "updated_at")
+    
+    def get_representative_name(self, obj):
+        if obj.representative:
+            return obj.representative.first_name
+        return None
+    
+    def get_representative_surname(self, obj):
+        if obj.representative:
+            return obj.representative.last_name
+        return None
 
 class CompanyInvitationSerializer(serializers.ModelSerializer):
     class Meta:
@@ -36,6 +49,8 @@ class CompanyInvitationSerializer(serializers.ModelSerializer):
 class CompanyRegistrationSerializer(serializers.Serializer):
     token = serializers.UUIDField(write_only=True)
     password = serializers.CharField(write_only=True, validators=[validate_password])
+    first_name = serializers.CharField(write_only=True, required=True, max_length=150)
+    last_name = serializers.CharField(write_only=True, required=True, max_length=150)
 
     def validate_token(self, value):
         try:
@@ -47,13 +62,17 @@ class CompanyRegistrationSerializer(serializers.Serializer):
     def create(self, validated_data):
         invitation = validated_data['token']
         password = validated_data['password']
+        first_name = validated_data['first_name']
+        last_name = validated_data['last_name']
 
         user = User.objects.create_user(
             username = invitation.company_name,
             email = invitation.email,
             type = 'company',
             password = password,
-            language = invitation.language or 'en'
+            language = invitation.language or 'en',
+            first_name = first_name,
+            last_name = last_name
         )
 
         company = Company.objects.create(

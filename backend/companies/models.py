@@ -28,8 +28,8 @@ SIZE_OPT = [
 
 STATE_OPT = [
     ('pending', 'oczekiwanie na akceptację'),
-    ('akcept', 'zaakceptowano'),
-    ('odrzucenie', 'wymagane poprawki')
+    ('accepted', 'zaakceptowano'),
+    ('rejected', 'wymagane poprawki')
 ]
 
 FORM_OPT = [
@@ -186,7 +186,6 @@ class BasicData(models.Model):
     nip = models.CharField(max_length=20, verbose_name="nip firmy")
     dl = models.ForeignKey(Deadline, on_delete=models.SET_NULL, null=True)
 
-
 class Address(models.Model):
     form = models.OneToOneField(BasicData, on_delete=models.CASCADE, related_name='adress')
     street = models.CharField(max_length=255, verbose_name="ulica")
@@ -196,7 +195,6 @@ class Address(models.Model):
     country = models.CharField(max_length=100, verbose_name="kraj")
     postal_code = models.CharField(max_length=20, verbose_name="kod pocztowy")
 
-
 class Person(models.Model):
     name = models.CharField(max_length=100, verbose_name="Imię")
     surname = models.CharField(max_length=100, verbose_name="Nazwisko")
@@ -205,7 +203,6 @@ class Person(models.Model):
     class Meta:
         # Aby baza danych nie tworzyła tabeli "Person"
         abstract = True
-
 
 class ContactPerson(Person):
     form = models.ForeignKey(BasicData, on_delete=models.CASCADE, related_name='contact_ppl')
@@ -281,7 +278,6 @@ class PDI(models.Model):
 class PDIAttendee(Person):
     form = models.ForeignKey(PDI, on_delete=models.CASCADE, related_name="pdiattendees")
     email = models.EmailField(verbose_name="Adres email")
-
 
 class Exhibitor(Person):
     form = models.ForeignKey(PDI, on_delete=models.CASCADE, related_name="exhibitors")

@@ -28,6 +28,8 @@ import { useTranslation, useLanguage } from "@/lib/i18n";
 import { LanguageSelector } from "@/components/layout/LanguageSelector/LanguageSelector";
 
 type FormInput = {
+  name: string;
+  surname: string;
   password: string;
   confirmPassword: string;
 };
@@ -49,6 +51,7 @@ export default function Index() {
 
   const [invitationInfo, setInvitationInfo] = React.useState<{
     company_name: string;
+    username: string;
     email: string;
     company_status: string;
   } | null>(null);
@@ -59,6 +62,8 @@ export default function Index() {
     () =>
       z
         .object({
+          name: z.string().min(1, t("auth.validation.nameRequired")),
+          surname: z.string().min(1, t("auth.validation.surnameRequired")),
           password: z
             .string()
             .min(8, t("auth.validation.passwordMin"))
@@ -77,6 +82,8 @@ export default function Index() {
   const form = useForm<FormInput>({
     resolver: zodResolver(formSchema),
     defaultValues: {
+      name: "",
+      surname: "",
       password: "",
       confirmPassword: "",
     },
@@ -125,6 +132,8 @@ export default function Index() {
       await apiClient.post("/api/register/", {
         token,
         password: data.password,
+        first_name: data.name,
+        last_name: data.surname,
       });
 
       toast.success(t("auth.register.success"), {
@@ -179,7 +188,7 @@ export default function Index() {
   }
 
   return (
-    <Card className="w-full sm:max-w-md">
+    <Card className="w-full sm:max-w-lg">
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle>{t("auth.register.title")}</CardTitle>
@@ -195,6 +204,80 @@ export default function Index() {
       <CardContent>
         <form id="s32-form-register" onSubmit={form.handleSubmit(handleSubmit)}>
           <FieldGroup>
+            <div className="flex flex-row gap-2">
+              <Field>
+                <FieldLabel htmlFor="s32-form-register-username">
+                  {t("auth.register.username")}
+                </FieldLabel>
+                <Input
+                  id="s32-form-register-username"
+                  type="text"
+                  value={invitationInfo?.username || ""}
+                  placeholder={t("auth.register.usernamePlaceholder")}
+                  disabled={true}
+                  readOnly
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="s32-form-register-email">
+                  {t("auth.register.email")}
+                </FieldLabel>
+                <Input
+                  id="s32-form-register-email"
+                  type="email"
+                  value={invitationInfo?.email || ""}
+                  placeholder={t("auth.register.emailPlaceholder")}
+                  disabled={true}
+                  readOnly
+                />
+              </Field>
+            </div>
+            <Controller
+              name="name"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <Field data-invalid={fieldState.invalid}>
+                  <FieldLabel htmlFor="s32-form-register-name">
+                    {t("auth.register.name")}
+                  </FieldLabel>
+                  <Input
+                    {...field}
+                    id="s32-form-register-name"
+                    type="text"
+                    aria-invalid={fieldState.invalid}
+                    placeholder={t("auth.register.namePlaceholder")}
+                    autoComplete="given-name"
+                    disabled={isLoading}
+                  />
+                  {fieldState.invalid && (
+                    <FieldError errors={[fieldState.error]} />
+                  )}
+                </Field>
+              )}
+            />
+            <Controller
+              name="surname"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <Field data-invalid={fieldState.invalid}>
+                  <FieldLabel htmlFor="s32-form-register-surname">
+                    {t("auth.register.surname")}
+                  </FieldLabel>
+                  <Input
+                    {...field}
+                    id="s32-form-register-surname"
+                    type="text"
+                    aria-invalid={fieldState.invalid}
+                    placeholder={t("auth.register.surnamePlaceholder")}
+                    autoComplete="family-name"
+                    disabled={isLoading}
+                  />
+                  {fieldState.invalid && (
+                    <FieldError errors={[fieldState.error]} />
+                  )}
+                </Field>
+              )}
+            />
             <Controller
               name="password"
               control={form.control}

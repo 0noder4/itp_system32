@@ -15,7 +15,8 @@
     "noResults": "Brak wyników",
     "all": "Wszystkie",
     "actions": "Akcje",
-    "backToLogin": "Powrót do logowania"
+    "backToLogin": "Powrót do logowania",
+    "logout": "Wyloguj"
   },
   "language": {
     "title": "Język",
@@ -40,7 +41,15 @@
     },
     "register": {
       "title": "Dokończ rejestrację",
-      "description": "Ustaw hasło dla {companyName} ({email})",
+      "description": "Dokończ rejestrację dla firmy {companyName} ({email})",
+      "name": "Imię",
+      "namePlaceholder": "Wprowadź swoje imię",
+      "surname": "Nazwisko",
+      "surnamePlaceholder": "Wprowadź swoje nazwisko",
+      "username": "Nazwa użytkownika",
+      "usernamePlaceholder": "Nazwa użytkownika",
+      "email": "E-mail",
+      "emailPlaceholder": "Adres e-mail",
       "password": "Hasło",
       "passwordPlaceholder": "Wprowadź silne hasło",
       "confirmPassword": "Potwierdź hasło",
@@ -99,12 +108,14 @@
       "confirmPasswordRequired": "Proszę potwierdzić hasło.",
       "passwordsDoNotMatch": "Hasła nie są zgodne.",
       "emailRequired": "Proszę wprowadzić prawidłowy adres e-mail.",
-      "companyNameRequired": "Nazwa firmy jest wymagana."
+      "companyNameRequired": "Nazwa firmy jest wymagana.",
+      "nameRequired": "Imię jest wymagane.",
+      "surnameRequired": "Nazwisko jest wymagane."
     }
   },
   "dashboard": {
     "staff": {
-      "title": "Panel pracownika",
+      "title": "Panel FR",
       "description": "Zarządzaj firmami i ustawieniami systemu."
     },
     "partner": {
@@ -125,7 +136,7 @@
       "name": "Nazwa",
       "status": "Status",
       "email": "E-mail",
-      "representativeId": "ID przedstawiciela",
+      "representative": "Przedstawiciel",
       "createdAt": "Data utworzenia"
     },
     "status": {
@@ -156,6 +167,115 @@
     "companyList": "Lista firm",
     "createCompany": "Utwórz firmę",
     "panel": "Panel"
+  },
+  "exhibitor": {
+    "panelTitle": "Panel wystawcy",
+    "panelDescription": "Uzupełnij wszystkie etapy formularza zgłoszeniowego",
+    "stagesOverview": "Etapy zgłoszenia",
+    "currentStageFormTitle": "Uzupełnij bieżący etap",
+    "loadError": "Nie udało się załadować danych formularza. Spróbuj ponownie później.",
+    "noCompanyTitle": "Nie znaleziono firmy",
+    "noCompanyDescription": "Twoje konto nie jest powiązane z żadną firmą. Skontaktuj się z pomocą techniczną.",
+    "allCompletedTitle": "Zgłoszenie kompletne!",
+    "allCompletedDescription": "Uzupełniłeś wszystkie etapy zgłoszenia. Dziękujemy za przesłanie formularza.",
+    "stage1": {
+      "title": "Etap 1: Dane podstawowe",
+      "description": "Informacje o firmie i dane kontaktowe"
+    },
+    "stage2": {
+      "title": "Etap 2: Wyposażenie",
+      "description": "Konfiguracja stoiska i wybór wyposażenia"
+    },
+    "stage3": {
+      "title": "Etap 3: Warsztaty",
+      "description": "Informacje o udziale w warsztatach"
+    },
+    "stage4": {
+      "title": "Etap 4: Jobwall",
+      "description": "Oferty pracy"
+    },
+    "stage5": {
+      "title": "Etap 5: Dane końcowe",
+      "description": "Dodatkowe informacje i logistyka"
+    },
+    "status": {
+      "notStarted": "Nierozpoczęty",
+      "inProgress": "W trakcie",
+      "pendingApproval": "Oczekuje na akceptację",
+      "accepted": "Zaakceptowany",
+      "rejected": "Wymaga poprawy"
+    },
+    "form": {
+      "required": "To pole jest wymagane",
+      "invalidEmail": "Proszę podać prawidłowy adres e-mail",
+      "invalidUrl": "Proszę podać prawidłowy adres URL",
+      "saveSuccess": "Formularz zapisany pomyślnie",
+      "saveError": "Nie udało się zapisać formularza. Spróbuj ponownie.",
+      "rejectionReason": "Powód odrzucenia:",
+      "basicData": "Podstawowe dane firmy",
+      "fullName": "Pełna nazwa firmy",
+      "nip": "NIP",
+      "address": "Adres",
+      "street": "Ulica",
+      "homeNumber": "Numer budynku",
+      "aptNumber": "Numer lokalu",
+      "city": "Miasto",
+      "country": "Kraj",
+      "postalCode": "Kod pocztowy",
+      "contactPerson": "Osoba kontaktowa",
+      "firstName": "Imię",
+      "lastName": "Nazwisko",
+      "phone": "Numer telefonu",
+      "email": "Adres e-mail",
+      "standDetails": "Szczegóły stoiska",
+      "selfConstruction": "Własna zabudowa stoiska",
+      "scDetails": "Szczegóły zabudowy",
+      "nameSignText": "Tekst na fryzie",
+      "basicEquipment": "Wyposażenie podstawowe",
+      "chairs": "Liczba krzeseł",
+      "counter": "Lada",
+      "trashbin": "Kosz na śmieci",
+      "hanger": "Wieszak",
+      "workshopInfo": "Informacje o warsztatach",
+      "willConductWorkshop": "Będziemy prowadzić warsztaty",
+      "workshopNotes": "Dodatkowe uwagi dotyczące warsztatów",
+      "jobwallInfo": "Informacje o stanowisku",
+      "positionName": "Nazwa stanowiska",
+      "workForm": "Forma pracy",
+      "workFormOnsite": "Stacjonarnie",
+      "workFormRemote": "Zdalnie",
+      "workFormHybrid": "Hybrydowo",
+      "workFormContest": "Konkurs",
+      "workFormMobile": "Mobilnie",
+      "workload": "Wymiar pracy",
+      "workloadFull": "Pełen etat",
+      "workloadHalf": "1/2 etatu",
+      "workloadThreeQuarters": "3/4 etatu",
+      "workloadFlexible": "Elastyczny",
+      "contract": "Rodzaj umowy",
+      "contractEmployment": "Umowa o pracę",
+      "contractMandate": "Umowa zlecenie",
+      "contractWork": "Umowa o dzieło",
+      "contractB2B": "Kontrakt B2B",
+      "contractInternship": "Staż/Praktyki",
+      "positionDescription": "Opis stanowiska",
+      "benefits": "Oferowane benefity",
+      "requirements": "Wymagania",
+      "applicationUrl": "Link do aplikacji",
+      "companyDescription": "Opis firmy",
+      "description": "Opis",
+      "finalData": "Dane końcowe",
+      "needsParking": "Potrzebujemy wjazdu na parking",
+      "electricDevices": "Urządzenia elektryczne podczas targów",
+      "electricPower": "Łączna moc urządzeń",
+      "lunches": "Obiady",
+      "addLunch": "Dodaj obiad",
+      "day": "Dzień",
+      "quantity": "Ilość",
+      "dietInfo": "Informacje o diecie",
+      "exhibitors": "Wystawcy (przedstawiciele na stoisku)",
+      "addExhibitor": "Dodaj wystawcę"
+    }
   }
 }
 

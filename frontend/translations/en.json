@@ -15,7 +15,8 @@
     "noResults": "No results found",
     "all": "All",
     "actions": "Actions",
-    "backToLogin": "Back to login"
+    "backToLogin": "Back to login",
+    "logout": "Logout"
   },
   "language": {
     "title": "Language",
@@ -40,7 +41,15 @@
     },
     "register": {
       "title": "Complete your registration",
-      "description": "Set a password for {companyName} ({email})",
+      "description": "Complete your registration for company {companyName} ({email})",
+      "name": "First Name",
+      "namePlaceholder": "Enter your first name",
+      "surname": "Last Name",
+      "surnamePlaceholder": "Enter your last name",
+      "username": "Username",
+      "usernamePlaceholder": "Username",
+      "email": "Email",
+      "emailPlaceholder": "Email address",
       "password": "Password",
       "passwordPlaceholder": "Enter a strong password",
       "confirmPassword": "Confirm Password",
@@ -99,12 +108,14 @@
       "confirmPasswordRequired": "Please confirm your password.",
       "passwordsDoNotMatch": "Passwords do not match.",
       "emailRequired": "Please enter a valid email address.",
-      "companyNameRequired": "Company name is required."
+      "companyNameRequired": "Company name is required.",
+      "nameRequired": "First name is required.",
+      "surnameRequired": "Last name is required."
     }
   },
   "dashboard": {
     "staff": {
-      "title": "Staff Dashboard",
+      "title": "FR Dashboard",
       "description": "Manage companies and system settings from here."
     },
     "partner": {
@@ -125,7 +136,7 @@
       "name": "Name",
       "status": "Status",
       "email": "Email",
-      "representativeId": "Representative ID",
+      "representative": "Representative",
       "createdAt": "Created At"
     },
     "status": {
@@ -156,6 +167,115 @@
     "companyList": "Company List",
     "createCompany": "Create company",
     "panel": "Panel"
+  },
+  "exhibitor": {
+    "panelTitle": "Exhibitor Panel",
+    "panelDescription": "Complete all stages of your application form",
+    "stagesOverview": "Application Stages",
+    "currentStageFormTitle": "Complete Current Stage",
+    "loadError": "Failed to load form data. Please try again later.",
+    "noCompanyTitle": "No Company Found",
+    "noCompanyDescription": "Your account is not associated with any company. Please contact support.",
+    "allCompletedTitle": "Application Complete!",
+    "allCompletedDescription": "You have completed all stages of your application. Thank you for your submission.",
+    "stage1": {
+      "title": "Stage 1: Basic Data",
+      "description": "Company information and contact details"
+    },
+    "stage2": {
+      "title": "Stage 2: Equipment",
+      "description": "Stand setup and equipment selection"
+    },
+    "stage3": {
+      "title": "Stage 3: Workshops",
+      "description": "Workshop participation information"
+    },
+    "stage4": {
+      "title": "Stage 4: Jobwall",
+      "description": "Job position listings"
+    },
+    "stage5": {
+      "title": "Stage 5: Final Data",
+      "description": "Additional information and logistics"
+    },
+    "status": {
+      "notStarted": "Not Started",
+      "inProgress": "In Progress",
+      "pendingApproval": "Pending Approval",
+      "accepted": "Accepted",
+      "rejected": "Needs Revision"
+    },
+    "form": {
+      "required": "This field is required",
+      "invalidEmail": "Please enter a valid email address",
+      "invalidUrl": "Please enter a valid URL",
+      "saveSuccess": "Form saved successfully",
+      "saveError": "Failed to save form. Please try again.",
+      "rejectionReason": "Revision required:",
+      "basicData": "Basic Company Data",
+      "fullName": "Full Company Name",
+      "nip": "Tax ID (NIP)",
+      "address": "Address",
+      "street": "Street",
+      "homeNumber": "Building Number",
+      "aptNumber": "Apartment/Suite Number",
+      "city": "City",
+      "country": "Country",
+      "postalCode": "Postal Code",
+      "contactPerson": "Contact Person",
+      "firstName": "First Name",
+      "lastName": "Last Name",
+      "phone": "Phone Number",
+      "email": "Email Address",
+      "standDetails": "Stand Details",
+      "selfConstruction": "Own stand construction",
+      "scDetails": "Construction details",
+      "nameSignText": "Name sign text",
+      "basicEquipment": "Basic Equipment",
+      "chairs": "Number of chairs",
+      "counter": "Counter",
+      "trashbin": "Trash bin",
+      "hanger": "Coat hanger",
+      "workshopInfo": "Workshop Information",
+      "willConductWorkshop": "We will conduct a workshop",
+      "workshopNotes": "Additional notes about the workshop",
+      "jobwallInfo": "Job Position Information",
+      "positionName": "Position Name",
+      "workForm": "Work Form",
+      "workFormOnsite": "On-site",
+      "workFormRemote": "Remote",
+      "workFormHybrid": "Hybrid",
+      "workFormContest": "Contest",
+      "workFormMobile": "Mobile",
+      "workload": "Workload",
+      "workloadFull": "Full-time",
+      "workloadHalf": "Half-time",
+      "workloadThreeQuarters": "3/4 time",
+      "workloadFlexible": "Flexible",
+      "contract": "Contract Type",
+      "contractEmployment": "Employment contract",
+      "contractMandate": "Mandate contract",
+      "contractWork": "Contract for work",
+      "contractB2B": "B2B contract",
+      "contractInternship": "Internship/Traineeship",
+      "positionDescription": "Position Description",
+      "benefits": "Benefits",
+      "requirements": "Requirements",
+      "applicationUrl": "Application URL",
+      "companyDescription": "Company Description",
+      "description": "Description",
+      "finalData": "Final Data",
+      "needsParking": "Need parking access",
+      "electricDevices": "Electric devices during fair",
+      "electricPower": "Total power consumption",
+      "lunches": "Lunches",
+      "addLunch": "Add Lunch",
+      "day": "Day",
+      "quantity": "Quantity",
+      "dietInfo": "Dietary requirements",
+      "exhibitors": "Exhibitors (Stand Representatives)",
+      "addExhibitor": "Add Exhibitor"
+    }
   }
 }
 

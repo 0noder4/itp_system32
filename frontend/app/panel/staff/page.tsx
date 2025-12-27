@@ -37,7 +37,7 @@ import {
   FieldGroup,
   FieldLabel,
 } from "@/components/ui/field";
-import { LanguageSelector } from "@/components/layout/LanguageSelector/LanguageSelector";
+import { DashboardHeader } from "@/components/layout/DashboardHeader";
 
 export default function Index() {
   const { t, locale } = useTranslation();
@@ -168,18 +168,17 @@ export default function Index() {
   };
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden p-6">
-      <div className="mb-6 shrink-0">
-        <div className="flex items-center justify-between">
+    <div className="flex h-screen flex-col overflow-hidden">
+      <DashboardHeader />
+      <div className="flex flex-1 flex-col overflow-hidden p-6">
+        <div className="mb-6 shrink-0">
           <h1 className="text-2xl font-bold mb-2">
             {t("dashboard.staff.title")}
           </h1>
-          <LanguageSelector />
+          <p className="text-muted-foreground">
+            {t("dashboard.staff.description")}
+          </p>
         </div>
-        <p className="text-muted-foreground">
-          {t("dashboard.staff.description")}
-        </p>
-      </div>
 
       <Card className="flex flex-1 flex-col overflow-hidden">
         <CardHeader className="shrink-0">
@@ -424,7 +423,7 @@ export default function Index() {
                       <TableHead>{t("companies.table.status")}</TableHead>
                       <TableHead>{t("companies.table.email")}</TableHead>
                       <TableHead>
-                        {t("companies.table.representativeId")}
+                        {t("companies.table.representative")}
                       </TableHead>
                       <TableHead>{t("companies.table.createdAt")}</TableHead>
                     </TableRow>
@@ -439,7 +438,13 @@ export default function Index() {
                         <TableCell>{getStatusBadge(company.status)}</TableCell>
                         <TableCell>{company.email}</TableCell>
                         <TableCell>
-                          {company.representative ?? (
+                          {company.representative_name && company.representative_surname ? (
+                            `${company.representative_name} ${company.representative_surname}`
+                          ) : company.representative_name ? (
+                            company.representative_name
+                          ) : company.representative_surname ? (
+                            company.representative_surname
+                          ) : (
                             <span className="text-muted-foreground">—</span>
                           )}
                         </TableCell>
@@ -461,6 +466,7 @@ export default function Index() {
           </div>
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }

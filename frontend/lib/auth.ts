@@ -92,7 +92,7 @@ export const getUserRoute = (userType: UserType | null): string => {
     case "staff":
       return "/panel/staff";
     case "company":
-      return "/panel/partner";
+      return "/panel/exhibitor";
     default:
       return "/panel";
   }

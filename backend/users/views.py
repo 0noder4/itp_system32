@@ -9,28 +9,40 @@ from .serializers import (
     PasswordResetRequestSerializer,
     PasswordResetConfirmSerializer
 )
+from companies.models import Company
 
 class CurrentUserView(APIView):
     """
     API endpoint to get current authenticated user information.
     This endpoint validates the JWT token and returns user data.
     Used by frontend to verify authentication and user type.
+    For company users, also returns company information.
     """
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         user = request.user
-        return Response(
-            {
-                "id": user.id,
-                "username": user.username,
-                "email": user.email,
-                "user_type": user.type,
-                "language": user.language,
-                "is_active": user.is_active,
-            },
-            status=status.HTTP_200_OK,
-        )
+        response_data = {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "user_type": user.type,
+            "language": user.language,
+            "is_active": user.is_active,
+        }
+        
+        # Include company information for company users
+        if user.type == 'company':
+            company = Company.objects.filter(representative=user).first()
+            if company:
+                response_data["company"] = {
+                    "id": company.id,
+                    "name": company.name,
+                    "status": company.status,
+                    "email": company.email,
+                }
+        
+        return Response(response_data, status=status.HTTP_200_OK)
 
 
 class UpdateLanguageView(APIView):
