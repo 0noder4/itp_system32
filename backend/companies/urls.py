@@ -20,7 +20,11 @@ urlpatterns = [
 
     # Feedbacks - pobierz wszystkie feedbacki dla firmy
     path('company/<int:company_id>/feedbacks/', views.CompanyFeedbackListView.as_view(), name='company-feedbacks'),
-    
+
     # Form status - consolidates form completion flags and latest feedbacks
     path('company/<int:company_id>/form/status/', views.FormStatusView.as_view(), name='form-status'),
+
+    # Export - CSV export of company data
+    path('export/csv/', views.ExportCSVView.as_view(), name='export-csv'),
+    path('export/logos/', views.ExportLogosView.as_view(), name='export-logos'),
 ]

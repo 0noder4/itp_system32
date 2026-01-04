@@ -269,7 +269,7 @@ class Lunch(models.Model):
     form = models.ForeignKey(FinalData, on_delete=models.CASCADE, related_name="lunches")
     day = models.CharField(max_length=15, choices=DAY_OPT)
     lunch_quantity = models.IntegerField(verbose_name="liczba obiadów")  # dodać info że sa dodatkowo płatne??
-    diet_info = models.CharField(max_length=255, verbose_name="informacje o dietach")
+    diet_info = models.CharField(max_length=255, verbose_name="informacje o dietach", blank=True)
 
 class PDI(models.Model):
     form = models.OneToOneField(FinalData, on_delete=models.CASCADE, related_name="pdis")

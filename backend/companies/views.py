@@ -10,6 +10,7 @@ from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.authentication import SessionAuthentication
 from users.permissions import IsAdminOrStaff
 
 from .models import (
@@ -755,3 +756,139 @@ class FormStatusView(APIView):
         except Exception as e:
             logger.error(f"Error in FormStatusView.get: {e}", exc_info=True)
             return Response({"detail": "An error occurred while retrieving form status"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class ExportCSVView(APIView):
+    """
+    Export all company data to CSV format.
+
+    GET /api/export/csv/
+
+    Returns:
+        StreamingHttpResponse with CSV file containing all companies and all fields
+    """
+    authentication_classes = [SessionAuthentication]
+    permission_classes = [IsAdminOrStaff]
+
+    def get(self, request):
+        """Handle CSV export request - exports all companies."""
+        from django.http import StreamingHttpResponse
+        from datetime import datetime
+        from companies.services.export_service import ExportService
+
+        try:
+            # Export all companies with all fields
+            export_service = ExportService(
+                user=request.user,
+                filters={'fields': ['all']}
+            )
+
+            # Get CSV generator (yields rows)
+            csv_generator = export_service.generate_csv()
+
+            # Create streaming response
+            response = StreamingHttpResponse(
+                csv_generator,
+                content_type='text/csv; charset=utf-8'
+            )
+
+            # Set filename with timestamp
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            filename = f'itp_export_{timestamp}.csv'
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+
+            logger.info(f"CSV export initiated by {request.user.username}")
+
+            return response
+
+        except Exception as e:
+            logger.error(
+                f"CSV export failed for user {request.user.username}: {str(e)}",
+                exc_info=True
+            )
+            return Response(
+                {
+                    "error": "Export failed",
+                    "message": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class ExportLogosView(APIView):
+    """
+    Export all company logos as a ZIP file.
+
+    GET /api/export/logos/
+
+    Returns:
+        ZIP file with logos named: {company_id}_{company_name}.{ext}
+    """
+    authentication_classes = [SessionAuthentication]
+    permission_classes = [IsAdminOrStaff]
+
+    def get(self, request):
+        """Handle logos export request - exports all logos as ZIP."""
+        from django.http import HttpResponse
+        from datetime import datetime
+        import zipfile
+        import io
+        import os
+
+        try:
+            # Get all companies with logos
+            companies = Company.objects.select_related('stand_details').filter(
+                stand_details__logo_sign_file__isnull=False
+            ).exclude(stand_details__logo_sign_file='')
+
+            # Create in-memory ZIP file
+            zip_buffer = io.BytesIO()
+
+            with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                for company in companies:
+                    if company.stand_details and company.stand_details.logo_sign_file:
+                        try:
+                            # Get file path
+                            logo_file = company.stand_details.logo_sign_file
+
+                            # Get file extension
+                            _, ext = os.path.splitext(logo_file.name)
+
+                            # Clean company name for filename (remove special chars)
+                            safe_name = "".join(c for c in company.name if c.isalnum() or c in (' ', '_', '-')).strip()
+                            safe_name = safe_name.replace(' ', '_')
+
+                            # Create filename: {id}_{name}.{ext}
+                            filename = f"{company.id}_{safe_name}{ext}"
+
+                            # Add file to ZIP
+                            zip_file.writestr(filename, logo_file.read())
+
+                        except Exception as e:
+                            logger.warning(f"Failed to add logo for company {company.id}: {e}")
+                            continue
+
+            # Prepare response
+            zip_buffer.seek(0)
+            response = HttpResponse(zip_buffer.getvalue(), content_type='application/zip')
+
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            filename = f'itp_logos_{timestamp}.zip'
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+
+            logger.info(f"Logos export initiated by {request.user.username} - {companies.count()} logos")
+
+            return response
+
+        except Exception as e:
+            logger.error(
+                f"Logos export failed for user {request.user.username}: {str(e)}",
+                exc_info=True
+            )
+            return Response(
+                {
+                    "error": "Logos export failed",
+                    "message": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

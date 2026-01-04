@@ -1,0 +1,13 @@
+{% extends "admin/change_list.html" %}
+
+{% block content %}
+<div style="margin-bottom: 20px;">
+    <a href="/api/export/csv/" class="button" style="background-color: #417690; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; display: inline-block; margin-right: 10px;">
+        📥 Export do CSV
+    </a>
+    <a href="/api/export/logos/" class="button" style="background-color: #28a745; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; display: inline-block;">
+        📦 Export logo (ZIP)
+    </a>
+</div>
+{{ block.super }}
+{% endblock %}
