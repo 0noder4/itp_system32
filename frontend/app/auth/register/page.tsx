@@ -30,6 +30,7 @@ import { LanguageSelector } from "@/components/layout/LanguageSelector/LanguageS
 type FormInput = {
   name: string;
   surname: string;
+  phone_number: string;
   password: string;
   confirmPassword: string;
 };
@@ -62,8 +63,9 @@ export default function Index() {
     () =>
       z
         .object({
-          name: z.string().min(1, t("auth.validation.nameRequired")),
-          surname: z.string().min(1, t("auth.validation.surnameRequired")),
+          name: z.string().min(1, t("auth.validation.firstNameRequired")),
+          surname: z.string().min(1, t("auth.validation.lastNameRequired")),
+          phone_number: z.string().min(1, t("auth.validation.phoneRequired")),
           password: z
             .string()
             .min(8, t("auth.validation.passwordMin"))
@@ -84,6 +86,7 @@ export default function Index() {
     defaultValues: {
       name: "",
       surname: "",
+      phone_number: "",
       password: "",
       confirmPassword: "",
     },
@@ -134,6 +137,7 @@ export default function Index() {
         password: data.password,
         first_name: data.name,
         last_name: data.surname,
+        phone_number: data.phone_number,
       });
 
       toast.success(t("auth.register.success"), {
@@ -207,7 +211,7 @@ export default function Index() {
             <div className="flex flex-row gap-2">
               <Field>
                 <FieldLabel htmlFor="s32-form-register-username">
-                  {t("auth.register.username")}
+                  {t("auth.register.usernameLabel")}
                 </FieldLabel>
                 <Input
                   id="s32-form-register-username"
@@ -220,7 +224,7 @@ export default function Index() {
               </Field>
               <Field>
                 <FieldLabel htmlFor="s32-form-register-email">
-                  {t("auth.register.email")}
+                  {t("auth.register.emailLabel")}
                 </FieldLabel>
                 <Input
                   id="s32-form-register-email"
@@ -238,14 +242,14 @@ export default function Index() {
               render={({ field, fieldState }) => (
                 <Field data-invalid={fieldState.invalid}>
                   <FieldLabel htmlFor="s32-form-register-name">
-                    {t("auth.register.name")}
+                    {t("auth.register.firstNameLabel")}
                   </FieldLabel>
                   <Input
                     {...field}
                     id="s32-form-register-name"
                     type="text"
                     aria-invalid={fieldState.invalid}
-                    placeholder={t("auth.register.namePlaceholder")}
+                    placeholder={t("auth.register.firstNamePlaceholder")}
                     autoComplete="given-name"
                     disabled={isLoading}
                   />
@@ -261,15 +265,38 @@ export default function Index() {
               render={({ field, fieldState }) => (
                 <Field data-invalid={fieldState.invalid}>
                   <FieldLabel htmlFor="s32-form-register-surname">
-                    {t("auth.register.surname")}
+                    {t("auth.register.lastNameLabel")}
                   </FieldLabel>
                   <Input
                     {...field}
                     id="s32-form-register-surname"
                     type="text"
                     aria-invalid={fieldState.invalid}
-                    placeholder={t("auth.register.surnamePlaceholder")}
+                    placeholder={t("auth.register.lastNamePlaceholder")}
                     autoComplete="family-name"
+                    disabled={isLoading}
+                  />
+                  {fieldState.invalid && (
+                    <FieldError errors={[fieldState.error]} />
+                  )}
+                </Field>
+              )}
+            />
+            <Controller
+              name="phone_number"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <Field data-invalid={fieldState.invalid}>
+                  <FieldLabel htmlFor="s32-form-register-phone">
+                    {t("auth.register.phoneLabel")}
+                  </FieldLabel>
+                  <Input
+                    {...field}
+                    id="s32-form-register-phone"
+                    type="tel"
+                    aria-invalid={fieldState.invalid}
+                    placeholder={t("auth.register.phonePlaceholder")}
+                    autoComplete="tel"
                     disabled={isLoading}
                   />
                   {fieldState.invalid && (
@@ -284,7 +311,7 @@ export default function Index() {
               render={({ field, fieldState }) => (
                 <Field data-invalid={fieldState.invalid}>
                   <FieldLabel htmlFor="s32-form-register-password">
-                    {t("auth.register.password")}
+                    {t("auth.register.passwordLabel")}
                   </FieldLabel>
                   <Input
                     {...field}
@@ -307,7 +334,7 @@ export default function Index() {
               render={({ field, fieldState }) => (
                 <Field data-invalid={fieldState.invalid}>
                   <FieldLabel htmlFor="s32-form-register-confirm-password">
-                    {t("auth.register.confirmPassword")}
+                    {t("auth.register.confirmPasswordLabel")}
                   </FieldLabel>
                   <Input
                     {...field}
@@ -337,7 +364,7 @@ export default function Index() {
           >
             {isLoading
               ? t("auth.register.submitting")
-              : t("auth.register.submit")}
+              : t("auth.register.submitButton")}
           </Button>
         </Field>
       </CardFooter>

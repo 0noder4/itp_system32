@@ -1,8 +1,15 @@
 "use client";
 
+import React from "react";
 import { StageInfo, StageStatus } from "@/lib/types";
 import { useTranslation } from "@/lib/i18n";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 import {
   CheckCircle,
   Clock,
@@ -38,16 +45,16 @@ const STATUS_CONFIG: Record<
   },
   in_progress: {
     icon: FileText,
-    color: "text-amber-500",
-    bgColor: "bg-amber-50",
-    borderColor: "border-amber-200",
+    color: "text-warning dark:text-warning-foreground",
+    bgColor: "bg-warning/10 dark:bg-warning/20",
+    borderColor: "border-warning/20 dark:border-warning/30",
     labelKey: "exhibitor.status.inProgress",
   },
   pending_approval: {
     icon: Clock,
-    color: "text-blue-500",
-    bgColor: "bg-blue-50",
-    borderColor: "border-blue-200",
+    color: "text-information dark:text-information-foreground",
+    bgColor: "bg-information/10 dark:bg-information/20",
+    borderColor: "border-information/20 dark:border-information/30",
     labelKey: "exhibitor.status.pendingApproval",
   },
   accepted: {
@@ -59,9 +66,9 @@ const STATUS_CONFIG: Record<
   },
   rejected: {
     icon: XCircle,
-    color: "text-rose-500",
-    bgColor: "bg-rose-50",
-    borderColor: "border-rose-200",
+    color: "text-danger dark:text-danger-foreground",
+    bgColor: "bg-danger/10 dark:bg-danger/20",
+    borderColor: "border-danger/20 dark:border-danger/30",
     labelKey: "exhibitor.status.rejected",
   },
 };
@@ -78,6 +85,50 @@ function StageCard({
   const { t } = useTranslation();
   const config = STATUS_CONFIG[stage.status];
   const Icon = config.icon;
+
+  const { locale } = useTranslation();
+
+  // Format deadline display
+  const formatDeadline = React.useMemo(() => {
+    if (!stage.deadline) return null;
+
+    const deadlineDate = new Date(stage.deadline);
+    const now = new Date();
+    const isPassed = deadlineDate < now;
+    const diffTime = deadlineDate.getTime() - now.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    // Format date for display (locale-aware)
+    const formattedDate = new Intl.DateTimeFormat(locale, {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    }).format(deadlineDate);
+
+    if (isPassed) {
+      return {
+        message: t("exhibitor.form.deadline.passed", { date: formattedDate }),
+        bgColor: "bg-danger/10 dark:bg-danger/20",
+        textColor: "text-danger dark:text-danger-foreground",
+        borderColor: "border-danger/20 dark:border-danger/30",
+      };
+    } else {
+      const unit =
+        diffDays === 1
+          ? t("exhibitor.form.deadline.day")
+          : t("exhibitor.form.deadline.days");
+      return {
+        message: t("exhibitor.form.deadline.remaining", {
+          date: formattedDate,
+          days: diffDays,
+          unit: unit,
+        }),
+        bgColor: "bg-warning/10 dark:bg-warning/20",
+        textColor: "text-warning dark:text-warning-foreground",
+        borderColor: "border-warning/20 dark:border-warning/30",
+      };
+    }
+  }, [stage.deadline, t, locale]);
 
   return (
     <Card
@@ -121,9 +172,19 @@ function StageCard({
       </CardHeader>
       {stage.status === "rejected" && stage.feedback?.comment && (
         <CardContent className="pt-0">
-          <div className="flex items-start gap-2 rounded-md bg-rose-50 p-3 text-sm text-rose-700">
+          <div className="flex items-start gap-2 rounded-md bg-danger/10 p-3 text-sm text-danger dark:bg-danger/20 dark:text-danger-foreground">
             <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
             <p>{stage.feedback.comment}</p>
+          </div>
+        </CardContent>
+      )}
+      {formatDeadline && (
+        <CardContent className="pt-0">
+          <div
+            className={`flex items-start gap-2 rounded-md border ${formatDeadline.bgColor} ${formatDeadline.textColor} ${formatDeadline.borderColor} p-3 text-sm`}
+          >
+            <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+            <p>{formatDeadline.message}</p>
           </div>
         </CardContent>
       )}
@@ -154,5 +215,3 @@ export function StageOverview({
     </div>
   );
 }
-
-

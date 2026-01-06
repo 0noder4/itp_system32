@@ -68,14 +68,55 @@ const processQueue = (
   failedQueue = [];
 };
 
+// Helper function to check if an endpoint is public (doesn't require authentication)
+const isPublicEndpoint = (
+  url: string | undefined,
+  method: string | undefined
+): boolean => {
+  if (!url) return false;
+
+  // Token endpoints (login, refresh) are public
+  if (
+    url.includes("/api/token/refresh/") ||
+    (url.includes("/api/token/") && method === "post")
+  ) {
+    return true;
+  }
+
+  // Registration endpoint is public
+  if (url.includes("/api/register/")) {
+    return true;
+  }
+
+  // Password reset endpoints are public
+  if (url.includes("/api/password-reset/")) {
+    return true;
+  }
+
+  return false;
+};
+
+// Helper function to check if current path is a public auth route
+const isPublicAuthRoute = (): boolean => {
+  if (typeof window === "undefined") return false;
+  const pathname = window.location.pathname;
+  return (
+    pathname === "/auth/login" ||
+    pathname === "/auth/register" ||
+    pathname.startsWith("/auth/reset-password")
+  );
+};
+
 // Request interceptor to add token to headers and refresh if needed
 apiClient.interceptors.request.use(
   async (config: InternalAxiosRequestConfig) => {
-    // Skip token refresh for refresh endpoint and login endpoint
-    if (
-      config.url?.includes("/api/token/refresh/") ||
-      (config.url?.includes("/api/token/") && config.method === "post")
-    ) {
+    // If data is FormData, remove Content-Type header to let browser set it with boundary
+    if (config.data instanceof FormData && config.headers) {
+      delete config.headers["Content-Type"];
+    }
+
+    // Skip token logic for public endpoints
+    if (isPublicEndpoint(config.url, config.method)) {
       return config;
     }
 
@@ -94,10 +135,7 @@ apiClient.interceptors.request.use(
               // Refresh failed, clear tokens
               processQueue(null, null);
               clearTokens();
-              if (
-                typeof window !== "undefined" &&
-                window.location.pathname !== "/auth/login"
-              ) {
+              if (typeof window !== "undefined" && !isPublicAuthRoute()) {
                 window.location.href = "/auth/login";
               }
               return null;
@@ -105,10 +143,7 @@ apiClient.interceptors.request.use(
           } catch (error) {
             processQueue(null, null);
             clearTokens();
-            if (
-              typeof window !== "undefined" &&
-              window.location.pathname !== "/auth/login"
-            ) {
+            if (typeof window !== "undefined" && !isPublicAuthRoute()) {
               window.location.href = "/auth/login";
             }
             return null;
@@ -155,12 +190,8 @@ apiClient.interceptors.response.use(
       _retry?: boolean;
     };
 
-    // Skip refresh logic for refresh endpoint and login endpoint
-    if (
-      originalRequest?.url?.includes("/api/token/refresh/") ||
-      (originalRequest?.url?.includes("/api/token/") &&
-        originalRequest?.method === "post")
-    ) {
+    // Skip refresh logic for public endpoints
+    if (isPublicEndpoint(originalRequest?.url, originalRequest?.method)) {
       return Promise.reject(error);
     }
 
@@ -203,10 +234,7 @@ apiClient.interceptors.response.use(
           // Refresh failed
           processQueue(error, null);
           clearTokens();
-          if (
-            typeof window !== "undefined" &&
-            window.location.pathname !== "/auth/login"
-          ) {
+          if (typeof window !== "undefined" && !isPublicAuthRoute()) {
             window.location.href = "/auth/login";
           }
           return Promise.reject(error);
@@ -214,10 +242,7 @@ apiClient.interceptors.response.use(
       } catch (refreshError) {
         processQueue(refreshError as AxiosError, null);
         clearTokens();
-        if (
-          typeof window !== "undefined" &&
-          window.location.pathname !== "/auth/login"
-        ) {
+        if (typeof window !== "undefined" && !isPublicAuthRoute()) {
           window.location.href = "/auth/login";
         }
         return Promise.reject(refreshError);
@@ -234,4 +259,71 @@ apiClient.interceptors.response.use(
 export const fetcher = async <T>(url: string): Promise<T> => {
   const response = await apiClient.get<T>(url);
   return response.data;
+};
+
+// Stage deadlines response type
+export interface StageDeadlinesResponse {
+  stage_1_deadline: string | null;
+  stage_2_deadline: string | null;
+  stage_3_deadline: string | null;
+  stage_4_deadline: string | null;
+  stage_5_deadline: string | null;
+}
+
+// Download order summary PDF
+export const downloadOrderSummaryPDF = async (
+  companyId: number
+): Promise<void> => {
+  try {
+    const response = await apiClient.get(
+      `/api/company/${companyId}/order-summary-pdf/`,
+      {
+        responseType: "blob",
+      }
+    );
+
+    // Create blob from response
+    const blob = new Blob([response.data], { type: "application/pdf" });
+
+    // Create download link
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+
+    // Extract filename from Content-Disposition header if available
+    const contentDisposition = response.headers["content-disposition"];
+    let filename = `order_summary_${companyId}.pdf`;
+    if (contentDisposition) {
+      const filenameMatch = contentDisposition.match(/filename="?(.+)"?/i);
+      if (filenameMatch) {
+        filename = filenameMatch[1];
+      }
+    }
+
+    link.setAttribute("download", filename);
+    document.body.appendChild(link);
+    link.click();
+
+    // Cleanup
+    link.parentNode?.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  } catch (error: any) {
+    const errorMessage =
+      error.response?.data?.detail ||
+      error.response?.data?.message ||
+      "An error occurred while downloading the PDF";
+
+    // If response is a blob (error PDF), try to read it as text
+    if (error.response?.data instanceof Blob) {
+      const text = await error.response.data.text();
+      try {
+        const jsonError = JSON.parse(text);
+        throw new Error(jsonError.detail || errorMessage);
+      } catch {
+        throw new Error(errorMessage);
+      }
+    }
+
+    throw new Error(errorMessage);
+  }
 };

@@ -40,7 +40,7 @@
                             <table role="presentation" style="width: 100%; border-collapse: collapse;">
                                 <tr>
                                     <td style="text-align: center; padding: 8px 0;">
-                                        <a href="{{ registration_link }}" style="display: inline-block; padding: 14px 32px; background-color: #1a1a1a; color: #ffffff; text-decoration: none; font-size: 15px; font-weight: 500; border-radius: 6px;">
+                                        <a href="{{ registration_link }}" style="display: inline-block; padding: 14px 32px; background-color: #F55718; color: #ffffff; text-decoration: none; font-size: 15px; font-weight: 500; border-radius: 6px;">
                                             Dokończ rejestrację
                                         </a>
                                     </td>
@@ -55,7 +55,7 @@
                     <tr>
                         <td style="padding: 24px 40px; background-color: #f9f9f9; border-top: 1px solid #eaeaea;">
                             <p style="margin: 0; font-size: 12px; line-height: 1.5; color: #888; text-align: center;">
-                                Jeśli nie spodziewałeś się tego zaproszenia, zignoruj tę wiadomość lub skontaktuj się z nami pod adresem <a href="mailto:best@best.pw.edu.pl">best@best.pw.edu.pl</a>.
+                                Jeśli nie spodziewałeś się tego zaproszenia, zignoruj tę wiadomość lub skontaktuj się{% if staff_email %} ze swoim opiekunem pod adresem <a href="mailto:{{ staff_email }}">{{ staff_email }}</a>{% if default_email %} lub{% endif %}{% endif %}{% if default_email %} z nami pod adresem <a href="mailto:{{ default_email }}">{{ default_email }}</a>{% endif %}.
                             </p>
                         </td>
                     </tr>

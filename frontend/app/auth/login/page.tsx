@@ -112,7 +112,7 @@ export default function Index() {
               render={({ field, fieldState }) => (
                 <Field data-invalid={fieldState.invalid}>
                   <FieldLabel htmlFor="s32-form-login-username">
-                    {t("auth.login.username")}
+                    {t("auth.login.usernameLabel")}
                   </FieldLabel>
                   <Input
                     {...field}
@@ -136,7 +136,7 @@ export default function Index() {
                 <Field data-invalid={fieldState.invalid}>
                   <div className="flex items-center">
                     <FieldLabel htmlFor="s32-form-login-password">
-                      {t("auth.login.password")}
+                      {t("auth.login.passwordLabel")}
                     </FieldLabel>
                     <Link
                       href="/auth/reset-password"
@@ -166,7 +166,7 @@ export default function Index() {
       <CardFooter>
         <Field>
           <Button type="submit" form="s32-form-login" disabled={isLoading}>
-            {isLoading ? t("auth.login.submitting") : t("auth.login.submit")}
+            {isLoading ? t("auth.login.submitting") : t("auth.login.submitButton")}
           </Button>
         </Field>
       </CardFooter>

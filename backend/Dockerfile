@@ -32,10 +32,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Stage 2: Base runtime stage
 FROM python:3.13-slim AS base
 
-# Install ONLY the runtime MariaDB libraries
+# Install ONLY the runtime MariaDB libraries and fonts for PDF generation
 RUN apt-get update && apt-get install -y \
     libmariadb3 \
     mariadb-client \
+    fonts-dejavu \
+    fonts-dejavu-core \
+    fonts-dejavu-extra \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy the Python dependencies from the builder stage
@@ -70,6 +73,9 @@ RUN apt-get update && apt-get install -y \
     git \
     curl \
     vim \
+    fonts-dejavu \
+    fonts-dejavu-core \
+    fonts-dejavu-extra \
     && rm -rf /var/lib/apt/lists/*
 
 # Install development Python packages

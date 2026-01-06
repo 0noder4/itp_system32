@@ -7,9 +7,12 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework import status
 from .serializers import (
     PasswordResetRequestSerializer,
-    PasswordResetConfirmSerializer
+    PasswordResetConfirmSerializer,
+    UserSerializer
 )
+from users.permissions import IsAdminOrStaff
 from companies.models import Company
+from users.models import User
 
 class CurrentUserView(APIView):
     """
@@ -164,3 +167,16 @@ class PasswordResetConfirmView(APIView):
             result = serializer.save()
             return Response(result, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class StaffListView(APIView):
+    """
+    API endpoint to get all staff members (admin and staff users).
+    Used for filtering companies by responsible staff member.
+    """
+    permission_classes = [IsAuthenticated, IsAdminOrStaff]
+
+    def get(self, request):
+        staff_users = User.objects.filter(type__in=['admin', 'staff']).order_by('first_name', 'last_name', 'username')
+        serializer = UserSerializer(staff_users, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)

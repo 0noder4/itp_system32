@@ -103,7 +103,7 @@ export default function ResetPasswordPage() {
               render={({ field, fieldState }) => (
                 <Field data-invalid={fieldState.invalid}>
                   <FieldLabel htmlFor="s32-form-reset-password-email">
-                    {t("auth.resetPassword.email")}
+                    {t("auth.resetPassword.emailLabel")}
                   </FieldLabel>
                   <Input
                     {...field}
@@ -133,7 +133,7 @@ export default function ResetPasswordPage() {
           >
             {isLoading
               ? t("auth.resetPassword.submitting")
-              : t("auth.resetPassword.submit")}
+              : t("auth.resetPassword.submitButton")}
           </Button>
         </Field>
         <div className="text-center text-sm">

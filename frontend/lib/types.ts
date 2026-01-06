@@ -7,8 +7,29 @@ export interface Company {
   representative: number | null;
   representative_name: string | null;
   representative_surname: string | null;
+  representative_phone_number: string | null;
+  representative_username: string | null;
+  fr_resp: number | null;
+  fr_resp_name: string | null;
+  fr_resp_surname: string | null;
+  fr_resp_email: string | null;
+  fr_resp_phone_number: string | null;
+  fr_resp_username: string | null;
+  day1_stand: { stand_number: string; stand_size: string } | null;
+  day2_stand: { stand_number: string; stand_size: string } | null;
+  completed_stages_count: number;
   created_at: string;
   updated_at: string;
+}
+
+// Staff user type
+export interface StaffUser {
+  id: number;
+  username: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  type: "admin" | "staff";
 }
 
 // Company info included in user validation response
@@ -40,6 +61,13 @@ export interface CompanyInvitation {
   updated_at: string;
   expires_at: string;
   is_accepted: boolean;
+  language: "en" | "pl";
+  invitation_status: "accepted" | "expired" | "not accepted";
+  invitation_link: string;
+  fr_resp: number | null;
+  fr_resp_name: string | null;
+  fr_resp_surname: string | null;
+  fr_resp_email: string | null;
 }
 
 // Form model - tracks stage completion
@@ -54,7 +82,7 @@ export interface Form {
 }
 
 // Feedback status options
-export type FeedbackStatus = "pending" | "akcept" | "odrzucenie";
+export type FeedbackStatus = "pending" | "accepted" | "rejected";
 
 // Feedback interface
 export interface Feedback {
@@ -95,6 +123,8 @@ export interface StageInfo {
   isCompleted: boolean;
   feedback?: StageFeedback;
   dataExists: boolean;
+  deadline?: string | null; // ISO date string or null
+  daysRemaining?: number | null; // Days remaining until deadline, or null if no deadline
 }
 
 // === Stage 1: Basic Data ===
@@ -116,57 +146,44 @@ export interface Address {
   postal_code: string;
 }
 
-export interface ContactPerson {
-  id?: number;
-  name: string;
-  surname: string;
-  phone_number: string;
-  email: string;
-}
-
 export interface Stage1Data {
   basic_data: BasicData;
   address: Address | null;
-  contact_person: ContactPerson | null;
+  terms_accepted?: boolean;
 }
 
 // === Stage 2: Stand Details ===
 export interface StandDetails {
   id?: number;
   company: number;
-  self_construction: boolean;
+  stand_type: "provided_stand" | "self_construction";
   sc_details?: string;
   name_sign_text?: string;
   logo_sign_file?: string;
+  fire_cert?: string;
   dl?: number | null;
 }
 
-export interface BasicEquipment {
-  id?: number;
-  form?: number;
-  chair: number;
-  counter: boolean;
-  trashbin: boolean;
-  hanger: boolean;
+export interface EquipmentItem {
+  id: number;
+  name: string;
+  price: string; // Decimal as string from API
+  is_basic: boolean;
+  included_quantity: number; // How many are included for free
+  category?: string;
+  is_active: boolean;
 }
 
-export interface ExtendedEquipment {
+export interface EquipmentSelection {
   id?: number;
-  form?: number;
-  counter: number;
-  arched_counter: number;
-  tv: number;
-  chair: number;
-  bar_table: number;
-  bar_stool: number;
-  leaflet_stand: number;
-  carpet_color: string;
+  equipment_item: EquipmentItem;
+  equipment_item_id?: number;
+  quantity: number;
 }
 
 export interface Stage2Data {
   stand_details: StandDetails;
-  basic_equipment: BasicEquipment | null;
-  extended_equipment: ExtendedEquipment | null;
+  equipment_selections: EquipmentSelection[];
 }
 
 // === Stage 3: Workshop ===
@@ -199,21 +216,23 @@ export interface Jobwall {
   dl?: number | null;
 }
 
-export type Stage4Data = Jobwall;
+export interface Stage4Data {
+  jobwalls: Jobwall[];
+  description: Description | null;
+}
 
 // === Stage 5: Final Data ===
 export interface Description {
   id?: number;
   company: number;
   descr: string;
+  logo_file?: string;
   dl?: number | null;
 }
 
 export interface FinalData {
   id?: number;
   company: number;
-  fire_cert?: string;
-  gg_parking: boolean;
   el_devices: string;
   el_power: string;
   dl?: number | null;
@@ -249,7 +268,6 @@ export interface Exhibitor {
 }
 
 export interface Stage5Data {
-  description: Description;
   final_data: FinalData;
   lunches: Lunch[];
   pdi: PDI | null;

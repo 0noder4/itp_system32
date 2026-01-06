@@ -5,7 +5,8 @@
     "error": "Error",
     "success": "Success",
     "cancel": "Cancel",
-    "save": "Save",
+    "save": "Submit",
+    "sendAgain": "Send Again",
     "delete": "Delete",
     "edit": "Edit",
     "create": "Create",
@@ -16,7 +17,8 @@
     "all": "All",
     "actions": "Actions",
     "backToLogin": "Back to login",
-    "logout": "Logout"
+    "logout": "Logout",
+    "browse": "Browse"
   },
   "language": {
     "title": "Language",
@@ -27,12 +29,12 @@
     "login": {
       "title": "Login to your account",
       "description": "Enter your username and password below",
-      "username": "Username",
+      "usernameLabel": "Username",
       "usernamePlaceholder": "Enter your username",
-      "password": "Password",
+      "passwordLabel": "Password",
       "passwordPlaceholder": "Enter your password",
       "forgotPassword": "Forgot your password?",
-      "submit": "Login",
+      "submitButton": "Login",
       "submitting": "Logging in...",
       "success": "Login successful!",
       "successDescription": "Redirecting to your dashboard...",
@@ -42,19 +44,21 @@
     "register": {
       "title": "Complete your registration",
       "description": "Complete your registration for company {companyName} ({email})",
-      "name": "First Name",
-      "namePlaceholder": "Enter your first name",
-      "surname": "Last Name",
-      "surnamePlaceholder": "Enter your last name",
-      "username": "Username",
+      "firstNameLabel": "First Name",
+      "firstNamePlaceholder": "Enter your first name",
+      "lastNameLabel": "Last Name",
+      "lastNamePlaceholder": "Enter your last name",
+      "phoneLabel": "Phone Number",
+      "phonePlaceholder": "Enter your phone number",
+      "usernameLabel": "Username",
       "usernamePlaceholder": "Username",
-      "email": "Email",
+      "emailLabel": "Email",
       "emailPlaceholder": "Email address",
-      "password": "Password",
+      "passwordLabel": "Password",
       "passwordPlaceholder": "Enter a strong password",
-      "confirmPassword": "Confirm Password",
+      "confirmPasswordLabel": "Confirm Password",
       "confirmPasswordPlaceholder": "Re-enter your password",
-      "submit": "Create account",
+      "submitButton": "Create account",
       "submitting": "Creating account...",
       "success": "Account created!",
       "successDescription": "You can now log in with your credentials.",
@@ -71,21 +75,21 @@
     "resetPassword": {
       "title": "Reset your password",
       "description": "Enter your email address and we'll send you a link to reset your password.",
-      "email": "Email",
+      "emailLabel": "Email",
       "emailPlaceholder": "Enter your email address",
-      "submit": "Send reset link",
+      "submitButton": "Send reset link",
       "submitting": "Sending...",
       "success": "Reset link sent!",
-      "successDescription": "If the email exists, a password reset link has been sent to your inbox."
+      "successDescription": "If the email exists in the system, a password reset link has been sent."
     },
     "resetPasswordConfirm": {
       "title": "Set new password",
       "description": "Enter a new password for {email}",
-      "newPassword": "New Password",
+      "newPasswordLabel": "New Password",
       "newPasswordPlaceholder": "Enter a strong password",
-      "confirmPassword": "Confirm Password",
+      "confirmPasswordLabel": "Confirm Password",
       "confirmPasswordPlaceholder": "Re-enter your password",
-      "submit": "Reset password",
+      "submitButton": "Reset password",
       "submitting": "Resetting password...",
       "success": "Password reset successful!",
       "successDescription": "You can now log in with your new password.",
@@ -109,38 +113,41 @@
       "passwordsDoNotMatch": "Passwords do not match.",
       "emailRequired": "Please enter a valid email address.",
       "companyNameRequired": "Company name is required.",
-      "nameRequired": "First name is required.",
-      "surnameRequired": "Last name is required."
+      "firstNameRequired": "First name is required.",
+      "lastNameRequired": "Last name is required.",
+      "phoneRequired": "Phone number is required."
     }
   },
   "dashboard": {
-    "staff": {
-      "title": "FR Dashboard",
-      "description": "Manage companies and system settings from here."
-    },
     "partner": {
       "title": "Company Dashboard",
       "description": "Welcome to your company panel. This is your dedicated workspace."
     }
   },
   "companies": {
-    "title": "Companies",
+    "title": "FR Dashboard",
+    "description": "Manage companies and system settings.",
     "searchPlaceholder": "Search by name, email, or ID...",
     "filterByStatus": "Filter by status:",
     "showingResults": "Showing {filtered} of {total} companies",
     "noCompaniesMatch": "No companies match your search criteria.",
     "noCompaniesFound": "No companies found.",
     "loadError": "Failed to load companies. Please try again later.",
+    "viewDetails": "View Details",
     "table": {
       "id": "ID",
-      "name": "Name",
+      "name": "System Name",
       "status": "Status",
       "email": "Email",
       "representative": "Representative",
-      "createdAt": "Created At"
+      "frResp": "Supervisor",
+      "standNumber": "Stand Number",
+      "completedStages": "Completed Stages",
+      "createdAt": "System Entry Date"
     },
+    "filterByFrResp": "Filter by FR Person",
     "status": {
-      "main": "Main",
+      "main": "Main Partner",
       "partner": "Partner",
       "basic": "Basic"
     },
@@ -154,13 +161,89 @@
       "companyNamePlaceholder": "Enter company name",
       "companyStatusLabel": "Company Status",
       "languageLabel": "Language",
-      "submit": "Send Invitation",
+      "submitButton": "Send Invitation",
       "submitting": "Sending...",
-      "success": "Invitation sent successfully!",
+      "success": "Invitation sent!",
       "successDescription": "An invitation has been sent to {email}",
-      "error": "Invitation failed",
+      "error": "Invitation sending failed",
       "errorDescription": "Failed to send invitation. Please try again."
+    },
+    "invitations": {
+      "title": "Company Invitations",
+      "showInvitations": "Show invitations",
+      "filterByStatus": "Filter by invitation status",
+      "showingResults": "Showing {filtered} of {total} invitations",
+      "noInvitationsMatch": "No invitations match your search criteria.",
+      "noInvitationsFound": "No invitations found.",
+      "expiresOn": "(Expires: {date})",
+      "expiredOn": "(Expired: {date})",
+      "isInvitation": "This is an invitation",
+      "isInvitationDescription": "This row represents a company invitation. Company details are only available after the invitation is accepted.",
+      "detailTitle": "Invitation Details",
+      "basicInfo": "Basic Information",
+      "dates": "Dates",
+      "createdAt": "Creation Date",
+      "expiresAt": "Expiry Date",
+      "invitationLink": "Invitation Link",
+      "additionalInfo": "Additional Information",
+      "linkCopied": "Link copied to clipboard",
+      "copyFailed": "Failed to copy link",
+      "viewDetails": "View Details",
+      "status": {
+        "label": "Invitation Status",
+        "accepted": "Invitation accepted",
+        "expired": "Invitation expired",
+        "notAccepted": "Invitation not accepted"
+      },
+      "table": {
+        "id": "ID",
+        "companyName": "Company Name",
+        "status": "Status",
+        "email": "Email",
+        "companyStatus": "Company Status",
+        "createdAt": "Creation Date",
+        "expiresAt": "Expiry Date"
+      }
+    },
+    "stand": {
+      "day1": "Day 1 Stand",
+      "day2": "Day 2 Stand",
+      "standNumber": "Stand Number",
+      "standSize": "Stand Size",
+      "notAssigned": "Not assigned",
+      "edit": "Edit Stands",
+      "save": "Save",
+      "cancel": "Cancel",
+      "sizes": {
+        "podstawowy": "4m²",
+        "standardowy": "6m²",
+        "rozszerzony": "8m²"
+      }
     }
+  },
+  "reminders": {
+    "title": "Send Stage Reminders",
+    "description": "Send reminder emails to all companies that haven't completed a specific form stage.",
+    "stageLabel": "Select Stage",
+    "stages": {
+      "stage1": "Stage 1: Basic Data",
+      "stage2": "Stage 2: Equipment",
+      "stage3": "Stage 3: Workshops",
+      "stage4": "Stage 4: Jobwall",
+      "stage5": "Stage 5: Final Data"
+    },
+    "sendButton": "Send Reminders",
+    "sending": "Sending...",
+    "success": "Reminders sent successfully",
+    "successDescription": "Sent {count} reminder email(s) for stage {stage}{failed}",
+    "error": "Failed to send reminders",
+    "errorDescription": "An error occurred while sending reminder emails. Please try again.",
+    "noCompanies": "No companies need reminders",
+    "noCompaniesDescription": "All companies have completed stage {stage} or no companies were found.",
+    "partialFailure": "Some reminders failed",
+    "partialFailureDescription": "Sent {sent} reminder(s) successfully, but {failed} failed to send.",
+    "allFailedDescription": "Failed to send all {total} reminder email(s). {failed} email(s) failed to send.",
+    "failed": "failed"
   },
   "navigation": {
     "companyManagement": "Company management",
@@ -171,6 +254,42 @@
   "exhibitor": {
     "panelTitle": "Exhibitor Panel",
     "panelDescription": "Complete all stages of your application form",
+    "navigation": {
+      "dashboard": "Dashboard",
+      "forms": "Forms",
+      "faq": "FAQ"
+    },
+    "dashboard": {
+      "description": "View your company information, application status, and progress in completing the forms."
+    },
+    "faqCard": {
+      "title": "Have questions?",
+      "description": "Check out the FAQ section or contact your event supervisor."
+    },
+    "forms": {
+      "description": "Complete all stages of the application form in the appropriate order."
+    },
+    "overview": {
+      "companyInfo": "Company Information",
+      "companyName": "Company Name",
+      "status": "Status",
+      "standDay1": "Stand - Day 1",
+      "standDay2": "Stand - Day 2",
+      "registrationDate": "Registration Date",
+      "representative": "Contact Person",
+      "supervisor": "Event Supervisor"
+    },
+    "welcome": {
+      "title": "Welcome to Your Exhibitor Dashboard",
+      "description": "This is your control center for managing your participation in the event. Here's a quick guide to help you get started:",
+      "instructions": {
+        "dashboard": "View your company information and application status on this dashboard.",
+        "forms": "Complete all 5 stages of the application form by navigating to the Forms section.",
+        "stages": "Each stage must be completed in order. You can see the status of each stage below.",
+        "feedback": "If a stage requires revision, you'll see feedback comments. Address the feedback and resubmit.",
+        "support": "If you need assistance, contact your event supervisor or support team."
+      }
+    },
     "stagesOverview": "Application Stages",
     "currentStageFormTitle": "Complete Current Stage",
     "loadError": "Failed to load form data. Please try again later.",
@@ -178,12 +297,18 @@
     "noCompanyDescription": "Your account is not associated with any company. Please contact support.",
     "allCompletedTitle": "Application Complete!",
     "allCompletedDescription": "You have completed all stages of your application. Thank you for your submission.",
+    "downloadOrderSummary": "Download Order Summary",
+    "downloadingPDF": "Generating PDF...",
+    "pdfDownloadSuccess": "PDF Downloaded",
+    "pdfDownloadSuccessDescription": "Order summary PDF has been downloaded successfully.",
+    "pdfDownloadError": "Download Failed",
+    "pdfDownloadErrorDescription": "Failed to download order summary PDF. Please try again.",
     "stage1": {
       "title": "Stage 1: Basic Data",
       "description": "Company information and contact details"
     },
     "stage2": {
-      "title": "Stage 2: Equipment",
+      "title": "Stage 2: Stand and Equipment",
       "description": "Stand setup and equipment selection"
     },
     "stage3": {
@@ -191,8 +316,8 @@
       "description": "Workshop participation information"
     },
     "stage4": {
-      "title": "Stage 4: Jobwall",
-      "description": "Job position listings"
+      "title": "Stage 4: Job Positions and Catalog",
+      "description": "Publication of job positions and company information for the catalog"
     },
     "stage5": {
       "title": "Stage 5: Final Data",
@@ -208,14 +333,20 @@
     "form": {
       "required": "This field is required",
       "invalidEmail": "Please enter a valid email address",
-      "invalidUrl": "Please enter a valid URL",
+      "invalidUrl": "Please enter a valid URL or email address",
       "saveSuccess": "Form saved successfully",
       "saveError": "Failed to save form. Please try again.",
       "rejectionReason": "Revision required:",
+      "pendingReviewMessage": "This stage is pending review and cannot be edited. Please wait for staff feedback.",
+      "completePreviousStages": "Please submit previous stages before submitting this stage",
+      "completeStagesList": "Submit the following stages first: {stages}",
+      "editAcceptedWarningTitle": "Edit Accepted Stage?",
+      "editAcceptedWarningMessage": "Editing this accepted stage will reset it to pending status and require staff approval again. Are you sure you want to continue?",
+      "confirmEdit": "Yes, Continue Editing",
       "basicData": "Basic Company Data",
       "fullName": "Full Company Name",
       "nip": "Tax ID (NIP)",
-      "address": "Address",
+      "address": "Company Address",
       "street": "Street",
       "homeNumber": "Building Number",
       "aptNumber": "Apartment/Suite Number",
@@ -228,18 +359,36 @@
       "phone": "Phone Number",
       "email": "Email Address",
       "standDetails": "Stand Details",
-      "selfConstruction": "Own stand construction",
+      "standType": "Stand Type",
+      "selectStandTypeMessage": "Please select a stand type above to continue",
+      "ourStand": "Standard Setup (provided by organizers)",
+      "selfConstruction": "Self Construction",
+      "ourStandDetails": "Stand Personalization",
+      "selfConstructionDetails": "Self Construction Details",
       "scDetails": "Construction details",
       "nameSignText": "Name sign text",
+      "uploadLogo": "Logo for sign",
+      "uploadFireCert": "Upload Fire Certificate",
+      "selectEquipment": "Select Equipment",
+      "addEquipment": "Additional Equipment from Organizer",
       "basicEquipment": "Basic Equipment",
+      "basicEquipmentIncluded": "Included",
+      "included": "included/in package",
+      "additionalAt": "additional at",
+      "each": "per unit",
+      "equipmentPrice": "Price",
+      "totalAdditionalCost": "Total Additional Cost",
+      "additionalCost": "Additional Cost",
       "chairs": "Number of chairs",
       "counter": "Counter",
       "trashbin": "Trash bin",
       "hanger": "Coat hanger",
       "workshopInfo": "Workshop Information",
-      "willConductWorkshop": "We will conduct a workshop",
+      "workshopDescription": "Workshops provide an excellent opportunity to showcase your company's expertise, share knowledge with students and professionals, and engage directly with potential candidates. If you plan to conduct a workshop during the fair, please indicate this below and we will contact you to arrange details. The number of available spots is limited.",
+      "willConductWorkshop": "We are interested in conducting workshops",
       "workshopNotes": "Additional notes about the workshop",
-      "jobwallInfo": "Job Position Information",
+      "jobwallInfo": "Job Position Publication",
+      "jobwallDescription": "We encourage you to post job positions on our Jobwall, which will be physically present during the event and also on the job fair website. This is an excellent opportunity to reach qualified candidates directly during the event. You can add multiple job positions, each with detailed information including position name, work form, workload, contract type, description, benefits, requirements, and application details. Please note that each job position posting has an additional cost.",
       "positionName": "Position Name",
       "workForm": "Work Form",
       "workFormOnsite": "On-site",
@@ -259,23 +408,176 @@
       "contractB2B": "B2B contract",
       "contractInternship": "Internship/Traineeship",
       "positionDescription": "Position Description",
-      "benefits": "Benefits",
+      "benefits": "Offered Benefits",
       "requirements": "Requirements",
-      "applicationUrl": "Application URL",
+      "applicationUrl": "Application Link",
       "companyDescription": "Company Description",
-      "description": "Description",
+      "description": "Company Description for Catalog",
+      "catalogueDescription": "The catalog (paper version) and e-catalog (on the job fair website) is a list of all exhibitors of the Engineering Job Fair. Take care of your company's visibility and submit an engaging company description and logo.",
+      "uploadCatalogueLogo": "Upload Logo for Catalog",
       "finalData": "Final Data",
-      "needsParking": "Need parking access",
+      "needsParking": "We need parking access",
       "electricDevices": "Electric devices during fair",
-      "electricPower": "Total power consumption",
+      "electricDevicesTitle": "Electric Devices",
+      "electricDevicesDescription": "Please provide information about the electric devices you will use during the fair. This information is needed to calculate the power paths and ensure proper electrical distribution. Specify the devices you plan to use and their total power consumption.",
+      "electricPower": "Total device power (in watts)",
       "lunches": "Lunches",
+      "lunchesDescription": "You can order lunches for your team during the fair. Lunches will be provided by Bistro Chochelka. Please specify the day, quantity, and any dietary requirements or restrictions for each lunch order. You can add multiple lunch orders for different days or with different dietary requirements.",
       "addLunch": "Add Lunch",
       "day": "Day",
       "quantity": "Quantity",
-      "dietInfo": "Dietary requirements",
-      "exhibitors": "Exhibitors (Stand Representatives)",
-      "addExhibitor": "Add Exhibitor"
+      "dietInfo": "Dietary Information",
+      "exhibitors": "Company Delegates at the Fair",
+      "addExhibitor": "Add Delegate",
+      "addYourself": "Add Yourself",
+      "acceptTerms": "I accept the terms and conditions",
+      "viewTerms": "View terms and conditions",
+      "termsDialogTitle": "Terms and Conditions Acceptance",
+      "termsDialogText": "By proceeding to save this form, you acknowledge that you have read, understood, and agree to be bound by the Terms and Conditions of the Engineering Job Fair. Your submission of this form constitutes your acceptance of all terms, conditions, and regulations set forth in the official Terms and Conditions document.",
+      "termsDialogLegalNotice": "By clicking 'Accept and Save', you confirm that you have reviewed the Terms and Conditions and agree to comply with all provisions contained therein. This acceptance is legally binding and will be recorded as part of your application.",
+      "acceptAndSave": "Accept and Save",
+      "currentFile": "Current file",
+      "viewCurrentFile": "View current file",
+      "replaceFile": "Upload a new file to replace the current one",
+      "selectFile": "Select a file to upload",
+      "addJobwall": "Add Job Position",
+      "jobwall": "Job Position",
+      "jobwallPricingDisclaimer": "Each job position posting has an additional cost.",
+      "jobwallPricePerPosting": "Price per posting",
+      "totalJobwallCost": "Total Job Position Cost",
+      "catalogue": "Catalog Data",
+      "deadline": {
+        "label": "Deadline",
+        "passed": "Deadline passed: {date}, please complete it as soon as possible",
+        "remaining": "Complete by {date} ({days} {unit} remaining)",
+        "until": "until {date}",
+        "overdue": "overdue",
+        "day": "day",
+        "days": "days"
+      }
+    },
+    "faq": {
+      "title": "Frequently Asked Questions",
+      "description": "Find answers to frequently asked questions about the 31st Engineering Job Fair.",
+      "contactUs": "Contact us",
+      "allCategories": "All",
+      "seeAllQuestions": "See all questions",
+      "categories": {
+        "general": "General Information",
+        "logistics": "Logistics",
+        "materials": "Promotional Materials and Setup",
+        "ownConstruction": "Own Construction",
+        "support": "Support and Catering",
+        "pdiVenue": "PDI Venue"
+      },
+      "general": {
+        "location": {
+          "question": "Where is the fair taking place?",
+          "answer": "The 31st Engineering Job Fair is taking place at the Main Building of Warsaw University of Technology at Plac Politechniki 1, Warsaw."
+        },
+        "dates": {
+          "question": "When is the fair taking place?",
+          "answer": "The fair takes place on March 10-11, 2026. The fair starts at 9:00 AM and ends at 4:00 PM on both days. The official opening is on March 10 at 10:00 AM."
+        },
+        "wifi": {
+          "question": "What is the Wi-Fi password?",
+          "answer": "The Wi-Fi password will be provided to exhibitors on the fair day by their assigned supervisor."
+        }
+      },
+      "logistics": {
+        "unloading": {
+          "question": "Where can I unload materials?",
+          "answer": "For unloading your vehicle, a short stop (5 min) is possible at the Main Building from Noakowskiego Street. Entry to the Square is from Stanisława Noakowskiego Street."
+        },
+        "parking": {
+          "question": "Do you provide parking spaces?",
+          "answer": "We do not provide parking spaces. Paid parking lots are available near the Main Building of Warsaw University of Technology. Detailed information about locations and prices can be found in the answer to the parking prices question."
+        },
+        "parkingPrices": {
+          "question": "What are the parking prices in the area?",
+          "answer": "1. City Paid Parking (with parking meters):\n   - First hour: 4.50 PLN\n   - Second hour: 5.40 PLN\n   - Third hour: 6.40 PLN\n   - Each additional hour: 4.50 PLN\n\n2. CPG Underground Guarded Parking at Progi 1:\n   - Price per hour: 6 PLN\n   - Price per day: 50 PLN\n\n3. Hala Koszyki Evend Parking, Koszykowa 63:\n   - First hour: 10 PLN\n   - Each additional started hour: 10 PLN\n\n4. Interparking Piękna 20:\n   - Price per hour: 7 PLN\n   - With online reservation: 50 PLN per day"
+        }
+      },
+      "materials": {
+        "setupTime": {
+          "question": "When can I set up promotional materials?",
+          "answer": "On the fair day, it is possible to arrive from 6:30 AM to set up promotional materials (roll-ups, walls, posters, gadgets)."
+        },
+        "ownSetup": {
+          "question": "When can I set up my own construction?",
+          "answer": "Exhibitors who have their own construction and are exhibiting on the first day can set it up on March 10 in a previously selected time slot from 2:00 PM.\n\nExhibitors who are only exhibiting on the second day can set up their construction on March 11 from 4:30 PM to 10:00 PM. After the fair ends, the construction must be dismantled by 10:00 PM."
+        },
+        "wallRestrictions": {
+          "question": "Can I stick materials on the construction walls?",
+          "answer": "Printed materials cannot be stuck on construction walls – this leads to wall damage. In case of wall damage resulting from sticking promotional materials on it, the company will incur an additional cost of 100 PLN per wall."
+        }
+      },
+      "support": {
+        "supervisor": {
+          "question": "Will I have an assigned supervisor?",
+          "answer": "Yes, during the event you will have an assigned company supervisor from the organizers. This person will be at your disposal for questions or comments regarding the course of the 31st Engineering Job Fair. Please save the contact information of your assigned supervisor and contact them in case of problems."
+        },
+        "lunch": {
+          "question": "Is lunch included in the package?",
+          "answer": "Yes, as part of the package, each exhibitor is provided with a lunch in the form of a hot meal. The welcome package will contain vouchers that can be exchanged for lunch at the Central Canteen of Warsaw University of Technology \"Bistro Chochelka\" (Rektorska 2). The scheduled lunch hours are: 12:00-15:00."
+        },
+        "coffee": {
+          "question": "Will there be a coffee point available?",
+          "answer": "Yes, during the fair there will be a coffee point available with coffee and sweet treats."
+        }
+      },
+      "pdiVenue": {
+        "gala": {
+          "question": "When is the Employer for Engineer Gala taking place?",
+          "answer": "This year's gala presenting the results of the Employer for Engineer survey will take place on March 10 in the Small Hall of the Main Building of Warsaw University of Technology. During the gala, the results of the study on the expectations of students and graduates of technical universities regarding the job market will be presented."
+        }
+      }
     }
+  },
+  "staff": {
+    "companyDetail": {
+      "title": "Company Details",
+      "backToList": "Back to Company List",
+      "companyInfo": "Exhibitor Information",
+      "stages": "Form Data",
+      "viewStageData": "View Stage Data",
+      "provideFeedback": "Submit Feedback",
+      "feedbackStatus": "Status",
+      "feedbackComment": "Comment",
+      "accept": "Accept",
+      "reject": "Reject",
+      "pending": "Pending",
+      "submitFeedback": "Submit Feedback",
+      "submitting": "Submitting...",
+      "feedbackSuccess": "Feedback submitted successfully",
+      "feedbackError": "Failed to submit feedback",
+      "stageNotSubmitted": "This stage has not been submitted yet",
+      "stageNotSubmittedMessage": "Feedback can only be provided for stages that have been submitted by the company.",
+      "rejectStage": "Reject Stage",
+      "rejectStageDescription": "Please provide a comment explaining why this stage is being rejected.",
+      "noData": "No data available for this stage",
+      "loadError": "Failed to load company data",
+      "notFound": "Company not found"
+    },
+    "invitationDetail": {
+      "title": "Invitation Details",
+      "backToList": "Back to Company List",
+      "loadError": "Failed to load invitation data",
+      "notFound": "Invitation not found"
+    },
+    "footer": {
+      "authors": "Authors",
+      "author1": "Bartosz Kuklewski",
+      "author2": "Patrycja Lubowiecka",
+      "author3": "Norbert Roszkowski",
+      "author4": "Dominika Zarzycka",
+      "and": "and"
+    }
+  },
+  "userAccountCard": {
+    "username": "Username",
+    "email": "Email",
+    "dateJoined": "Date Joined",
+    "phoneNumber": "Phone Number"
   }
 }
-

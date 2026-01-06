@@ -35,26 +35,30 @@ function computeStageStatus(
   if (!formStatus) return "not_started";
 
   const stageKey = `stage_${stageNum}`;
-  const isCompleted =
-    formStatus.form[`stage_${stageNum}_completed` as keyof typeof formStatus.form] as boolean;
+  const isCompleted = formStatus.form[
+    `stage_${stageNum}_completed` as keyof typeof formStatus.form
+  ] as boolean;
   const dataExists = formStatus.data_exists[stageKey];
   const feedback = formStatus.feedbacks[stageKey];
 
-  // If stage is marked as completed in Form model
+  // If data exists, check feedback status first
+  if (dataExists && feedback) {
+    if (feedback.status === "accepted") return "accepted";
+    if (feedback.status === "rejected") return "rejected";
+    if (feedback.status === "pending") return "pending_approval";
+  }
+
+  // If stage is marked as completed in Form model but no feedback yet
   if (isCompleted) {
-    // Check feedback status
-    if (feedback) {
-      if (feedback.status === "akcept") return "accepted";
-      if (feedback.status === "odrzucenie") return "rejected";
-      if (feedback.status === "pending") return "pending_approval";
-    }
     return "pending_approval";
   }
 
   // Stage not completed
   if (dataExists) {
-    // Data exists but not completed - either in progress or rejected
-    if (feedback && feedback.status === "odrzucenie") return "rejected";
+    // Data exists but not completed - check if it was rejected
+    if (feedback && feedback.status === "rejected") return "rejected";
+    // If there's pending feedback, show pending
+    if (feedback && feedback.status === "pending") return "pending_approval";
     return "in_progress";
   }
 
@@ -112,7 +116,9 @@ export function useFormStatus(): UseFormStatusReturn {
     const stageKey = `stage_${i}`;
     const status = computeStageStatus(i, formStatus, previousStageCompleted);
     const isCompleted =
-      formStatus?.form[`stage_${i}_completed` as keyof typeof formStatus.form] as boolean ?? false;
+      (formStatus?.form[
+        `stage_${i}_completed` as keyof typeof formStatus.form
+      ] as boolean) ?? false;
     const feedback = formStatus?.feedbacks[stageKey];
     const dataExists = formStatus?.data_exists[stageKey] ?? false;
 
@@ -149,5 +155,3 @@ export function useFormStatus(): UseFormStatusReturn {
     mutateFormStatus,
   };
 }
-
-

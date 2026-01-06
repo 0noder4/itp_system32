@@ -25,6 +25,7 @@ class User(AbstractUser):
         choices=LANGUAGE_CHOICES,
         default="pl"
     )
+    phone_number = models.CharField(max_length=20, verbose_name="Phone number", blank=True)
     created_at = models.DateTimeField(auto_now_add = True)
     updated_at = models.DateTimeField(auto_now = True)
 

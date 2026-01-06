@@ -64,6 +64,11 @@ STAGE_CHOICES = [
     ('completed', 'Zakończone'),
 ]
 
+STAND_TYPE_CHOICES = [
+    ('provided_stand', 'Provided Stand'),
+    ('self_construction', 'Self Construction'),
+]
+
 class Company(models.Model):
     name = models.CharField(max_length=100, unique=True)
     email = models.EmailField()
@@ -118,6 +123,15 @@ class CompanyInvitation(models.Model):
         max_length=10,
         choices=COMPANY_STATUS_CHOICES,
         default=STATUS_BASIC,
+    )
+    
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_invitations',
+        verbose_name='Created by'
     )
 
     def is_expired(self):
@@ -204,35 +218,44 @@ class Person(models.Model):
         # Aby baza danych nie tworzyła tabeli "Person"
         abstract = True
 
-class ContactPerson(Person):
-    form = models.ForeignKey(BasicData, on_delete=models.CASCADE, related_name='contact_ppl')
-    email = models.EmailField(verbose_name="Adres email")
     
 class StandDetails(models.Model):
     company = models.OneToOneField(Company, on_delete=models.CASCADE, related_name='stand_details')
-    self_construction = models.BooleanField(verbose_name="własna zabudowa", default=False)
+    stand_type = models.CharField(max_length=20, choices=STAND_TYPE_CHOICES, default='provided_stand', verbose_name="typ stanowiska")
     sc_details = models.CharField(max_length=255, verbose_name="z czego się składa własna zabudowa", blank=True)
-    name_sign_text = models.CharField(max_length=255, verbose_name="napis na fryz", blank=True)  # trzeba zrobic walidację z basic equipment
-    logo_sign_file = models.FileField(upload_to='logos', verbose_name="Logotyp na fryz", blank=True)  # jak wyzej
+    name_sign_text = models.CharField(max_length=255, verbose_name="napis na fryz", blank=True)
+    logo_sign_file = models.FileField(upload_to='logos', verbose_name="Logotyp na fryz", blank=True)
+    fire_cert = models.FileField(upload_to="fire_certs", verbose_name="certyfikat o niepalności", blank=True)
     dl = models.ForeignKey(Deadline, on_delete=models.SET_NULL, null=True)
 
-class BasicEquipment(models.Model):
-    form = models.OneToOneField(StandDetails, on_delete=models.CASCADE, related_name='basic_equipment')
-    chair = models.IntegerField(verbose_name="ilość krzeseł", default=2)
-    counter = models.BooleanField(verbose_name="lada zwykła", default=True)
-    trashbin = models.BooleanField(verbose_name="śmietnik", default=True)
-    hanger = models.BooleanField(verbose_name="wieszak", default=True) 
+class EquipmentItem(models.Model):
+    name_en = models.CharField(max_length=255, verbose_name="nazwa (angielski)")
+    name_pl = models.CharField(max_length=255, verbose_name="nazwa (polski)")
+    price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="cena")
+    is_basic = models.BooleanField(default=False, verbose_name="wyposażenie podstawowe")
+    included_quantity = models.IntegerField(default=0, verbose_name="ilość wliczona (darmowa)")
+    category = models.CharField(max_length=100, blank=True, verbose_name="kategoria")
+    is_active = models.BooleanField(default=True, verbose_name="aktywne")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
-class ExtendedEquipment(models.Model):
-    form = models.OneToOneField(StandDetails, on_delete=models.CASCADE, related_name='ext_equipment')
-    counter = models.IntegerField(verbose_name="lada zwykła")
-    arched_counter = models.IntegerField(verbose_name="lada łukowa")
-    tv = models.IntegerField(verbose_name="telewizor")
-    chair = models.IntegerField(verbose_name="krzesło")
-    bar_table = models.IntegerField(verbose_name="stół barowy")
-    bar_stool = models.IntegerField(verbose_name="krzesło barowe")
-    leaflet_stand = models.IntegerField(verbose_name="stojak na ulotki")
-    carpet_color = models.CharField(max_length=20, verbose_name="kolor wykładziny")
+    def __str__(self):
+        return self.name_en
+
+    class Meta:
+        ordering = ['category', 'name_en']
+
+
+class EquipmentSelection(models.Model):
+    stand_details = models.ForeignKey(StandDetails, on_delete=models.CASCADE, related_name='equipment_selections')
+    equipment_item = models.ForeignKey(EquipmentItem, on_delete=models.CASCADE)
+    quantity = models.IntegerField(default=1, verbose_name="ilość")
+
+    def __str__(self):
+        return f"{self.stand_details.company.name} - {self.equipment_item.name_pl} x{self.quantity}"
+
+    class Meta:
+        unique_together = ['stand_details', 'equipment_item']
 
 class Jobwall(models.Model):
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="jobwalls")
@@ -243,7 +266,7 @@ class Jobwall(models.Model):
     description = models.TextField(verbose_name="opis stanowiska")
     benefits = models.TextField(verbose_name="co jest oferowane")
     requirements = models.TextField(verbose_name="wymagania")
-    url = models.URLField()
+    url = models.CharField(max_length=500, verbose_name="application URL or email")
     dl = models.ForeignKey(Deadline, on_delete=models.SET_NULL, null=True)
 
 class Workshop(models.Model):
@@ -255,12 +278,11 @@ class Workshop(models.Model):
 class Description(models.Model):
     company = models.OneToOneField(Company, on_delete=models.CASCADE, related_name='description')
     descr = models.TextField(verbose_name="opis firmy")
+    logo_file = models.FileField(upload_to='catalogue_logos', verbose_name="Logotyp do katalogu", blank=True)
     dl = models.ForeignKey(Deadline, on_delete=models.SET_NULL, null=True)
 
 class FinalData(models.Model):
     company = models.OneToOneField(Company, on_delete=models.CASCADE, related_name='finaldata')
-    fire_cert = models.FileField(upload_to="fire_certs", verbose_name="certyfikat o niepalności", blank=True)
-    gg_parking = models.BooleanField(verbose_name="czy potrzebny wyjazd na parking")
     el_devices = models.CharField(max_length=255, verbose_name="urządzenia elektryczne w trakcie targów")
     el_power = models.CharField(max_length=255, verbose_name="łączna moc urządzeń")
     dl = models.ForeignKey(Deadline, on_delete=models.SET_NULL, null=True)
@@ -282,6 +304,61 @@ class PDIAttendee(Person):
 class Exhibitor(Person):
     form = models.ForeignKey(PDI, on_delete=models.CASCADE, related_name="exhibitors")
 
-# nie implementuje: CarData
+class Settings(models.Model):
+    """
+    System-wide settings. Uses singleton pattern - only one instance should exist.
+    """
+    jobwall_price = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        verbose_name="cena za ogłoszenie jobwall",
+        default=0.00,
+        help_text="Cena za jedno ogłoszenie jobwall"
+    )
+    stage_1_deadline = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="termin etapu 1",
+        help_text="Globalny termin dla etapu 1 (Dane podstawowe)"
+    )
+    stage_2_deadline = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="termin etapu 2",
+        help_text="Globalny termin dla etapu 2 (Wyposażenie)"
+    )
+    stage_3_deadline = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="termin etapu 3",
+        help_text="Globalny termin dla etapu 3 (Warsztaty)"
+    )
+    stage_4_deadline = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="termin etapu 4",
+        help_text="Globalny termin dla etapu 4 (Jobwall)"
+    )
+    stage_5_deadline = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="termin etapu 5",
+        help_text="Globalny termin dla etapu 5 (Inne dane)"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Settings"
+        verbose_name_plural = "Settings"
+
+    def __str__(self):
+        return "System Settings"
+
+    @classmethod
+    def get_settings(cls):
+        """Get or create the singleton settings instance"""
+        settings, created = cls.objects.get_or_create(pk=1)
+        return settings
 
 

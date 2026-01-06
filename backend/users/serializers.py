@@ -36,6 +36,13 @@ class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
 
 
+class UserSerializer(serializers.ModelSerializer):
+    """Serializer for user information"""
+    class Meta:
+        model = User
+        fields = ('id', 'username', 'email', 'first_name', 'last_name', 'type')
+
+
 class PasswordResetRequestSerializer(serializers.Serializer):
     """
     Serializer for requesting password reset.
@@ -93,11 +100,25 @@ Link wygaśnie za 24 godziny.
 
 Jeśli nie prosiłeś o reset hasła, możesz zignorować tę wiadomość."""
 
+            # Get staff contact email if user is a company user
+            staff_email = None
+            default_email = 'best@best.pw.edu.pl'
+            if user.type == 'company':
+                from companies.models import Company
+                try:
+                    company = Company.objects.get(representative=user)
+                    if company.fr_resp and company.fr_resp.email:
+                        staff_email = company.fr_resp.email
+                except Company.DoesNotExist:
+                    pass  # Company not found, use default
+            
             # Render HTML template
             html_content = render_to_string(template_name, {
                 'username': user.username,
                 'reset_link': reset_link,
                 'logo_url': logo_url,
+                'staff_email': staff_email,
+                'default_email': default_email,
             })
 
             # Send email with HTML and plain text alternatives
@@ -147,4 +168,3 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
         reset_request.save()
 
         return {"detail": "Password has been reset successfully."}
-

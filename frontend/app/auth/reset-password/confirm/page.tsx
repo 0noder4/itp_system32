@@ -220,7 +220,7 @@ export default function ResetPasswordConfirmPage() {
               render={({ field, fieldState }) => (
                 <Field data-invalid={fieldState.invalid}>
                   <FieldLabel htmlFor="s32-form-reset-confirm-password">
-                    {t("auth.resetPasswordConfirm.newPassword")}
+                    {t("auth.resetPasswordConfirm.newPasswordLabel")}
                   </FieldLabel>
                   <Input
                     {...field}
@@ -245,7 +245,7 @@ export default function ResetPasswordConfirmPage() {
               render={({ field, fieldState }) => (
                 <Field data-invalid={fieldState.invalid}>
                   <FieldLabel htmlFor="s32-form-reset-confirm-confirm-password">
-                    {t("auth.resetPasswordConfirm.confirmPassword")}
+                    {t("auth.resetPasswordConfirm.confirmPasswordLabel")}
                   </FieldLabel>
                   <Input
                     {...field}
@@ -277,7 +277,7 @@ export default function ResetPasswordConfirmPage() {
           >
             {isLoading
               ? t("auth.resetPasswordConfirm.submitting")
-              : t("auth.resetPasswordConfirm.submit")}
+              : t("auth.resetPasswordConfirm.submitButton")}
           </Button>
         </Field>
         <div className="text-center text-sm">
