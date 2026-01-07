@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { Suspense } from "react";
 import { useTranslation } from "@/lib/i18n";
 import { useFormStatus } from "@/hooks/use-form-status";
 import { StageForm } from "@/components/exhibitor/StageForm";
@@ -60,7 +60,7 @@ const STATUS_CONFIG: Record<
   },
 };
 
-export default function ExhibitorFormsPage() {
+function ExhibitorFormsPageContent() {
   const { t, locale } = useTranslation();
   const searchParams = useSearchParams();
   const {
@@ -445,5 +445,19 @@ export default function ExhibitorFormsPage() {
         </Tabs>
       </div>
     </div>
+  );
+}
+
+export default function ExhibitorFormsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-[400px] items-center justify-center">
+          <Skeleton className="h-8 w-64" />
+        </div>
+      }
+    >
+      <ExhibitorFormsPageContent />
+    </Suspense>
   );
 }

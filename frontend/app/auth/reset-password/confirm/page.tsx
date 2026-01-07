@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { Suspense } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -35,7 +36,7 @@ type FormInput = {
   confirmPassword: string;
 };
 
-export default function ResetPasswordConfirmPage() {
+function ResetPasswordConfirmForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
@@ -350,5 +351,17 @@ export default function ResetPasswordConfirmPage() {
         </div>
       </CardFooter>
     </Card>
+  );
+}
+
+export default function ResetPasswordConfirmPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-[400px] items-center justify-center">
+        <p className="text-sm text-muted-foreground">Loading...</p>
+      </div>
+    }>
+      <ResetPasswordConfirmForm />
+    </Suspense>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { Suspense } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Controller, useForm } from "react-hook-form";
 import * as z from "zod";
@@ -37,7 +38,7 @@ type FormInput = {
   confirmPassword: string;
 };
 
-export default function Index() {
+function RegisterForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
@@ -417,5 +418,17 @@ export default function Index() {
         </Field>
       </CardFooter>
     </Card>
+  );
+}
+
+export default function Index() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-[400px] items-center justify-center">
+        <p className="text-sm text-muted-foreground">Loading...</p>
+      </div>
+    }>
+      <RegisterForm />
+    </Suspense>
   );
 }

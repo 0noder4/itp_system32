@@ -52,6 +52,7 @@ FRONTEND_BASE_URL = os.environ.get("FRONTEND_BASE_URL", "http://localhost:3000")
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -190,12 +191,30 @@ if os.getenv('EMAIL_USE_SSL', '').lower() in ('true', '1', 'yes'):
 if os.getenv('EMAIL_USE_TLS', '').lower() in ('true', '1', 'yes'):
     EMAIL_USE_TLS = True
 
-# For production
-STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
+# WhiteNoise configuration for serving static files in production
+# Use CompressedStaticFilesStorage for better compatibility with Docker volumes
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
 # Default primary key field type
 # https://docs.djangoproject.com/en/3.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# CSRF settings
+# Trusted origins for CSRF protection (required for HTTPS and cross-origin requests)
+if DEBUG:
+    # In development, allow localhost origins
+    CSRF_TRUSTED_ORIGINS = ['http://localhost:8000', 'http://127.0.0.1:8000', 'http://localhost:3000', 'http://127.0.0.1:3000']
+else:
+    # In production, use the configured trusted origins
+    csrf_origins = os.environ.get(
+        "CSRF_TRUSTED_ORIGINS",
+        os.environ.get("CORS_ALLOWED_ORIGINS", "")  # Fallback to CORS origins if CSRF_TRUSTED_ORIGINS not set
+    )
+    if csrf_origins:
+        CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in csrf_origins.split(",") if origin.strip()]
+    else:
+        # If neither is set, use empty list (not recommended for production)
+        CSRF_TRUSTED_ORIGINS = []
 
 # CORS settings
 # Allow all origins in development, restrict in production
