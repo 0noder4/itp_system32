@@ -30,6 +30,11 @@ SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "django-insecure")
 DEBUG = os.environ.get("DEBUG", "False").lower() in ("true", "1", "yes")
 ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS","127.0.0.1").split(",")
 
+# Reverse proxy settings (required when behind a reverse proxy)
+# Trust the X-Forwarded-Proto and X-Forwarded-Host headers from reverse proxy
+USE_X_FORWARDED_HOST = True
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
 
 # Application definition
 
