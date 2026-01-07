@@ -189,7 +189,12 @@ EMAIL_HOST = os.getenv('EMAIL_HOST', 'localhost')
 EMAIL_PORT = int(os.getenv('EMAIL_PORT', 1025))
 EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
-DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@targipracy.org.pl')
+# Default to EMAIL_HOST_USER if DEFAULT_FROM_EMAIL not set (required for SMTP authentication)
+# Many SMTP servers require sender address to match authenticated user
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL') or EMAIL_HOST_USER or 'noreply@targipracy.org.pl'
+
+# Timeout settings to prevent hanging connections
+EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', '10'))  # 10 seconds timeout
 
 if os.getenv('EMAIL_USE_SSL', '').lower() in ('true', '1', 'yes'):
     EMAIL_USE_SSL = True
