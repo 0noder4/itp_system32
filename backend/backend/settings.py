@@ -27,7 +27,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "django-insecure")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get("DEBUG")
+DEBUG = os.environ.get("DEBUG", "False").lower() in ("true", "1", "yes")
 ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS","127.0.0.1").split(",")
 
 
@@ -180,13 +180,15 @@ MEDIA_URL = '/media/'
 # Email service configuration
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = os.getenv('EMAIL_HOST', 'localhost')
-EMAIL_PORT = os.getenv('EMAIL_PORT', 1025)
+EMAIL_PORT = int(os.getenv('EMAIL_PORT', 1025))
 EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@targipracy.org.pl')
 
-if (os.getenv('EMAIL_USE_SSL')):
+if os.getenv('EMAIL_USE_SSL', '').lower() in ('true', '1', 'yes'):
     EMAIL_USE_SSL = True
+if os.getenv('EMAIL_USE_TLS', '').lower() in ('true', '1', 'yes'):
+    EMAIL_USE_TLS = True
 
 # For production
 STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'

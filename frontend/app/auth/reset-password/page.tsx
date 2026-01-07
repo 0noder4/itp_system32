@@ -27,6 +27,8 @@ import { Input } from "@/components/ui/input";
 import { apiClient } from "@/lib/api";
 import { useTranslation } from "@/lib/i18n";
 import { LanguageSelector } from "@/components/layout/LanguageSelector/LanguageSelector";
+import { ACCENT_COLOR } from "@/lib/colors";
+import Image from "next/image";
 
 export default function ResetPasswordPage() {
   const router = useRouter();
@@ -82,6 +84,16 @@ export default function ResetPasswordPage() {
   return (
     <Card className="w-full sm:max-w-md">
       <CardHeader>
+        <div className="flex flex-col items-center gap-4 mb-2">
+          <Image
+            src="/images/ITP_LOGO_horizontal_black.png"
+            alt="ITP Logo"
+            width={200}
+            height={60}
+            className="h-auto w-auto max-h-12 object-contain"
+            priority
+          />
+        </div>
         <div className="flex items-center justify-between">
           <CardTitle>{t("auth.resetPassword.title")}</CardTitle>
           <LanguageSelector />
@@ -130,6 +142,20 @@ export default function ResetPasswordPage() {
             form="s32-form-reset-password"
             className="w-full"
             disabled={isLoading}
+            style={{
+              backgroundColor: isLoading ? undefined : ACCENT_COLOR,
+              color: "#ffffff",
+            }}
+            onMouseEnter={(e) => {
+              if (!isLoading) {
+                e.currentTarget.style.backgroundColor = "#E04E15";
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!isLoading) {
+                e.currentTarget.style.backgroundColor = ACCENT_COLOR;
+              }
+            }}
           >
             {isLoading
               ? t("auth.resetPassword.submitting")
@@ -139,7 +165,14 @@ export default function ResetPasswordPage() {
         <div className="text-center text-sm">
           <Link
             href="/auth/login"
-            className="text-muted-foreground underline-offset-4 hover:underline"
+            className="underline-offset-4 hover:underline"
+            style={{ color: ACCENT_COLOR }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = "#E04E15";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = ACCENT_COLOR;
+            }}
           >
             {t("common.backToLogin")}
           </Link>

@@ -32,13 +32,14 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Stage 2: Base runtime stage
 FROM python:3.13-slim AS base
 
-# Install ONLY the runtime MariaDB libraries and fonts for PDF generation
+# Install ONLY the runtime MariaDB libraries, fonts for PDF generation, and curl for healthchecks
 RUN apt-get update && apt-get install -y \
     libmariadb3 \
     mariadb-client \
     fonts-dejavu \
     fonts-dejavu-core \
     fonts-dejavu-extra \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy the Python dependencies from the builder stage
@@ -100,16 +101,19 @@ FROM base AS production
 # Create non-root user for security
 RUN useradd -m -r -u 1001 appuser
 
-# Create staticfiles and mediafiles directories and set permissions
-RUN mkdir -p /app/staticfiles /app/mediafiles && \
-    chown -R appuser:appuser /app/staticfiles /app/mediafiles /app
-
-# Set Django environment to production
+# Set Django environment to production (before collectstatic)
 ENV DJANGO_SETTINGS_MODULE=backend.settings
 ENV DEBUG=False
 
-# Collect static files before switching user
-RUN python manage.py collectstatic --noinput
+# Create staticfiles and mediafiles directories
+RUN mkdir -p /app/staticfiles /app/mediafiles
+
+# Collect static files before switching user (requires root for file creation)
+# Use a minimal settings to avoid needing database connection during build
+RUN DJANGO_SECRET_KEY=dummy python manage.py collectstatic --noinput || true
+
+# Set proper ownership for directories
+RUN chown -R appuser:appuser /app/staticfiles /app/mediafiles /app
 
 # Switch to non-root user
 USER appuser

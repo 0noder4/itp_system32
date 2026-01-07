@@ -28,6 +28,8 @@ import { apiClient } from "@/lib/api";
 import { storeTokens, getUserRoute, type UserType } from "@/lib/auth";
 import { useTranslation } from "@/lib/i18n";
 import { LanguageSelector } from "@/components/layout/LanguageSelector/LanguageSelector";
+import { ACCENT_COLOR } from "@/lib/colors";
+import Image from "next/image";
 
 export default function Index() {
   const router = useRouter();
@@ -91,6 +93,16 @@ export default function Index() {
   return (
     <Card className="w-full sm:max-w-md">
       <CardHeader>
+        <div className="flex flex-col items-center gap-4 mb-2">
+          <Image
+            src="/images/ITP_LOGO_horizontal_black.png"
+            alt="ITP Logo"
+            width={200}
+            height={60}
+            className="h-auto w-auto max-h-12 object-contain"
+            priority
+          />
+        </div>
         <div className="flex items-center justify-between">
           <CardTitle>{t("auth.login.title")}</CardTitle>
           <LanguageSelector />
@@ -141,6 +153,13 @@ export default function Index() {
                     <Link
                       href="/auth/reset-password"
                       className="ml-auto inline-block text-sm underline-offset-4 hover:underline"
+                      style={{ color: ACCENT_COLOR }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.color = "#E04E15";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.color = ACCENT_COLOR;
+                      }}
                     >
                       {t("auth.login.forgotPassword")}
                     </Link>
@@ -165,7 +184,25 @@ export default function Index() {
       </CardContent>
       <CardFooter>
         <Field>
-          <Button type="submit" form="s32-form-login" disabled={isLoading}>
+          <Button
+            type="submit"
+            form="s32-form-login"
+            disabled={isLoading}
+            style={{
+              backgroundColor: isLoading ? undefined : ACCENT_COLOR,
+              color: "#ffffff",
+            }}
+            onMouseEnter={(e) => {
+              if (!isLoading) {
+                e.currentTarget.style.backgroundColor = "#E04E15";
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!isLoading) {
+                e.currentTarget.style.backgroundColor = ACCENT_COLOR;
+              }
+            }}
+          >
             {isLoading ? t("auth.login.submitting") : t("auth.login.submitButton")}
           </Button>
         </Field>

@@ -50,6 +50,13 @@ done
 echo "Running migrations..."
 python manage.py migrate --noinput
 
+# Collect static files (important for production with volumes)
+# Skip in development if DEBUG=True to speed up startup
+if [ "${DEBUG:-False}" != "True" ]; then
+    echo "Collecting static files..."
+    python manage.py collectstatic --noinput
+fi
+
 # Execute the command passed to the container
 echo "Starting application..."
 exec "$@"

@@ -26,6 +26,8 @@ import { Input } from "@/components/ui/input";
 import { apiClient } from "@/lib/api";
 import { useTranslation, useLanguage } from "@/lib/i18n";
 import { LanguageSelector } from "@/components/layout/LanguageSelector/LanguageSelector";
+import { ACCENT_COLOR } from "@/lib/colors";
+import Image from "next/image";
 
 type FormInput = {
   name: string;
@@ -173,6 +175,16 @@ export default function Index() {
       <div className="flex min-h-[400px] items-center justify-center">
         <Card className="w-full sm:max-w-md">
           <CardHeader>
+            <div className="flex flex-col items-center gap-4 mb-2">
+              <Image
+                src="/images/ITP_LOGO_horizontal_black.png"
+                alt="ITP Logo"
+                width={200}
+                height={60}
+                className="h-auto w-auto max-h-12 object-contain"
+                priority
+              />
+            </div>
             <div className="flex items-center justify-between">
               <CardTitle>{t("auth.register.invitationNotFound")}</CardTitle>
               <LanguageSelector />
@@ -182,7 +194,19 @@ export default function Index() {
             </CardDescription>
           </CardHeader>
           <CardFooter>
-            <Button onClick={() => router.push("/auth/login")}>
+            <Button
+              onClick={() => router.push("/auth/login")}
+              style={{
+                backgroundColor: ACCENT_COLOR,
+                color: "#ffffff",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = "#E04E15";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = ACCENT_COLOR;
+              }}
+            >
               {t("common.backToLogin")}
             </Button>
           </CardFooter>
@@ -194,6 +218,16 @@ export default function Index() {
   return (
     <Card className="w-full sm:max-w-lg">
       <CardHeader>
+        <div className="flex flex-col items-center gap-4 mb-2">
+          <Image
+            src="/images/ITP_LOGO_horizontal_black.png"
+            alt="ITP Logo"
+            width={200}
+            height={60}
+            className="h-auto w-auto max-h-12 object-contain"
+            priority
+          />
+        </div>
         <div className="flex items-center justify-between">
           <CardTitle>{t("auth.register.title")}</CardTitle>
           <LanguageSelector />
@@ -361,6 +395,20 @@ export default function Index() {
             form="s32-form-register"
             className="w-full"
             disabled={isLoading}
+            style={{
+              backgroundColor: isLoading ? undefined : ACCENT_COLOR,
+              color: "#ffffff",
+            }}
+            onMouseEnter={(e) => {
+              if (!isLoading) {
+                e.currentTarget.style.backgroundColor = "#E04E15";
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!isLoading) {
+                e.currentTarget.style.backgroundColor = ACCENT_COLOR;
+              }
+            }}
           >
             {isLoading
               ? t("auth.register.submitting")
