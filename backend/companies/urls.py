@@ -40,4 +40,8 @@ urlpatterns = [
     
     # Order summary PDF
     path('company/<int:company_id>/order-summary-pdf/', views.OrderSummaryPDFView.as_view(), name='order-summary-pdf'),
+
+    # Export - CSV export of company data
+    path('export/csv/', views.ExportCSVView.as_view(), name='export-csv'),
+    path('export/logos/', views.ExportLogosView.as_view(), name='export-logos'),
 ]
