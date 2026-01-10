@@ -37,3 +37,4 @@ __pycache__/
 
 # ignore vscode specific
 .vscode/
+frontend/package-lock.json

@@ -10,6 +10,7 @@ from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.authentication import SessionAuthentication
 from users.permissions import IsAdminOrStaff, IsAdmin
 
 from .models import (
@@ -2172,3 +2173,77 @@ Jeśli masz pytania, skontaktuj się{' ze swoim opiekunem pod adresem ' + staff_
         except Exception as e:
             logger.error(f"Error sending email to {representative.email}: {e}", exc_info=True)
             raise
+
+class ExportCSVView(APIView):
+    """
+    Export company data to CSV format.
+    
+    Accessible only to admin users via Django session authentication.
+    Generates a streaming CSV response with all company form data.
+    """
+    authentication_classes = [SessionAuthentication]
+    permission_classes = [IsAdminOrStaff]
+
+    def get(self, request):
+        from django.http import StreamingHttpResponse
+        from companies.services.export_service import ExportService
+        from datetime import datetime
+
+        export_service = ExportService(user=request.user, filters={})
+        
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f'companies_export_{timestamp}.csv'
+
+        response = StreamingHttpResponse(
+            export_service.generate_csv(),
+            content_type='text/csv; charset=utf-8-sig'
+        )
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        
+        logger.info(f"CSV export initiated by user {request.user.username}")
+        return response
+
+
+class ExportLogosView(APIView):
+    """
+    Export all company logos as a ZIP file.
+    
+    Accessible only to admin users via Django session authentication.
+    Creates a ZIP archive containing all logo files from stand_details.
+    """
+    authentication_classes = [SessionAuthentication]
+    permission_classes = [IsAdminOrStaff]
+
+    def get(self, request):
+        from django.http import HttpResponse
+        from datetime import datetime
+        import zipfile
+        from io import BytesIO
+
+        companies = Company.objects.filter(
+            stand_details__logo_sign_file__isnull=False
+        ).select_related('stand_details')
+
+        buffer = BytesIO()
+        
+        with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            for company in companies:
+                if company.stand_details.logo_sign_file:
+                    try:
+                        file_path = company.stand_details.logo_sign_file.path
+                        file_name = f"{company.name}_{os.path.basename(file_path)}"
+                        zip_file.write(file_path, arcname=file_name)
+                    except Exception as e:
+                        logger.warning(f"Could not add logo for company {company.name}: {e}")
+                        continue
+
+        buffer.seek(0)
+        
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f'company_logos_{timestamp}.zip'
+        
+        response = HttpResponse(buffer.getvalue(), content_type='application/zip')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        
+        logger.info(f"Logos ZIP export initiated by user {request.user.username}")
+        return response
