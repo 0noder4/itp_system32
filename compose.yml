@@ -92,7 +92,32 @@ services:
     networks:
       - internal
 
+  backup:
+    build:
+      context: ./backups
+      dockerfile: Dockerfile
+    container_name: ${PROJECT_NAME}_backup
+    restart: unless-stopped
+    environment:
+      DATABASE_HOST: ${DATABASE_HOST:-db}
+      DATABASE_NAME: ${DATABASE_NAME}
+      DATABASE_USER: root
+      DATABASE_PASSWORD: ${DATABASE_ROOT_PASSWORD}
+      DATABASE_PORT: ${DATABASE_PORT:-3306}
+      BACKUP_DIR: /backups
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
+      BACKUP_SCHEDULE: ${BACKUP_SCHEDULE:-0 2 * * *}
+      BACKUP_ON_START: ${BACKUP_ON_START:-false}
+      TZ: ${TZ:-UTC}
+    volumes:
+      - backups:/backups
+    networks:
+      - internal
+    depends_on:
+      - db
+
 volumes:
   data:
+  backups:
 networks:
   internal:

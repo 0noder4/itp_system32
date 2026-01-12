@@ -24,6 +24,13 @@ __pycache__/
 # Ignore database files
 /mysql_data/**
 
+# Ignore backup files
+*.sql
+*.sql.gz
+backups/*.sql
+backups/*.sql.gz
+backups/*.log
+
 # ignore cursor rules
 .cursor/
 .cursorrules
