@@ -14,7 +14,8 @@ import { ACCENT_COLOR, STAFF_ACCENT_COLOR } from "@/lib/colors"
 import React, { useEffect, useState } from "react"
 
 const Toaster = ({ ...props }: ToasterProps) => {
-  const { theme = "system" } = useTheme()
+  const themeContext = useTheme()
+  const theme = themeContext?.theme ?? "system"
   const [accentColor, setAccentColor] = useState(ACCENT_COLOR)
 
   useEffect(() => {
