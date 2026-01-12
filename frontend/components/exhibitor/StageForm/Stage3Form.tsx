@@ -15,7 +15,7 @@ import { Loader2, Save } from "lucide-react";
 interface Stage3FormProps {
   companyId?: number;
   initialData?: Stage3Data;
-  onSubmit: (data: Stage3FormData) => void;
+  onSubmit: (data: Stage3FormData) => Promise<void>;
   isSubmitting: boolean;
   disabled?: boolean;
   isAccepted?: boolean;
@@ -39,8 +39,66 @@ export function Stage3Form({
 
   const watchWorkshop = form.watch("workshop");
 
+  const handleFormSubmit = async (data: Stage3FormData) => {
+    try {
+      await onSubmit(data);
+    } catch (error: any) {
+      // Handle backend validation errors and set them on form fields
+      if (error.response?.status === 400 && error.response?.data) {
+        const errorData = error.response.data;
+        let hasFieldErrors = false;
+        
+        // Handle workshop errors
+        if (errorData.workshop !== undefined) {
+          const fieldErrors = errorData.workshop;
+          const errorMessage = Array.isArray(fieldErrors) 
+            ? fieldErrors[0] 
+            : typeof fieldErrors === 'string' 
+            ? fieldErrors 
+            : String(fieldErrors);
+          
+          form.setError('workshop', {
+            type: 'server',
+            message: errorMessage,
+          });
+          hasFieldErrors = true;
+        }
+        
+        // Handle notes errors
+        if (errorData.notes !== undefined) {
+          const fieldErrors = errorData.notes;
+          const errorMessage = Array.isArray(fieldErrors) 
+            ? fieldErrors[0] 
+            : typeof fieldErrors === 'string' 
+            ? fieldErrors 
+            : String(fieldErrors);
+          
+          form.setError('notes', {
+            type: 'server',
+            message: errorMessage,
+          });
+          hasFieldErrors = true;
+        }
+        
+        // Handle general errors
+        if (errorData.detail && typeof errorData.detail === 'string') {
+          form.setError('root', {
+            type: 'server',
+            message: errorData.detail,
+          });
+          hasFieldErrors = true;
+        }
+        
+        if (hasFieldErrors) {
+          return;
+        }
+      }
+      throw error;
+    }
+  };
+
   return (
-    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+    <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-6">
       <div className="space-y-3">
         <h3 className="font-medium">{t("exhibitor.form.workshopInfo")}</h3>
         <p className="text-sm text-muted-foreground">
@@ -52,7 +110,12 @@ export function Stage3Form({
               type="checkbox"
               id="workshop"
               {...form.register("workshop")}
-              className="h-4 w-4 rounded border-gray-300"
+              className="h-4 w-4 rounded border border-gray-300 bg-white cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 focus:ring-2 focus:ring-ring focus:ring-offset-2 checked:bg-primary checked:border-primary"
+              style={{
+                appearance: "none",
+                WebkitAppearance: "none",
+                MozAppearance: "none",
+              }}
               disabled={disabled}
             />
             <FieldLabel htmlFor="workshop" className="cursor-pointer">

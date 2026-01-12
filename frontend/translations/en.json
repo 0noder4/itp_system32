@@ -115,7 +115,8 @@
       "companyNameRequired": "Company name is required.",
       "firstNameRequired": "First name is required.",
       "lastNameRequired": "Last name is required.",
-      "phoneRequired": "Phone number is required."
+      "phoneRequired": "Phone number is required.",
+      "phoneInvalid": "Please enter a valid phone number."
     }
   },
   "dashboard": {
@@ -168,6 +169,20 @@
       "error": "Invitation sending failed",
       "errorDescription": "Failed to send invitation. Please try again."
     },
+    "export": {
+      "button": "Export CSV",
+      "downloading": "Generating CSV...",
+      "success": "CSV Downloaded",
+      "successDescription": "CSV file with company data has been downloaded successfully.",
+      "error": "Download Failed",
+      "errorDescription": "Failed to generate and download CSV file. Please try again.",
+      "mediaButton": "Export Media Files",
+      "mediaDownloading": "Generating ZIP...",
+      "mediaSuccess": "Media Files Downloaded",
+      "mediaSuccessDescription": "ZIP file with all media files has been downloaded successfully.",
+      "mediaError": "Download Failed",
+      "mediaErrorDescription": "Failed to generate and download media files. Please try again."
+    },
     "invitations": {
       "title": "Company Invitations",
       "showInvitations": "Show invitations",
@@ -193,7 +208,20 @@
         "label": "Invitation Status",
         "accepted": "Invitation accepted",
         "expired": "Invitation expired",
-        "notAccepted": "Invitation not accepted"
+        "notAccepted": "Invitation not accepted",
+        "cancelled": "Invitation cancelled"
+      },
+      "cancel": {
+        "button": "Cancel Invitation",
+        "confirmTitle": "Cancel Invitation?",
+        "confirmMessage": "Are you sure you want to cancel this invitation? This action cannot be undone.",
+        "confirmButton": "Yes, Cancel Invitation",
+        "success": "Invitation cancelled",
+        "successDescription": "The invitation has been cancelled successfully.",
+        "error": "Failed to cancel invitation",
+        "errorDescription": "An error occurred while cancelling the invitation. Please try again.",
+        "alreadyAccepted": "Cannot cancel accepted invitation",
+        "alreadyCancelled": "Invitation is already cancelled"
       },
       "table": {
         "id": "ID",
@@ -257,7 +285,8 @@
     "navigation": {
       "dashboard": "Dashboard",
       "forms": "Forms",
-      "faq": "FAQ"
+      "faq": "FAQ",
+      "map": "Map"
     },
     "dashboard": {
       "description": "View your company information, application status, and progress in completing the forms."
@@ -303,6 +332,14 @@
     "pdfDownloadSuccessDescription": "Order summary PDF has been downloaded successfully.",
     "pdfDownloadError": "Download Failed",
     "pdfDownloadErrorDescription": "Failed to download order summary PDF. Please try again.",
+    "map": {
+      "title": "Floor Plan Map",
+      "description": "View the floor plan and locate your company's stand",
+      "day1": "Day 1",
+      "day2": "Day 2",
+      "noStandAssigned": "No stand assigned for this day",
+      "yourStand": "Your Stand"
+    },
     "stage1": {
       "title": "Stage 1: Basic Data",
       "description": "Company information and contact details"
@@ -365,7 +402,7 @@
       "selfConstruction": "Self Construction",
       "ourStandDetails": "Stand Personalization",
       "selfConstructionDetails": "Self Construction Details",
-      "scDetails": "Construction details",
+      "scDetails": "Construction dimensions (Length × Width × Height )",
       "nameSignText": "Name sign text",
       "uploadLogo": "Logo for sign",
       "uploadFireCert": "Upload Fire Certificate",
@@ -410,7 +447,7 @@
       "positionDescription": "Position Description",
       "benefits": "Offered Benefits",
       "requirements": "Requirements",
-      "applicationUrl": "Application Link",
+      "applicationUrl": "Application Link or email address",
       "companyDescription": "Company Description",
       "description": "Company Description for Catalog",
       "catalogueDescription": "The catalog (paper version) and e-catalog (on the job fair website) is a list of all exhibitors of the Engineering Job Fair. Take care of your company's visibility and submit an engaging company description and logo.",
@@ -445,6 +482,11 @@
       "jobwallPricingDisclaimer": "Each job position posting has an additional cost.",
       "jobwallPricePerPosting": "Price per posting",
       "totalJobwallCost": "Total Job Position Cost",
+      "lunchPricingDisclaimer": "Additional lunches (beyond 2 per day included in package) are charged.",
+      "lunchPricePerMeal": "Price per additional lunch",
+      "lunchFreeIncluded": "First 2 lunches per day are included in the package (4 lunches for 2 days).",
+      "totalLunchCost": "Total cost of additional lunches",
+      "extraLunchesCount": "Additional lunches: {count}",
       "catalogue": "Catalog Data",
       "deadline": {
         "label": "Deadline",
@@ -454,11 +496,12 @@
         "overdue": "overdue",
         "day": "day",
         "days": "days"
-      }
+      },
+      "completedAt": "Completed at"
     },
     "faq": {
       "title": "Frequently Asked Questions",
-      "description": "Find answers to frequently asked questions about the 31st Engineering Job Fair.",
+      "description": "Find answers to frequently asked questions about the Engineering Job Fair.",
       "contactUs": "Contact us",
       "allCategories": "All",
       "seeAllQuestions": "See all questions",
@@ -473,7 +516,7 @@
       "general": {
         "location": {
           "question": "Where is the fair taking place?",
-          "answer": "The 31st Engineering Job Fair is taking place at the Main Building of Warsaw University of Technology at Plac Politechniki 1, Warsaw."
+          "answer": "The Engineering Job Fair is taking place at the Main Building of Warsaw University of Technology at Plac Politechniki 1, Warsaw."
         },
         "dates": {
           "question": "When is the fair taking place?",
@@ -491,7 +534,7 @@
         },
         "parking": {
           "question": "Do you provide parking spaces?",
-          "answer": "We do not provide parking spaces. Paid parking lots are available near the Main Building of Warsaw University of Technology. Detailed information about locations and prices can be found in the answer to the parking prices question."
+          "answer": "We do not provide parking spaces. Paid parking lots are available near the Main Building of Warsaw University of Technology."
         },
         "parkingPrices": {
           "question": "What are the parking prices in the area?",
@@ -505,21 +548,21 @@
         },
         "ownSetup": {
           "question": "When can I set up my own construction?",
-          "answer": "Exhibitors who have their own construction and are exhibiting on the first day can set it up on March 10 in a previously selected time slot from 2:00 PM.\n\nExhibitors who are only exhibiting on the second day can set up their construction on March 11 from 4:30 PM to 10:00 PM. After the fair ends, the construction must be dismantled by 10:00 PM."
+          "answer": "Exhibitors who have their own construction and are exhibiting on the first day can set it up on March 10. Exhibitors who are only exhibiting on the second day can set up their construction on March 11. The speciic timeslots will be consulted with assigned supervisor."
         },
         "wallRestrictions": {
           "question": "Can I stick materials on the construction walls?",
-          "answer": "Printed materials cannot be stuck on construction walls – this leads to wall damage. In case of wall damage resulting from sticking promotional materials on it, the company will incur an additional cost of 100 PLN per wall."
+          "answer": "Printed materials cannot be stuck on construction walls – this leads to wall damage. In case of wall damage resulting from sticking promotional materials on it, the company will incur an additional cost."
         }
       },
       "support": {
         "supervisor": {
           "question": "Will I have an assigned supervisor?",
-          "answer": "Yes, during the event you will have an assigned company supervisor from the organizers. This person will be at your disposal for questions or comments regarding the course of the 31st Engineering Job Fair. Please save the contact information of your assigned supervisor and contact them in case of problems."
+          "answer": "Yes, during the event you will have an assigned company supervisor from the organizers. This person will be at your disposal for questions or comments regarding the course of the Engineering Job Fair. Please save the contact information of your assigned supervisor and contact them in case of problems."
         },
         "lunch": {
           "question": "Is lunch included in the package?",
-          "answer": "Yes, as part of the package, each exhibitor is provided with a lunch in the form of a hot meal. The welcome package will contain vouchers that can be exchanged for lunch at the Central Canteen of Warsaw University of Technology \"Bistro Chochelka\" (Rektorska 2). The scheduled lunch hours are: 12:00-15:00."
+          "answer": "Yes, as part of the package, two of your delegates are provided with a lunch in the form of a hot meal (2 lunches per company per day, additional can be bought in the formular or during the fairs through your supervisor). The welcome package will contain vouchers that can be exchanged for lunch at the Central Canteen of Warsaw University of Technology \"Bistro Chochelka\" (Rektorska 2). The scheduled lunch hours are: 12:00-15:00."
         },
         "coffee": {
           "question": "Will there be a coffee point available?",
@@ -535,6 +578,12 @@
     }
   },
   "staff": {
+    "map": {
+      "title": "Floor Plan Map",
+      "description": "View all assigned stands on the floor plan",
+      "day1": "Day 1",
+      "day2": "Day 2"
+    },
     "companyDetail": {
       "title": "Company Details",
       "backToList": "Back to Company List",
@@ -578,5 +627,11 @@
     "email": "Email",
     "dateJoined": "Date Joined",
     "phoneNumber": "Phone Number"
+  },
+  "notFound": {
+    "title": "404 - Page Not Found",
+    "description": "Sorry, we couldn't find the page you're looking for.",
+    "goHome": "Go to Home",
+    "backButton": "Go Back"
   }
 }

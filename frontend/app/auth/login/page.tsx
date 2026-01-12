@@ -61,8 +61,8 @@ export default function Index() {
         password: data.password,
       });
 
-      // Store tokens
-      storeTokens(response.data);
+      // Store tokens and notify RouteGuard of the change (for user switching)
+      storeTokens(response.data, true);
 
       // Get user type from response or decode from token
       const userType: UserType | null = response.data.user_type || null;
@@ -73,14 +73,45 @@ export default function Index() {
       });
 
       // Redirect to appropriate panel based on user type
-      router.push(route);
+      // RouteGuard will handle the authorization check
+      router.replace(route);
     } catch (error: any) {
-      // Prevent any default form submission behavior
-      const errorMessage =
-        error.response?.data?.detail ||
-        error.response?.data?.message ||
-        Object.values(error.response?.data || {}).flat()[0] ||
-        t("auth.login.errorDescription");
+      // Handle authentication errors
+      let errorMessage = t("auth.login.errorDescription");
+      
+      if (error.response?.data) {
+        const errorData = error.response.data;
+        
+        // Check for detail field first (most common in DRF)
+        if (errorData.detail) {
+          errorMessage = errorData.detail;
+        } else if (errorData.message) {
+          errorMessage = errorData.message;
+        } else if (errorData.non_field_errors) {
+          // Handle non_field_errors array
+          const nonFieldErrors = errorData.non_field_errors;
+          if (Array.isArray(nonFieldErrors)) {
+            errorMessage = nonFieldErrors[0];
+          } else if (typeof nonFieldErrors === "string") {
+            errorMessage = nonFieldErrors;
+          }
+        } else {
+          // Try to extract the first error from any field
+          const errorKeys = Object.keys(errorData);
+          if (errorKeys.length > 0) {
+            const firstError = errorData[errorKeys[0]];
+            if (Array.isArray(firstError)) {
+              errorMessage = firstError[0];
+            } else if (typeof firstError === "string") {
+              errorMessage = firstError;
+            } else if (typeof firstError === "object") {
+              errorMessage = Object.values(firstError)[0] as string;
+            }
+          }
+        }
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
 
       toast.error(t("auth.login.error"), {
         description: errorMessage,

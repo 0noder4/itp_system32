@@ -115,7 +115,8 @@
       "companyNameRequired": "Nazwa firmy jest wymagana.",
       "firstNameRequired": "Imię jest wymagane.",
       "lastNameRequired": "Nazwisko jest wymagane.",
-      "phoneRequired": "Numer telefonu jest wymagany."
+      "phoneRequired": "Numer telefonu jest wymagany.",
+      "phoneInvalid": "Proszę wprowadzić prawidłowy numer telefonu."
     }
   },
   "dashboard": {
@@ -168,6 +169,20 @@
       "error": "Wysyłanie zaproszenia nieudane",
       "errorDescription": "Nie udało się wysłać zaproszenia. Spróbuj ponownie."
     },
+    "export": {
+      "button": "Eksportuj CSV",
+      "downloading": "Generowanie CSV...",
+      "success": "CSV pobrany",
+      "successDescription": "Plik CSV z danymi firm został pobrany pomyślnie.",
+      "error": "Błąd pobierania",
+      "errorDescription": "Nie udało się wygenerować i pobrać pliku CSV. Spróbuj ponownie.",
+      "mediaButton": "Eksportuj Pliki Mediowe",
+      "mediaDownloading": "Generowanie ZIP...",
+      "mediaSuccess": "Pliki Mediowe Pobrane",
+      "mediaSuccessDescription": "Plik ZIP ze wszystkimi plikami mediowymi został pobrany pomyślnie.",
+      "mediaError": "Błąd pobierania",
+      "mediaErrorDescription": "Nie udało się wygenerować i pobrać plików mediowych. Spróbuj ponownie."
+    },
     "invitations": {
       "title": "Zaproszenia do firm",
       "showInvitations": "Pokaż zaproszenia",
@@ -193,7 +208,20 @@
         "label": "Status zaproszenia",
         "accepted": "Zaproszenie zaakceptowane",
         "expired": "Zaproszenie wygasło",
-        "notAccepted": "Zaproszenie nie zaakceptowane"
+        "notAccepted": "Zaproszenie nie zaakceptowane",
+        "cancelled": "Zaproszenie anulowane"
+      },
+      "cancel": {
+        "button": "Anuluj zaproszenie",
+        "confirmTitle": "Anulować zaproszenie?",
+        "confirmMessage": "Czy na pewno chcesz anulować to zaproszenie? Tej akcji nie można cofnąć.",
+        "confirmButton": "Tak, anuluj zaproszenie",
+        "success": "Zaproszenie anulowane",
+        "successDescription": "Zaproszenie zostało pomyślnie anulowane.",
+        "error": "Nie udało się anulować zaproszenia",
+        "errorDescription": "Wystąpił błąd podczas anulowania zaproszenia. Spróbuj ponownie.",
+        "alreadyAccepted": "Nie można anulować zaakceptowanego zaproszenia",
+        "alreadyCancelled": "Zaproszenie jest już anulowane"
       },
       "table": {
         "id": "ID",
@@ -257,7 +285,8 @@
     "navigation": {
       "dashboard": "Panel główny",
       "forms": "Formularze",
-      "faq": "FAQ"
+      "faq": "FAQ",
+      "map": "Mapa"
     },
     "dashboard": {
       "description": "Przeglądaj informacje o swojej firmie, status zgłoszenia oraz postęp w uzupełnianiu formularzy."
@@ -303,6 +332,14 @@
     "pdfDownloadSuccessDescription": "Podsumowanie zamówienia PDF zostało pobrane pomyślnie.",
     "pdfDownloadError": "Błąd pobierania",
     "pdfDownloadErrorDescription": "Nie udało się pobrać podsumowania zamówienia PDF. Spróbuj ponownie.",
+    "map": {
+      "title": "Mapa planu sali",
+      "description": "Zobacz plan sali i znajdź stoisko swojej firmy",
+      "day1": "Dzień 1",
+      "day2": "Dzień 2",
+      "noStandAssigned": "Brak przypisanego stoiska na ten dzień",
+      "yourStand": "Twoje stoisko"
+    },
     "stage1": {
       "title": "Etap 1: Dane podstawowe",
       "description": "Informacje o firmie i dane kontaktowe"
@@ -365,7 +402,7 @@
       "selfConstruction": "Własna zabudowa",
       "ourStandDetails": "Personalizacja stoiska",
       "selfConstructionDetails": "Szczegóły własnej zabudowy",
-      "scDetails": "Szczegóły zabudowy",
+      "scDetails": "Wymiary zabudowy (Długość × Szerokość × Wysokość)",
       "nameSignText": "Tekst szyldu",
       "uploadLogo": "Logotyp na szyldzie",
       "uploadFireCert": "Prześlij certyfikat o niepalności",
@@ -410,7 +447,7 @@
       "positionDescription": "Opis stanowiska",
       "benefits": "Oferowane benefity",
       "requirements": "Wymagania",
-      "applicationUrl": "Link do aplikacji",
+      "applicationUrl": "Link do aplikacji lub adres e-mail",
       "companyDescription": "Opis firmy",
       "description": "Opis firmy do katalogu",
       "catalogueDescription": "Katalog (wersja papierowa) oraz e-katalog (na stornie targów pracy) to lista wszystkich wystawców Inżynierkich Targów Pracy. Zadbaj o widoczność swojej formy i prześlij angażujący opis firmy i logo.",
@@ -445,6 +482,11 @@
       "jobwallPricingDisclaimer": "Każda oferta pracy wiąże się z dodatkowym kosztem.",
       "jobwallPricePerPosting": "Cena za ogłoszenie",
       "totalJobwallCost": "Całkowity koszt ofert pracy",
+      "lunchPricingDisclaimer": "Dodatkowe obiady (powyżej 2 dziennie w pakiecie) są płatne.",
+      "lunchPricePerMeal": "Cena za dodatkowy obiad",
+      "lunchFreeIncluded": "Pierwsze 2 obiady dziennie są wliczone w pakiet (4 obiady za 2 dni).",
+      "totalLunchCost": "Całkowity koszt dodatkowych obiadów",
+      "extraLunchesCount": "Dodatkowych obiadów: {count}",
       "catalogue": "Dane do katalogu",
       "deadline": {
         "label": "Termin",
@@ -454,7 +496,8 @@
         "overdue": "po terminie",
         "day": "dzień",
         "days": "dni"
-      }
+      },
+      "completedAt": "Uzupełniono"
     },
     "faq": {
       "title": "Najczęściej zadawane pytania",
@@ -505,11 +548,11 @@
         },
         "ownSetup": {
           "question": "Kiedy mogę rozstawić własną zabudowę?",
-          "answer": "Wystawcy, którzy posiadają własną zabudowę i wystawiają się pierwszego dnia mogą rozstawiać ją 10 marca w wybranym przez siebie wcześniej slocie czasowym od godziny 14:00.\n\nWystawcy, którzy wystawiają się jedynie drugiego dnia mogą rozkładać swoją zabudowę 11 marca od godziny 16:30 do godziny 22:00. Po zakończeniu targów zabudowę należy złożyć do godziny 22:00."
+          "answer": "Wystawcy, którzy posiadają własną zabudowę i wystawiają się pierwszego dnia mogą rozstawiać ją 10 marca. Wystawcy, którzy wystawiają się jedynie drugiego dnia mogą rozkładać swoją zabudowę 11 marca. Szczegóły i dokładne godziny należy ustalić z opiekunem firmy."
         },
         "wallRestrictions": {
           "question": "Czy mogę przyklejać materiały na ściankach zabudowy?",
-          "answer": "Na ściankach zabudowy nie można przyklejać materiałów drukowanych – prowadzi to do zniszczenia ścianki. W przypadku zniszczenia ścianki wynikające z naklejenia na nią materiałów promocyjnych, firma poniesie dodatkowy koszt w wysokości 100 zł za każdą ściankę."
+          "answer": "Na ściankach zabudowy nie można przyklejać materiałów drukowanych – prowadzi to do zniszczenia ścianki. W przypadku zniszczenia ścianki wynikające z naklejenia na nią materiałów promocyjnych, firma poniesie dodatkowy koszt."
         }
       },
       "support": {
@@ -519,7 +562,7 @@
         },
         "lunch": {
           "question": "Czy obiad jest wliczony w pakiet?",
-          "answer": "Tak, w ramach pakietu dla każdego wystawcy przewidziane są dwa lunche w postaci ciepłego posiłku. W zestawie powitalnym będą znajdować się bony, które będzie można wymienić na lunch w Stołówce Centralnej Politechniki Warszawskiej „Bistro Chochelka” (Rektorska 2). Przewidziane godziny na lunch to: 12:00-15:00. Istnieje możliwość dokupienia dodoatkowych lunchy w formularzu zgłoszeniowym lub w czasie targów."
+          "answer": "Tak, w ramach pakietu przewidziane są lunche dla dwóch przedstawicieli twojej firmy w postaci ciepłego posiłku (2 obiady na firmę na dzień, dodatkowe można dokupić w formularzu zgłoszeniowym lub w czasie targów przez opiekuna firmy). W zestawie powitalnym będą znajdować się bony, które będzie można wymienić na lunch w Stołówce Centralnej Politechniki Warszawskiej „Bistro Chochelka” (Rektorska 2). Przewidziane godziny na lunch to: 12:00-15:00."
         },
         "coffee": {
           "question": "Czy będzie dostępny coffee point?",
@@ -535,6 +578,12 @@
     }
   },
   "staff": {
+    "map": {
+      "title": "Mapa planu",
+      "description": "Wyświetl wszystkie przypisane stoiska na planie",
+      "day1": "Dzień 1",
+      "day2": "Dzień 2"
+    },
     "companyDetail": {
       "title": "Szczegóły firmy",
       "backToList": "Powrót do listy firm",
@@ -578,5 +627,11 @@
     "email": "E-mail",
     "dateJoined": "Data dołączenia",
     "phoneNumber": "Numer telefonu"
+  },
+  "notFound": {
+    "title": "404 - Strona nie znaleziona",
+    "description": "Przepraszamy, nie możemy znaleźć strony, której szukasz.",
+    "goHome": "Przejdź do strony głównej",
+    "backButton": "Wróć"
   }
 }

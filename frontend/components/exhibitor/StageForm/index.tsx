@@ -117,6 +117,25 @@ export function StageForm({
     }
   }, [stageInfo.deadline, t, locale, isCompleted]);
 
+  // Format completion timestamp - only show for completed stages
+  const formatCompletedAt = React.useMemo(() => {
+    if (!isCompleted) return null;
+    if (!stageInfo.completedAt) return null;
+
+    const completedDate = new Date(stageInfo.completedAt);
+    
+    // Format date and time for display (locale-aware)
+    const formattedDate = new Intl.DateTimeFormat(locale, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(completedDate);
+
+    return formattedDate;
+  }, [stageInfo.completedAt, locale, isCompleted]);
+
   // Fetch stage data if not provided
   React.useEffect(() => {
     async function fetchStageData() {
@@ -297,8 +316,7 @@ export function StageForm({
           if (logoFile instanceof File) {
             formData.append("description[logo_file]", logoFile, logoFile.name);
           }
-          // If logoFile is a string (existing file URL), don't send it - backend will keep existing file
-          formData.append("description[company]", companyId.toString());
+          // Don't send company field - backend handles it to avoid unique constraint validation error
         }
 
         // apiClient interceptor will automatically remove Content-Type for FormData
@@ -321,11 +339,61 @@ export function StageForm({
       toast.success(t("exhibitor.form.saveSuccess"));
       onSuccess?.();
     } catch (error: any) {
-      const errorMessage =
-        error.response?.data?.detail ||
-        error.response?.data?.message ||
-        error.message ||
-        t("exhibitor.form.saveError");
+      // For all stages, let the form component handle validation errors for better UX
+      // Other errors or non-validation errors still show toast
+      if (error.response?.status === 400) {
+        // Re-throw validation errors so form components can handle them
+        throw error;
+      }
+      
+      let errorMessage = t("exhibitor.form.saveError");
+      
+      if (error.response?.status === 400) {
+        // Handle validation errors
+        const errorData = error.response.data;
+        
+        // If it's a dictionary of field errors, format them nicely
+        if (errorData && typeof errorData === "object" && !errorData.detail && !errorData.message) {
+          const fieldErrors: string[] = [];
+          const formatFieldErrors = (obj: any, prefix = "") => {
+            Object.keys(obj).forEach((key) => {
+              const value = obj[key];
+              const fieldPath = prefix ? `${prefix}.${key}` : key;
+              
+              if (Array.isArray(value)) {
+                value.forEach((msg) => {
+                  fieldErrors.push(`${fieldPath}: ${msg}`);
+                });
+              } else if (typeof value === "string") {
+                fieldErrors.push(`${fieldPath}: ${value}`);
+              } else if (typeof value === "object" && value !== null) {
+                formatFieldErrors(value, fieldPath);
+              }
+            });
+          };
+          
+          formatFieldErrors(errorData);
+          if (fieldErrors.length > 0) {
+            errorMessage = fieldErrors.slice(0, 3).join(", ");
+            if (fieldErrors.length > 3) {
+              errorMessage += ` (+${fieldErrors.length - 3} more)`;
+            }
+          }
+        } else {
+          errorMessage =
+            errorData?.detail ||
+            errorData?.message ||
+            error.message ||
+            t("exhibitor.form.saveError");
+        }
+      } else {
+        errorMessage =
+          error.response?.data?.detail ||
+          error.response?.data?.message ||
+          error.message ||
+          t("exhibitor.form.saveError");
+      }
+      
       toast.error(errorMessage);
     } finally {
       setIsSubmitting(false);
@@ -366,13 +434,20 @@ export function StageForm({
               {t(`exhibitor.${stageInfo.description}`)}
             </CardDescription>
           </div>
-          {formatDeadline && (
-            <div
-              className={`text-xs font-medium ${formatDeadline.textColor} whitespace-nowrap`}
-            >
-              {formatDeadline.message}
-            </div>
-          )}
+          <div className="flex flex-col items-end gap-1">
+            {formatDeadline && (
+              <div
+                className={`text-xs font-medium ${formatDeadline.textColor} whitespace-nowrap`}
+              >
+                {formatDeadline.message}
+              </div>
+            )}
+            {formatCompletedAt && (
+              <div className="text-xs font-medium text-muted-foreground whitespace-nowrap">
+                {t("exhibitor.form.completedAt")} {formatCompletedAt}
+              </div>
+            )}
+          </div>
         </div>
         {stageInfo.status === "rejected" && stageInfo.feedback?.comment && (
           <div className="mt-1 flex items-start gap-2 rounded-md bg-rose-50 p-3 text-sm text-rose-700">

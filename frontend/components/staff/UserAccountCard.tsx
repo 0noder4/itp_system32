@@ -12,7 +12,8 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { LogOut } from "lucide-react";
 import { formatDate } from "./Companies/utils";
-import { STAFF_ACCENT_COLOR } from "@/lib/colors";
+import { ACCENT_COLOR, STAFF_ACCENT_COLOR } from "@/lib/colors";
+import { getUserInfo } from "@/lib/auth";
 
 interface UserAccountCardProps {
   name: string | null;
@@ -82,13 +83,18 @@ export function UserAccountCard({
   const displayName = getDisplayName(name, surname, email);
   const initials = getInitials(name, surname, email);
 
+  // Determine accent color based on logged-in user type
+  const userInfo = getUserInfo();
+  const isStaff = userInfo?.type === "admin" || userInfo?.type === "staff";
+  const accentColor = isStaff ? STAFF_ACCENT_COLOR : ACCENT_COLOR;
+
   return (
     <Popover>
       <PopoverTrigger asChild>
         <Card
           className="cursor-pointer transition-colors p-3"
           onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = `${STAFF_ACCENT_COLOR}14`;
+            e.currentTarget.style.backgroundColor = `${accentColor}14`;
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.backgroundColor = "";
@@ -98,7 +104,7 @@ export function UserAccountCard({
             <Avatar className="size-8">
               <AvatarFallback
                 className="text-xs font-medium text-white"
-                style={{ backgroundColor: STAFF_ACCENT_COLOR }}
+                style={{ backgroundColor: accentColor }}
               >
                 {initials}
               </AvatarFallback>
@@ -120,7 +126,7 @@ export function UserAccountCard({
             <Avatar className="size-16">
               <AvatarFallback
                 className="text-xl font-medium text-white"
-                style={{ backgroundColor: STAFF_ACCENT_COLOR }}
+                style={{ backgroundColor: accentColor }}
               >
                 {initials}
               </AvatarFallback>
@@ -175,8 +181,8 @@ export function UserAccountCard({
                 className="w-full"
                 onClick={onLogout}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = STAFF_ACCENT_COLOR;
-                  e.currentTarget.style.color = STAFF_ACCENT_COLOR;
+                  e.currentTarget.style.borderColor = accentColor;
+                  e.currentTarget.style.color = accentColor;
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.borderColor = "";

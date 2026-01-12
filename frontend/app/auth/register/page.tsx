@@ -68,7 +68,13 @@ function RegisterForm() {
         .object({
           name: z.string().min(1, t("auth.validation.firstNameRequired")),
           surname: z.string().min(1, t("auth.validation.lastNameRequired")),
-          phone_number: z.string().min(1, t("auth.validation.phoneRequired")),
+          phone_number: z
+            .string()
+            .min(1, t("auth.validation.phoneRequired"))
+            .regex(
+              /^[\+]?[(]?[0-9]{1,4}[)]?[-\s\.]?[(]?[0-9]{1,4}[)]?[-\s\.]?[0-9]{1,9}$/,
+              t("auth.validation.phoneInvalid")
+            ),
           password: z
             .string()
             .min(8, t("auth.validation.passwordMin"))
@@ -148,10 +154,67 @@ function RegisterForm() {
       });
       router.push("/auth/login");
     } catch (error: any) {
-      const errorMessage =
-        error.response?.data?.password?.[0] ||
-        error.response?.data?.detail ||
-        t("auth.register.errorDescription");
+      // Handle validation errors from backend
+      const errorData = error.response?.data;
+      let errorMessage = t("auth.register.errorDescription");
+      
+      if (errorData) {
+        // Map backend field names to frontend field names
+        const fieldMapping: Record<string, keyof FormInput> = {
+          password: "password",
+          first_name: "name",
+          last_name: "surname",
+          phone_number: "phone_number",
+          token: "token",
+        };
+
+        // Set errors on form fields
+        Object.keys(errorData).forEach((backendField) => {
+          const frontendField = fieldMapping[backendField];
+          if (frontendField && frontendField !== "token") {
+            const fieldError = errorData[backendField];
+            let errorMsg: string;
+            
+            if (Array.isArray(fieldError)) {
+              errorMsg = fieldError[0];
+            } else if (typeof fieldError === "string") {
+              errorMsg = fieldError;
+            } else {
+              errorMsg = String(fieldError);
+            }
+
+            if (errorMsg) {
+              form.setError(frontendField, {
+                type: "server",
+                message: errorMsg,
+              });
+            }
+          }
+        });
+
+        // Extract error message for toast
+        if (errorData.password) {
+          const passwordErrors = errorData.password;
+          if (Array.isArray(passwordErrors)) {
+            errorMessage = passwordErrors.join(". ");
+          } else if (typeof passwordErrors === "string") {
+            errorMessage = passwordErrors;
+          }
+        } else if (errorData.detail) {
+          errorMessage = errorData.detail;
+        } else {
+          // Get first error from any field
+          const firstErrorField = Object.keys(errorData)[0];
+          if (firstErrorField) {
+            const firstError = errorData[firstErrorField];
+            if (Array.isArray(firstError)) {
+              errorMessage = firstError[0];
+            } else if (typeof firstError === "string") {
+              errorMessage = firstError;
+            }
+          }
+        }
+      }
 
       toast.error(t("auth.register.error"), {
         description: errorMessage,

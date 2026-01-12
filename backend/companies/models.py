@@ -111,8 +111,9 @@ class CompanyInvitation(models.Model):
     token = models.UUIDField(default=uuid.uuid4, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    expires_at = models.DateTimeField(blank=True, default=get_expiry_time())
+    expires_at = models.DateTimeField(blank=True, default=get_expiry_time)
     is_accepted = models.BooleanField(default=False)
+    is_cancelled = models.BooleanField(default=False)
     language = models.CharField(
         max_length=5,
         choices=LANGUAGE_CHOICES,
@@ -138,7 +139,9 @@ class CompanyInvitation(models.Model):
         return django.utils.timezone.now() > self.expires_at
 
     def get_invitation_status(self):
-        if self.is_accepted:
+        if self.is_cancelled:
+            return "cancelled"
+        elif self.is_accepted:
             return "accepted"
         elif self.is_expired():
             return "expired"
@@ -291,7 +294,7 @@ class Lunch(models.Model):
     form = models.ForeignKey(FinalData, on_delete=models.CASCADE, related_name="lunches")
     day = models.CharField(max_length=15, choices=DAY_OPT)
     lunch_quantity = models.IntegerField(verbose_name="liczba obiadów")  # dodać info że sa dodatkowo płatne??
-    diet_info = models.CharField(max_length=255, verbose_name="informacje o dietach")
+    diet_info = models.CharField(max_length=255, verbose_name="informacje o dietach", blank=True, default="")
 
 class PDI(models.Model):
     form = models.OneToOneField(FinalData, on_delete=models.CASCADE, related_name="pdis")
@@ -314,6 +317,13 @@ class Settings(models.Model):
         verbose_name="cena za ogłoszenie jobwall",
         default=0.00,
         help_text="Cena za jedno ogłoszenie jobwall"
+    )
+    lunch_price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        verbose_name="cena za dodatkowy obiad",
+        default=0.00,
+        help_text="Cena za dodatkowy obiad (pierwsze 2 obiady dziennie są w pakiecie, czyli 4 obiady za 2 dni)"
     )
     stage_1_deadline = models.DateTimeField(
         null=True,
@@ -345,6 +355,18 @@ class Settings(models.Model):
         verbose_name="termin etapu 5",
         help_text="Globalny termin dla etapu 5 (Inne dane)"
     )
+    day1_date = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name="dzień 1 targów",
+        help_text="Data pierwszego dnia targów (np. 2025-03-10)"
+    )
+    day2_date = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name="dzień 2 targów",
+        help_text="Data drugiego dnia targów (np. 2025-03-11)"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -360,5 +382,46 @@ class Settings(models.Model):
         """Get or create the singleton settings instance"""
         settings, created = cls.objects.get_or_create(pk=1)
         return settings
+    
+    def get_day_opt(self):
+        """
+        Get DAY_OPT format from settings dates.
+        Returns list of tuples like [('day1', '10.03.2025'), ('day2', '11.03.2025')]
+        Falls back to default values if dates are not set.
+        """
+        if self.day1_date and self.day2_date:
+            return [
+                ('day1', self.day1_date.strftime('%d.%m.%Y')),
+                ('day2', self.day2_date.strftime('%d.%m.%Y'))
+            ]
+        # Fallback to defaults if not set
+        return [
+            ('day1', '10.03.2025'),
+            ('day2', '11.03.2025')
+        ]
+    
+    def get_day1_display_en(self):
+        """Get English display format for day 1 (e.g., 'March 10, 2025')"""
+        if self.day1_date:
+            return self.day1_date.strftime('%B %d, %Y')
+        return "March 10, 2025"
+    
+    def get_day1_display_pl(self):
+        """Get Polish display format for day 1 (e.g., '10.03.2025')"""
+        if self.day1_date:
+            return self.day1_date.strftime('%d.%m.%Y')
+        return "10.03.2025"
+    
+    def get_day2_display_en(self):
+        """Get English display format for day 2 (e.g., 'March 11, 2025')"""
+        if self.day2_date:
+            return self.day2_date.strftime('%B %d, %Y')
+        return "March 11, 2025"
+    
+    def get_day2_display_pl(self):
+        """Get Polish display format for day 2 (e.g., '11.03.2025')"""
+        if self.day2_date:
+            return self.day2_date.strftime('%d.%m.%Y')
+        return "11.03.2025"
 
 

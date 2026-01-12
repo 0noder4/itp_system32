@@ -44,6 +44,7 @@ services:
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
       CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS}
       FRONTEND_BASE_URL: ${FRONTEND_BASE_URL}
+      BACKEND_BASE_URL: ${BACKEND_BASE_URL}
     volumes:
       - staticfiles:/app/staticfiles
       - mediafiles:/app/mediafiles

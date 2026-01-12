@@ -83,8 +83,8 @@ export function LanguageSelector({ accentColor = ACCENT_COLOR }: LanguageSelecto
           {languages.map((lang) => {
             const isActive = locale === lang.code;
             return (
-              <Button
-                key={lang.code}
+            <Button
+              key={lang.code}
                 variant={isActive ? "default" : "outline"}
                 className={`justify-start gap-3 ${isActive ? "text-white" : ""}`}
                 style={
@@ -95,8 +95,8 @@ export function LanguageSelector({ accentColor = ACCENT_COLOR }: LanguageSelecto
                       }
                     : undefined
                 }
-                onClick={() => handleLanguageChange(lang.code)}
-                disabled={isUpdating}
+              onClick={() => handleLanguageChange(lang.code)}
+              disabled={isUpdating}
                 onMouseEnter={(e) => {
                   if (!isActive && !isUpdating) {
                     e.currentTarget.style.borderColor = accentColor;
@@ -109,13 +109,13 @@ export function LanguageSelector({ accentColor = ACCENT_COLOR }: LanguageSelecto
                     e.currentTarget.style.color = "";
                   }
                 }}
-              >
-                <span className="text-lg">{lang.flag}</span>
-                <span>{lang.label}</span>
+            >
+              <span className="text-lg">{lang.flag}</span>
+              <span>{lang.label}</span>
                 {isActive && (
-                  <span className="ml-auto text-xs opacity-60">✓</span>
-                )}
-              </Button>
+                <span className="ml-auto text-xs opacity-60">✓</span>
+              )}
+            </Button>
             );
           })}
         </div>

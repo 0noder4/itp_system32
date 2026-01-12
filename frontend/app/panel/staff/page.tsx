@@ -2,7 +2,7 @@
 
 import React from "react";
 import useSWR from "swr";
-import { fetcher } from "@/lib/api";
+import { fetcher, downloadCompaniesCSV, downloadMediaFiles } from "@/lib/api";
 import { Company, CompanyInvitation, StaffUser } from "@/lib/types";
 import { useTranslation } from "@/lib/i18n";
 import {
@@ -13,6 +13,9 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import { Download } from "lucide-react";
+import { toast } from "sonner";
 import { Header } from "@/components/layout/Header";
 import { InvitationFormDialog } from "@/components/staff/Invitations/InvitationFormDialog";
 import { CompanyFilters } from "@/components/staff/Companies/CompanyFilters";
@@ -20,6 +23,7 @@ import { CompaniesTable } from "@/components/staff/Companies/CompaniesTable";
 import { useFilteredRows } from "@/components/staff/Companies/useFilteredRows";
 import { useStaffDashboardFilters } from "@/hooks/useStaffDashboardFilters";
 import { StageReminderCard } from "@/components/staff/StageReminder/StageReminderCard";
+import { STAFF_ACCENT_COLOR } from "@/lib/colors";
 
 export default function Index() {
   const { t } = useTranslation();
@@ -74,26 +78,130 @@ export default function Index() {
     mutateInvitations();
   };
 
+  const [isDownloadingCSV, setIsDownloadingCSV] = React.useState(false);
+  const [isDownloadingMedia, setIsDownloadingMedia] = React.useState(false);
+
+  const handleDownloadCSV = async () => {
+    setIsDownloadingCSV(true);
+    try {
+      await downloadCompaniesCSV();
+      toast.success(t("companies.export.success"), {
+        description: t("companies.export.successDescription"),
+      });
+    } catch (error: any) {
+      const errorMessage =
+        error.message || t("companies.export.errorDescription");
+      toast.error(t("companies.export.error"), {
+        description: errorMessage,
+      });
+    } finally {
+      setIsDownloadingCSV(false);
+    }
+  };
+
+  const handleDownloadMedia = async () => {
+    setIsDownloadingMedia(true);
+    try {
+      await downloadMediaFiles();
+      toast.success(t("companies.export.mediaSuccess"), {
+        description: t("companies.export.mediaSuccessDescription"),
+      });
+    } catch (error: any) {
+      const errorMessage =
+        error.message || t("companies.export.mediaErrorDescription");
+      toast.error(t("companies.export.mediaError"), {
+        description: errorMessage,
+      });
+    } finally {
+      setIsDownloadingMedia(false);
+    }
+  };
+
   const isLoading =
     isLoadingCompanies || isLoadingInvitations || isLoadingStaff;
   const hasError = error || invitationsError;
   const hasData = companies !== undefined || invitations !== undefined;
 
+  const navItems = [
+    {
+      title: t("companies.title"),
+      url: "/panel/staff",
+    },
+    {
+      title: t("staff.map.title"),
+      url: "/panel/staff/map",
+    },
+  ];
+
   return (
-    <div className="flex h-screen flex-col overflow-hidden">
-      <Header />
-      <div className="flex flex-1 overflow-hidden p-6 gap-4">
-        <Card className="flex flex-3 flex-col overflow-hidden gap-2">
+    <div className="flex flex-col md:h-screen md:overflow-hidden min-h-screen md:min-h-0">
+      <Header navigationItems={navItems} />
+      <div className="flex flex-col md:flex-row flex-1 md:overflow-hidden p-3 md:p-6 gap-4">
+        <Card className="flex flex-col md:flex-[3] md:overflow-hidden gap-2 md:flex-initial">
           <CardHeader className="shrink-0">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
               <div className="flex flex-col gap-2">
                 <CardTitle>{t("companies.title")}</CardTitle>
                 <CardDescription>{t("companies.description")}</CardDescription>
               </div>
-              <InvitationFormDialog onSuccess={handleInvitationSuccess} />
+              <div className="flex items-center gap-2">
+                <Button
+                  onClick={handleDownloadCSV}
+                  disabled={isDownloadingCSV}
+                  className="text-xs sm:text-sm whitespace-nowrap"
+                  size="sm"
+                  variant="outline"
+                  style={{ borderColor: STAFF_ACCENT_COLOR }}
+                  onMouseEnter={(e) => {
+                    if (!isDownloadingCSV) {
+                      e.currentTarget.style.backgroundColor =
+                        STAFF_ACCENT_COLOR;
+                      e.currentTarget.style.color = "white";
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isDownloadingCSV) {
+                      e.currentTarget.style.backgroundColor = "transparent";
+                      e.currentTarget.style.color = "";
+                    }
+                  }}
+                >
+                  <Download className="mr-1 sm:mr-2 h-4 w-4 shrink-0" />
+                  {isDownloadingCSV
+                    ? t("companies.export.downloading")
+                    : t("companies.export.button")}
+                </Button>
+                <Button
+                  onClick={handleDownloadMedia}
+                  disabled={isDownloadingMedia}
+                  className="text-xs sm:text-sm whitespace-nowrap"
+                  size="sm"
+                  variant="outline"
+                  style={{ borderColor: STAFF_ACCENT_COLOR }}
+                  onMouseEnter={(e) => {
+                    if (!isDownloadingMedia) {
+                      e.currentTarget.style.backgroundColor =
+                        STAFF_ACCENT_COLOR;
+                      e.currentTarget.style.color = "white";
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isDownloadingMedia) {
+                      e.currentTarget.style.backgroundColor = "transparent";
+                      e.currentTarget.style.color = "";
+                    }
+                  }}
+                >
+                  <Download className="mr-1 sm:mr-2 h-4 w-4 shrink-0" />
+                  {isDownloadingMedia
+                    ? t("companies.export.mediaDownloading")
+                    : t("companies.export.mediaButton")}
+                </Button>
+                <InvitationFormDialog onSuccess={handleInvitationSuccess} />
+              </div>
             </div>
           </CardHeader>
-          <CardContent className="flex flex-1 flex-col overflow-hidden">
+          <CardContent className="flex md:flex-1 flex-col md:overflow-hidden">
             {!isLoading && hasData && (
               <CompanyFilters
                 searchQuery={searchQuery}
@@ -112,7 +220,7 @@ export default function Index() {
               />
             )}
 
-            <div className="custom-scrollbar flex-1 overflow-auto">
+            <div className="custom-scrollbar md:flex-1 md:overflow-auto md:min-h-0">
               {isLoading ? (
                 <div className="space-y-3">
                   <Skeleton className="h-12 w-full" />
@@ -140,13 +248,15 @@ export default function Index() {
         </Card>
         <StageReminderCard />
       </div>
-      <footer className="shrink-0 border-t border-border bg-muted/30 py-3 px-6">
-        <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+      <footer className="shrink-0 border-t border-border bg-muted/30 py-2 md:py-3 px-3 md:px-6">
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 text-xs sm:text-sm text-muted-foreground">
           <span className="font-medium">{t("staff.footer.authors")}:</span>
-          <span>{t("staff.footer.author1")},</span>
-          <span>{t("staff.footer.author2")},</span>
-          <span>{t("staff.footer.author3")},</span>
-          <span>{t("staff.footer.author4")}</span>
+          <div className="flex flex-wrap items-center justify-center gap-1 sm:gap-2">
+            <span>{t("staff.footer.author1")},</span>
+            <span>{t("staff.footer.author2")},</span>
+            <span>{t("staff.footer.author3")},</span>
+            <span>{t("staff.footer.author4")}</span>
+          </div>
         </div>
       </footer>
     </div>

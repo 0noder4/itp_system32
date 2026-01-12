@@ -467,33 +467,18 @@ export default function ExhibitorDashboardPage() {
                       </p>
                     </div>
                     <div className="md:col-span-2">
-                      <div className="grid gap-4 md:grid-cols-2">
-                        <div>
-                          <p className="text-sm font-medium text-muted-foreground mb-2">
-                            {t("exhibitor.overview.representative")}
-                          </p>
-                          <UserAccountCard
-                            name={company.representative_name}
-                            surname={company.representative_surname}
-                            email={company.email}
-                            username={company.representative_username}
-                            phoneNumber={company.representative_phone_number}
-                            dateJoined={company.created_at}
-                          />
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-muted-foreground mb-2">
-                            {t("exhibitor.overview.supervisor")}
-                          </p>
-                          <UserAccountCard
-                            name={company.fr_resp_name}
-                            surname={company.fr_resp_surname}
-                            email={company.fr_resp_email || company.email}
-                            username={company.fr_resp_username}
-                            phoneNumber={company.fr_resp_phone_number}
-                            dateJoined={company.created_at}
-                          />
-                        </div>
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground mb-2">
+                          {t("exhibitor.overview.supervisor")}
+                        </p>
+                        <UserAccountCard
+                          name={company.fr_resp_name}
+                          surname={company.fr_resp_surname}
+                          email={company.fr_resp_email || company.email}
+                          username={company.fr_resp_username}
+                          phoneNumber={company.fr_resp_phone_number}
+                          dateJoined={company.created_at}
+                        />
                       </div>
                     </div>
                   </div>

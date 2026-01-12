@@ -18,7 +18,7 @@ import { apiClient } from "@/lib/api";
 interface Stage5FormProps {
   companyId: number;
   initialData?: Stage5Data;
-  onSubmit: (data: Stage5FormData) => void;
+  onSubmit: (data: Stage5FormData) => Promise<void>;
   isSubmitting: boolean;
   disabled?: boolean;
   isAccepted?: boolean;
@@ -34,6 +34,8 @@ export function Stage5Form({
 }: Stage5FormProps) {
   const { t } = useTranslation();
   const [isLoadingUser, setIsLoadingUser] = React.useState(false);
+  const [lunchPrice, setLunchPrice] = React.useState<number>(0);
+  const [isLoadingPrice, setIsLoadingPrice] = React.useState(true);
 
   const form = useForm<Stage5FormData>({
     resolver: zodResolver(stage5Schema),
@@ -65,6 +67,42 @@ export function Stage5Form({
     control: form.control,
     name: "exhibitors",
   });
+
+  // Fetch lunch price on mount
+  React.useEffect(() => {
+    async function fetchLunchPrice() {
+      try {
+        const response = await apiClient.get("/api/lunch-price/");
+        setLunchPrice(parseFloat(response.data.lunch_price) || 0);
+      } catch (error) {
+        console.error("Error fetching lunch price:", error);
+        setLunchPrice(0);
+      } finally {
+        setIsLoadingPrice(false);
+      }
+    }
+    fetchLunchPrice();
+  }, []);
+
+  const watchLunches = form.watch("lunches") || [];
+  // Calculate extra lunches: 2 free lunches per day
+  // Group lunches by day and sum quantities per day, then calculate extra lunches per day
+  const lunchesByDay = watchLunches.reduce((acc, lunch) => {
+    const day = lunch.day || "";
+    const quantity = lunch.lunch_quantity || 0;
+    acc[day] = (acc[day] || 0) + quantity;
+    return acc;
+  }, {} as Record<string, number>);
+
+  const freePerDay = 2;
+  const extraLunches = Object.values(lunchesByDay).reduce(
+    (sum, totalForDay) => {
+      const extraForDay = Math.max(0, totalForDay - freePerDay);
+      return sum + extraForDay;
+    },
+    0
+  );
+  const totalLunchCost = extraLunches * lunchPrice;
 
   const handleAddYourself = React.useCallback(async () => {
     if (disabled) return;
@@ -123,8 +161,146 @@ export function Stage5Form({
     }
   }, [companyId, disabled, appendExhibitor]);
 
+  const handleFormSubmit = async (data: Stage5FormData) => {
+    try {
+      await onSubmit(data);
+    } catch (error: any) {
+      // Handle backend validation errors and set them on form fields
+      if (error.response?.status === 400 && error.response?.data) {
+        const errorData = error.response.data;
+        let hasFieldErrors = false;
+
+        // Handle final_data errors
+        if (errorData.final_data && typeof errorData.final_data === "object") {
+          Object.keys(errorData.final_data).forEach((field) => {
+            const fieldErrors = errorData.final_data[field];
+            const errorMessage = Array.isArray(fieldErrors)
+              ? fieldErrors[0]
+              : typeof fieldErrors === "string"
+              ? fieldErrors
+              : String(fieldErrors);
+
+            form.setError(`final_data.${field}` as any, {
+              type: "server",
+              message: errorMessage,
+            });
+            hasFieldErrors = true;
+          });
+        }
+
+        // Handle lunches errors
+        if (errorData.lunches) {
+          if (Array.isArray(errorData.lunches)) {
+            errorData.lunches.forEach((lunchErrors: any, index: number) => {
+              if (lunchErrors && typeof lunchErrors === "object") {
+                Object.keys(lunchErrors).forEach((field) => {
+                  const fieldErrors = lunchErrors[field];
+                  const errorMessage = Array.isArray(fieldErrors)
+                    ? fieldErrors[0]
+                    : typeof fieldErrors === "string"
+                    ? fieldErrors
+                    : String(fieldErrors);
+
+                  form.setError(`lunches.${index}.${field}` as any, {
+                    type: "server",
+                    message: errorMessage,
+                  });
+                  hasFieldErrors = true;
+                });
+              }
+            });
+          } else if (typeof errorData.lunches === "object") {
+            // Handle object format {0: {...}, 1: {...}}
+            Object.keys(errorData.lunches).forEach((indexStr) => {
+              const index = parseInt(indexStr, 10);
+              const lunchErrors = errorData.lunches[indexStr];
+              if (
+                lunchErrors &&
+                typeof lunchErrors === "object" &&
+                !isNaN(index)
+              ) {
+                Object.keys(lunchErrors).forEach((field) => {
+                  const fieldErrors = lunchErrors[field];
+                  const errorMessage = Array.isArray(fieldErrors)
+                    ? fieldErrors[0]
+                    : typeof fieldErrors === "string"
+                    ? fieldErrors
+                    : String(fieldErrors);
+
+                  form.setError(`lunches.${index}.${field}` as any, {
+                    type: "server",
+                    message: errorMessage,
+                  });
+                  hasFieldErrors = true;
+                });
+              }
+            });
+          }
+        }
+
+        // Handle pdi errors
+        if (errorData.pdi && typeof errorData.pdi === "object") {
+          Object.keys(errorData.pdi).forEach((field) => {
+            const fieldErrors = errorData.pdi[field];
+            const errorMessage = Array.isArray(fieldErrors)
+              ? fieldErrors[0]
+              : typeof fieldErrors === "string"
+              ? fieldErrors
+              : String(fieldErrors);
+
+            form.setError(`pdi.${field}` as any, {
+              type: "server",
+              message: errorMessage,
+            });
+            hasFieldErrors = true;
+          });
+        }
+
+        // Handle exhibitors errors
+        if (errorData.exhibitors) {
+          if (Array.isArray(errorData.exhibitors)) {
+            errorData.exhibitors.forEach(
+              (exhibitorErrors: any, index: number) => {
+                if (exhibitorErrors && typeof exhibitorErrors === "object") {
+                  Object.keys(exhibitorErrors).forEach((field) => {
+                    const fieldErrors = exhibitorErrors[field];
+                    const errorMessage = Array.isArray(fieldErrors)
+                      ? fieldErrors[0]
+                      : typeof fieldErrors === "string"
+                      ? fieldErrors
+                      : String(fieldErrors);
+
+                    form.setError(`exhibitors.${index}.${field}` as any, {
+                      type: "server",
+                      message: errorMessage,
+                    });
+                    hasFieldErrors = true;
+                  });
+                }
+              }
+            );
+          }
+        }
+
+        // Handle general errors
+        if (errorData.detail && typeof errorData.detail === "string") {
+          form.setError("root", {
+            type: "server",
+            message: errorData.detail,
+          });
+          hasFieldErrors = true;
+        }
+
+        if (hasFieldErrors) {
+          return;
+        }
+      }
+      throw error;
+    }
+  };
+
   return (
-    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+    <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-6">
       {/* Electric Devices */}
       <div className="space-y-3">
         <h3 className="font-medium">
@@ -141,7 +317,10 @@ export function Stage5Form({
               disabled={disabled}
             />
             {form.formState.errors.final_data?.el_devices && (
-              <FieldError>{t("exhibitor.form.required")}</FieldError>
+              <FieldError>
+                {form.formState.errors.final_data.el_devices.message ||
+                  t("exhibitor.form.required")}
+              </FieldError>
             )}
           </FieldGroup>
           <FieldGroup>
@@ -151,7 +330,10 @@ export function Stage5Form({
               disabled={disabled}
             />
             {form.formState.errors.final_data?.el_power && (
-              <FieldError>{t("exhibitor.form.required")}</FieldError>
+              <FieldError>
+                {form.formState.errors.final_data.el_power.message ||
+                  t("exhibitor.form.required")}
+              </FieldError>
             )}
           </FieldGroup>
         </div>
@@ -163,6 +345,20 @@ export function Stage5Form({
         <p className="text-sm text-muted-foreground">
           {t("exhibitor.form.lunchesDescription")}
         </p>
+        {lunchPrice > 0 && (
+          <div className="rounded-md bg-information/10 p-3 text-sm text-information border border-information/20 dark:bg-information/20 dark:text-information-foreground dark:border-information/30">
+            <p className="font-medium mb-1">
+              {t("exhibitor.form.lunchPricingDisclaimer")}
+            </p>
+            <p>
+              {t("exhibitor.form.lunchPricePerMeal")}: {lunchPrice.toFixed(2)}{" "}
+              PLN
+            </p>
+            <p className="mt-1 text-xs">
+              {t("exhibitor.form.lunchFreeIncluded")}
+            </p>
+          </div>
+        )}
         <div className="flex justify-start">
           <Button
             type="button"
@@ -217,8 +413,8 @@ export function Stage5Form({
               />
               {form.formState.errors.lunches?.[index]?.lunch_quantity && (
                 <FieldError>
-                  {form.formState.errors.lunches[index]?.lunch_quantity?.message ||
-                    t("exhibitor.form.required")}
+                  {form.formState.errors.lunches[index]?.lunch_quantity
+                    ?.message || t("exhibitor.form.required")}
                 </FieldError>
               )}
             </FieldGroup>
@@ -246,6 +442,17 @@ export function Stage5Form({
             </Button>
           </div>
         ))}
+        {totalLunchCost > 0 && (
+          <div className="rounded-md bg-amber-50 p-4 border border-amber-200">
+            <p className="text-sm font-medium text-amber-900">
+              {t("exhibitor.form.totalLunchCost")}: {totalLunchCost.toFixed(2)}{" "}
+              PLN
+            </p>
+            <p className="text-xs text-amber-700 mt-1">
+              {t("exhibitor.form.extraLunchesCount", { count: extraLunches })}
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Exhibitors */}
@@ -323,8 +530,8 @@ export function Stage5Form({
               />
               {form.formState.errors.exhibitors?.[index]?.phone_number && (
                 <FieldError>
-                  {form.formState.errors.exhibitors[index]?.phone_number?.message ||
-                    t("exhibitor.form.required")}
+                  {form.formState.errors.exhibitors[index]?.phone_number
+                    ?.message || t("exhibitor.form.required")}
                 </FieldError>
               )}
             </FieldGroup>

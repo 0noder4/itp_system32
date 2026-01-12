@@ -7,6 +7,7 @@ import { apiClient } from "@/lib/api";
 import { useTranslation } from "@/lib/i18n";
 import { Stage4Data } from "@/lib/types";
 import { stage4Schema, Stage4FormData } from "./schemas";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ACCENT_COLOR } from "@/lib/colors";
 import { Input } from "@/components/ui/input";
@@ -25,7 +26,7 @@ import { cn } from "@/lib/utils";
 interface Stage4FormProps {
   companyId?: number;
   initialData?: Stage4Data;
-  onSubmit: (data: Stage4FormData) => void;
+  onSubmit: (data: Stage4FormData) => Promise<void>;
   isSubmitting: boolean;
   disabled?: boolean;
   isAccepted?: boolean;
@@ -176,7 +177,7 @@ export function Stage4Form({
     }
   };
 
-  const handleFormSubmit = (data: Stage4FormData) => {
+  const handleFormSubmit = async (data: Stage4FormData) => {
     // Get current form values to ensure files are included (React Hook Form might strip files during validation)
     const currentFormValues = form.getValues();
 
@@ -196,7 +197,164 @@ export function Stage4Form({
           }
         : null,
     };
-    onSubmit(dataWithFiles);
+    
+    try {
+      await onSubmit(dataWithFiles);
+    } catch (error: any) {
+      // Handle backend validation errors and set them on form fields
+      if (error.response?.status === 400 && error.response?.data) {
+        const errorData = error.response.data;
+        // Log error data for debugging
+        console.error('Stage4Form error response:', errorData);
+        let hasFieldErrors = false;
+        
+        // Handle jobwall errors
+        if (errorData.jobwalls) {
+          // Handle both array format [{}] and object format {0: {}, 1: {}}
+          if (Array.isArray(errorData.jobwalls)) {
+            errorData.jobwalls.forEach((jobwallErrors: any, index: number) => {
+              if (jobwallErrors && typeof jobwallErrors === 'object') {
+                Object.keys(jobwallErrors).forEach((field) => {
+                  const fieldErrors = jobwallErrors[field];
+                  const errorMessage = Array.isArray(fieldErrors) 
+                    ? fieldErrors[0] 
+                    : typeof fieldErrors === 'string' 
+                    ? fieldErrors 
+                    : String(fieldErrors);
+                  
+                  form.setError(`jobwalls.${index}.${field}` as any, {
+                    type: 'server',
+                    message: errorMessage,
+                  });
+                  hasFieldErrors = true;
+                });
+              }
+            });
+          } else if (typeof errorData.jobwalls === 'object') {
+            // Handle object format {0: {...}, 1: {...}}
+            Object.keys(errorData.jobwalls).forEach((indexStr) => {
+              const index = parseInt(indexStr, 10);
+              const jobwallErrors = errorData.jobwalls[indexStr];
+              if (jobwallErrors && typeof jobwallErrors === 'object' && !isNaN(index)) {
+                Object.keys(jobwallErrors).forEach((field) => {
+                  const fieldErrors = jobwallErrors[field];
+                  const errorMessage = Array.isArray(fieldErrors) 
+                    ? fieldErrors[0] 
+                    : typeof fieldErrors === 'string' 
+                    ? fieldErrors 
+                    : String(fieldErrors);
+                  
+                  form.setError(`jobwalls.${index}.${field}` as any, {
+                    type: 'server',
+                    message: errorMessage,
+                  });
+                  hasFieldErrors = true;
+                });
+              }
+            });
+          }
+        }
+        
+        // Handle description errors
+        if (errorData.description && typeof errorData.description === 'object') {
+          Object.keys(errorData.description).forEach((field) => {
+            const fieldErrors = errorData.description[field];
+            const errorMessage = Array.isArray(fieldErrors) 
+              ? fieldErrors[0] 
+              : typeof fieldErrors === 'string' 
+              ? fieldErrors 
+              : String(fieldErrors);
+            
+            form.setError(`description.${field}` as any, {
+              type: 'server',
+              message: errorMessage,
+            });
+            hasFieldErrors = true;
+          });
+        }
+        
+        // Handle general errors (like detail field, non_field_errors, etc.)
+        if (!hasFieldErrors) {
+          if (errorData.detail && typeof errorData.detail === 'string') {
+            form.setError('root', {
+              type: 'server',
+              message: errorData.detail,
+            });
+            hasFieldErrors = true;
+          } else if (errorData.non_field_errors) {
+            const nonFieldErrors = Array.isArray(errorData.non_field_errors) 
+              ? errorData.non_field_errors[0] 
+              : errorData.non_field_errors;
+            form.setError('root', {
+              type: 'server',
+              message: typeof nonFieldErrors === 'string' ? nonFieldErrors : String(nonFieldErrors),
+            });
+            hasFieldErrors = true;
+          } else if (errorData.message && typeof errorData.message === 'string') {
+            form.setError('root', {
+              type: 'server',
+              message: errorData.message,
+            });
+            hasFieldErrors = true;
+          }
+        }
+        
+        // If we set field errors, show a toast with actual error details and return
+        if (hasFieldErrors) {
+          // Build error message from the actual errors
+          let errorMessage = "Please fix the form errors";
+          if (errorData.detail && typeof errorData.detail === 'string') {
+            errorMessage = errorData.detail;
+          } else if (errorData.non_field_errors) {
+            const nonFieldErrors = Array.isArray(errorData.non_field_errors) 
+              ? errorData.non_field_errors[0] 
+              : errorData.non_field_errors;
+            errorMessage = typeof nonFieldErrors === 'string' ? nonFieldErrors : String(nonFieldErrors);
+          } else {
+            // Try to extract first error message from any field with field path
+            const extractFirstError = (obj: any, path: string = ""): { message: string; path: string } | null => {
+              for (const key in obj) {
+                const value = obj[key];
+                const currentPath = path ? `${path}.${key}` : key;
+                if (Array.isArray(value) && value.length > 0) {
+                  const msg = typeof value[0] === 'string' ? value[0] : String(value[0]);
+                  return { message: msg, path: currentPath };
+                } else if (typeof value === 'string' && value) {
+                  return { message: value, path: currentPath };
+                } else if (typeof value === 'object' && value !== null) {
+                  const nested = extractFirstError(value, currentPath);
+                  if (nested) return nested;
+                }
+              }
+              return null;
+            };
+            const firstError = extractFirstError(errorData);
+            if (firstError) {
+              errorMessage = `${firstError.path}: ${firstError.message}`;
+            }
+          }
+          toast.error(errorMessage);
+          return;
+        }
+        
+        // If error format is completely unexpected, show the raw error
+        console.error('Unexpected error format:', errorData);
+        let errorMessage = t("exhibitor.form.saveError") || "An error occurred";
+        if (errorData.detail) {
+          errorMessage = typeof errorData.detail === 'string' ? errorData.detail : String(errorData.detail);
+        } else if (errorData.message) {
+          errorMessage = typeof errorData.message === 'string' ? errorData.message : String(errorData.message);
+        } else {
+          // Show the JSON stringified error so user can see what's wrong
+          errorMessage = JSON.stringify(errorData);
+        }
+        toast.error(errorMessage);
+        return;
+      }
+      
+      // Re-throw other errors
+      throw error;
+    }
   };
 
   return (
@@ -215,11 +373,17 @@ export function Stage4Form({
             disabled={disabled}
           />
           {form.formState.errors.description?.descr && (
-            <FieldError>{t("exhibitor.form.required")}</FieldError>
+            <FieldError>
+              {form.formState.errors.description.descr.message ||
+                t("exhibitor.form.required")}
+            </FieldError>
           )}
         </FieldGroup>
         <FieldGroup>
-          <FieldLabel>{t("exhibitor.form.uploadCatalogueLogo")}</FieldLabel>
+          <FieldLabel>
+            {t("exhibitor.form.uploadCatalogueLogo")}{" "}
+            <span className="text-red-500">*</span>
+          </FieldLabel>
           <div className="relative">
             <input
               type="file"
@@ -350,7 +514,10 @@ export function Stage4Form({
                   disabled={disabled}
                 />
                 {form.formState.errors.jobwalls?.[index]?.name && (
-                  <FieldError>{t("exhibitor.form.required")}</FieldError>
+                  <FieldError>
+                    {form.formState.errors.jobwalls[index]?.name?.message ||
+                      t("exhibitor.form.required")}
+                  </FieldError>
                 )}
               </FieldGroup>
 
@@ -429,7 +596,10 @@ export function Stage4Form({
                   disabled={disabled}
                 />
                 {form.formState.errors.jobwalls?.[index]?.description && (
-                  <FieldError>{t("exhibitor.form.required")}</FieldError>
+                  <FieldError>
+                    {form.formState.errors.jobwalls[index]?.description?.message ||
+                      t("exhibitor.form.required")}
+                  </FieldError>
                 )}
               </FieldGroup>
 
@@ -441,7 +611,10 @@ export function Stage4Form({
                   disabled={disabled}
                 />
                 {form.formState.errors.jobwalls?.[index]?.benefits && (
-                  <FieldError>{t("exhibitor.form.required")}</FieldError>
+                  <FieldError>
+                    {form.formState.errors.jobwalls[index]?.benefits?.message ||
+                      t("exhibitor.form.required")}
+                  </FieldError>
                 )}
               </FieldGroup>
 
@@ -453,12 +626,18 @@ export function Stage4Form({
                   disabled={disabled}
                 />
                 {form.formState.errors.jobwalls?.[index]?.requirements && (
-                  <FieldError>{t("exhibitor.form.required")}</FieldError>
+                  <FieldError>
+                    {form.formState.errors.jobwalls[index]?.requirements?.message ||
+                      t("exhibitor.form.required")}
+                  </FieldError>
                 )}
               </FieldGroup>
 
               <FieldGroup>
-                <FieldLabel>{t("exhibitor.form.applicationUrl")}</FieldLabel>
+                <FieldLabel>
+                  {t("exhibitor.form.applicationUrl")}{" "}
+                  <span className="text-red-500">*</span>
+                </FieldLabel>
                 <Input
                   {...form.register(`jobwalls.${index}.url`)}
                   type="text"

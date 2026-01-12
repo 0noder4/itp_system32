@@ -89,6 +89,8 @@ export function InvitationFormDialog({ onSuccess }: InvitationFormDialogProps) {
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
         <Button
+          className="text-xs sm:text-sm whitespace-nowrap"
+          size="sm"
           style={{ backgroundColor: STAFF_ACCENT_COLOR }}
           onMouseEnter={(e) => {
             e.currentTarget.style.backgroundColor = "#C84FA8";
@@ -97,7 +99,7 @@ export function InvitationFormDialog({ onSuccess }: InvitationFormDialogProps) {
             e.currentTarget.style.backgroundColor = STAFF_ACCENT_COLOR;
           }}
         >
-          <UserPlus className="mr-2 h-4 w-4" />
+          <UserPlus className="mr-1 sm:mr-2 h-4 w-4 shrink-0" />
           {t("companies.invite.button")}
         </Button>
       </DialogTrigger>

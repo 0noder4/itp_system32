@@ -10,7 +10,6 @@ from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.authentication import SessionAuthentication
 from users.permissions import IsAdminOrStaff, IsAdmin
 
 from .models import (
@@ -289,8 +288,7 @@ class CompanyDetailView(APIView):
         dashboard_link = f"{settings.FRONTEND_BASE_URL}/panel/exhibitor"
         
         # Use backend URL for static files (logo is hosted on backend)
-        backend_url = os.environ.get('BACKEND_BASE_URL', 'http://localhost:8000')
-        logo_url = f"{backend_url}{settings.STATIC_URL}images/ITP_LOGO_horizontal_black.png"
+        logo_url = f"{settings.BACKEND_BASE_URL}{settings.STATIC_URL}images/ITP_LOGO_horizontal_black.png"
         
         # Select template based on language
         template_name = f"emails/stand_assigned_{language}.html"
@@ -313,6 +311,13 @@ class CompanyDetailView(APIView):
             contact_text_en = f' us at {default_email}'
             contact_text_pl = f' z nami pod adresem {default_email}'
         
+        # Get job fair dates from settings
+        system_settings = Settings.get_settings()
+        day1_display_en = system_settings.get_day1_display_en()
+        day1_display_pl = system_settings.get_day1_display_pl()
+        day2_display_en = system_settings.get_day2_display_en()
+        day2_display_pl = system_settings.get_day2_display_pl()
+        
         # Plain text message
         if language == 'en':
             plain_message = f"""Hello {representative.username or representative.email},
@@ -321,9 +326,9 @@ Your stand assignment for {company.name} has been updated.
 
 """
             if day1_stand_data:
-                plain_message += f"Day 1 Stand (March 10, 2025):\nStand Number: {day1_stand_data['stand_number']}\nSize: {day1_stand_data['stand_size_display']}\n\n"
+                plain_message += f"Day 1 Stand ({day1_display_en}):\nStand Number: {day1_stand_data['stand_number']}\nSize: {day1_stand_data['stand_size_display']}\n\n"
             if day2_stand_data:
-                plain_message += f"Day 2 Stand (March 11, 2025):\nStand Number: {day2_stand_data['stand_number']}\nSize: {day2_stand_data['stand_size_display']}\n\n"
+                plain_message += f"Day 2 Stand ({day2_display_en}):\nStand Number: {day2_stand_data['stand_number']}\nSize: {day2_stand_data['stand_size_display']}\n\n"
             if not day1_stand_data and not day2_stand_data:
                 plain_message += "Your stand assignments have been removed.\n\n"
             
@@ -337,9 +342,9 @@ Twoje przypisanie stoiska dla {company.name} zostało zaktualizowane.
 
 """
             if day1_stand_data:
-                plain_message += f"Stoisko dzień 1 (10.03.2025):\nNumer stoiska: {day1_stand_data['stand_number']}\nRozmiar: {day1_stand_data['stand_size_display']}\n\n"
+                plain_message += f"Stoisko dzień 1 ({day1_display_pl}):\nNumer stoiska: {day1_stand_data['stand_number']}\nRozmiar: {day1_stand_data['stand_size_display']}\n\n"
             if day2_stand_data:
-                plain_message += f"Stoisko dzień 2 (11.03.2025):\nNumer stoiska: {day2_stand_data['stand_number']}\nRozmiar: {day2_stand_data['stand_size_display']}\n\n"
+                plain_message += f"Stoisko dzień 2 ({day2_display_pl}):\nNumer stoiska: {day2_stand_data['stand_number']}\nRozmiar: {day2_stand_data['stand_size_display']}\n\n"
             if not day1_stand_data and not day2_stand_data:
                 plain_message += "Twoje przypisania stoisk zostały usunięte.\n\n"
             
@@ -407,7 +412,7 @@ class CompanyInvitationListView(APIView):
 
 class CompanyInvitationDetailView(APIView):
     """
-    Retrieve a single company invitation by ID.
+    Retrieve, update, or cancel a single company invitation by ID.
     """
     permission_classes = [IsAuthenticated, IsAdminOrStaff]
     
@@ -425,6 +430,36 @@ class CompanyInvitationDetailView(APIView):
         
         serializer = CompanyInvitationSerializer(invitation)
         return Response(serializer.data)
+    
+    def patch(self, request, id):
+        """
+        Cancel an invitation by setting is_cancelled to True.
+        """
+        try:
+            validate_company_id(id)
+            invitation = CompanyInvitation.objects.get(id=id)
+        except ValidationError as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except CompanyInvitation.DoesNotExist:
+            return Response({"detail": "Invitation not found"}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"Error in CompanyInvitationDetailView.patch: {e}", exc_info=True)
+            return Response({"detail": "An error occurred while updating the invitation"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        # Check if invitation is already accepted
+        if invitation.is_accepted:
+            return Response({"detail": "Cannot cancel an already accepted invitation"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Check if invitation is already cancelled
+        if invitation.is_cancelled:
+            return Response({"detail": "Invitation is already cancelled"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Cancel the invitation
+        invitation.is_cancelled = True
+        invitation.save()
+        
+        serializer = CompanyInvitationSerializer(invitation)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class CompanyInvitationView(generics.CreateAPIView):
@@ -444,8 +479,7 @@ class CompanyInvitationView(generics.CreateAPIView):
         # Get registration link with language parameter
         registration_link = f"{settings.FRONTEND_BASE_URL}/auth/register?token={invitation.token}&lang={language}"
         # Use backend URL for static files (logo is hosted on backend)
-        backend_url = os.environ.get('BACKEND_BASE_URL', 'http://localhost:8000')
-        logo_url = f"{backend_url}{settings.STATIC_URL}images/ITP_LOGO_horizontal_black.png"
+        logo_url = f"{settings.BACKEND_BASE_URL}{settings.STATIC_URL}images/ITP_LOGO_horizontal_black.png"
 
         # Select template based on language
         template_name = f"emails/invitation_{language}.html"
@@ -535,8 +569,12 @@ class CompanyRegistrationView(APIView):
             return Response({"detail": "Token is required"}, status=status.HTTP_400_BAD_REQUEST)
         data = request.data.copy()
         serializer = CompanyRegistrationSerializer(data=data)
+        
+        # Validate serializer - this will raise ValidationError if invalid
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
         try:
-            serializer.is_valid(raise_exception=True)
             serializer.save()
             return Response({"message": "Company registration successful"}, status=status.HTTP_201_CREATED)
         except Exception as e:
@@ -1301,9 +1339,12 @@ class FormStage4View(APIView):
         if 'jobwalls' in data and isinstance(data['jobwalls'], list):
             for jobwall_data in data['jobwalls']:
                 jobwall_data['company'] = company.id
-        # Add company ID to description if provided
-        if 'description' in data and data['description']:
-            data['description']['company'] = company.id
+        # Don't add company ID to description here - it causes unique constraint validation error
+        # The serializer will handle it in create()/update() methods
+        
+        logger.info(f"Stage4 POST data keys: {list(data.keys())}")
+        if 'description' in data:
+            logger.info(f"Stage4 description data: {data['description']}")
         
         serializer = Stage4Serializer(data=data, context={'company': company})
         if serializer.is_valid():
@@ -1422,9 +1463,8 @@ class FormStage4View(APIView):
             for jobwall_data in data['jobwalls']:
                 if isinstance(jobwall_data, dict):
                     jobwall_data['company'] = company.id
-        # Add company ID to description if provided
-        if 'description' in data and data['description'] and isinstance(data['description'], dict):
-            data['description']['company'] = company.id
+        # Don't add company ID to description here - it causes unique constraint validation error
+        # The serializer will handle it in create()/update() methods
         
         serializer = Stage4Serializer(instance_data, data=data, partial=True, context={'company': company})
         if serializer.is_valid():
@@ -1680,8 +1720,7 @@ class FormReviewView(APIView):
         dashboard_link = f"{settings.FRONTEND_BASE_URL}/panel/exhibitor"
         
         # Use backend URL for static files (logo is hosted on backend)
-        backend_url = os.environ.get('BACKEND_BASE_URL', 'http://localhost:8000')
-        logo_url = f"{backend_url}{settings.STATIC_URL}images/ITP_LOGO_horizontal_black.png"
+        logo_url = f"{settings.BACKEND_BASE_URL}{settings.STATIC_URL}images/ITP_LOGO_horizontal_black.png"
         
         # Select template based on status and language
         if status == 'accepted':
@@ -1838,6 +1877,19 @@ class FormStatusView(APIView):
                 'stage_5': FinalData.objects.filter(company=company).exists(),
             }
             
+            # Get completion timestamps for completed stages
+            # Use Form's updated_at as proxy for completion time
+            # A stage is considered completed if it has feedback with status pending, accepted, or rejected
+            completion_timestamps = {}
+            for i in range(1, 6):
+                stage_key = f'stage_{i}'
+                stage_feedback = feedbacks.filter(form=stage_key).first()
+                # Stage is completed if it has feedback (status: pending, accepted, or rejected)
+                if stage_feedback:
+                    # Use Form's updated_at as completion timestamp
+                    # Convert to ISO format string
+                    completion_timestamps[stage_key] = form.updated_at.isoformat() if form.updated_at else None
+            
             return Response({
                 'form': {
                     'id': form.id,
@@ -1850,6 +1902,7 @@ class FormStatusView(APIView):
                 },
                 'feedbacks': stage_feedbacks,
                 'data_exists': stage_data_exists,
+                'completion_timestamps': completion_timestamps,
             })
         except ValidationError as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -1875,6 +1928,23 @@ class JobwallPriceView(APIView):
         except Exception as e:
             logger.error(f"Error in JobwallPriceView.get: {e}", exc_info=True)
             return Response({"detail": "An error occurred while retrieving jobwall price"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class LunchPriceView(APIView):
+    """
+    Get the current lunch price from system settings.
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        try:
+            settings = Settings.get_settings()
+            return Response({
+                'lunch_price': str(settings.lunch_price),
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Error in LunchPriceView.get: {e}", exc_info=True)
+            return Response({"detail": "An error occurred while retrieving lunch price"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class StageDeadlinesView(APIView):
@@ -2104,8 +2174,7 @@ class SendStageReminderView(APIView):
         dashboard_link = f"{settings.FRONTEND_BASE_URL}/panel/exhibitor"
         
         # Use backend URL for static files (logo is hosted on backend)
-        backend_url = os.environ.get('BACKEND_BASE_URL', 'http://localhost:8000')
-        logo_url = f"{backend_url}{settings.STATIC_URL}images/ITP_LOGO_horizontal_black.png"
+        logo_url = f"{settings.BACKEND_BASE_URL}{settings.STATIC_URL}images/ITP_LOGO_horizontal_black.png"
         
         # Select template based on language
         template_name = f"emails/stage_reminder_{language}.html"
@@ -2178,41 +2247,78 @@ class ExportCSVView(APIView):
     """
     Export company data to CSV format.
     
-    Accessible only to admin users via Django session authentication.
+    Accessible only to admin/staff users via JWT authentication.
     Generates a streaming CSV response with all company form data.
     """
-    authentication_classes = [SessionAuthentication]
-    permission_classes = [IsAdminOrStaff]
+    permission_classes = [IsAuthenticated, IsAdminOrStaff]
 
     def get(self, request):
-        from django.http import StreamingHttpResponse
+        from django.http import StreamingHttpResponse, HttpResponseServerError, JsonResponse
         from companies.services.export_service import ExportService
         from datetime import datetime
+        import traceback
 
-        export_service = ExportService(user=request.user, filters={})
-        
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = f'companies_export_{timestamp}.csv'
+        try:
+            export_service = ExportService(user=request.user, filters={})
+            
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            filename = f'companies_export_{timestamp}.csv'
 
-        response = StreamingHttpResponse(
-            export_service.generate_csv(),
-            content_type='text/csv; charset=utf-8-sig'
-        )
-        response['Content-Disposition'] = f'attachment; filename="{filename}"'
-        
-        logger.info(f"CSV export initiated by user {request.user.username}")
-        return response
+            # Wrapper generator with error handling for streaming
+            def csv_generator():
+                try:
+                    for chunk in export_service.generate_csv():
+                        # Ensure chunk is a string (CSVGenerator returns strings)
+                        if chunk:
+                            yield chunk
+                except Exception as e:
+                    logger.error(
+                        f"Error during CSV streaming for user {request.user.username}: {str(e)}",
+                        exc_info=True
+                    )
+                    # Cannot raise exception here as it's a generator, but error is logged
+                    # The outer try-except will catch initialization errors
+                    raise
+
+            response = StreamingHttpResponse(
+                csv_generator(),
+                content_type='text/csv; charset=utf-8-sig'
+            )
+            # Use RFC 5987 format for UTF-8 filename encoding
+            response['Content-Disposition'] = f'attachment; filename="{filename}"; filename*=UTF-8\'\'{filename}'
+            
+            logger.info(f"CSV export initiated by user {request.user.username}")
+            return response
+            
+        except Exception as e:
+            error_message = f"Error generating CSV export: {str(e)}"
+            logger.error(
+                f"CSV export failed for user {request.user.username}: {error_message}",
+                exc_info=True
+            )
+            
+            # Return JSON error response for API clients
+            if request.headers.get('Accept', '').startswith('application/json'):
+                return JsonResponse(
+                    {'error': 'CSV export failed', 'detail': str(e)},
+                    status=500
+                )
+            
+            # Return plain text error for browser
+            return HttpResponseServerError(
+                error_message,
+                content_type='text/plain; charset=utf-8'
+            )
 
 
 class ExportLogosView(APIView):
     """
     Export all company logos as a ZIP file.
     
-    Accessible only to admin users via Django session authentication.
+    Accessible only to admin/staff users via JWT authentication.
     Creates a ZIP archive containing all logo files from stand_details.
     """
-    authentication_classes = [SessionAuthentication]
-    permission_classes = [IsAdminOrStaff]
+    permission_classes = [IsAuthenticated, IsAdminOrStaff]
 
     def get(self, request):
         from django.http import HttpResponse
@@ -2246,4 +2352,198 @@ class ExportLogosView(APIView):
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         
         logger.info(f"Logos ZIP export initiated by user {request.user.username}")
+        return response
+
+
+class ExportMediaFilesView(APIView):
+    """
+    Export active media files referenced in exhibitor forms as a ZIP file.
+    
+    Accessible only to admin/staff users via JWT authentication.
+    Creates a ZIP archive containing files referenced in:
+    - StandDetails.logo_sign_file (logos/)
+    - StandDetails.fire_cert (fire_certs/)
+    - Description.logo_file (catalogue_logos/)
+    
+    Files are named: "folder/[stand_code_day1][stand_code_day2] full company name.extension"
+    Folder structure is preserved: logos/, fire_certs/, catalogue_logos/
+    """
+    permission_classes = [IsAuthenticated, IsAdminOrStaff]
+
+    def _format_filename(self, company, original_filename, folder_prefix):
+        """
+        Format filename as: "folder_prefix/[stand_code_day1][stand_code_day2] full company name.extension"
+        
+        Args:
+            company: Company instance
+            original_filename: Original filename (relative path from MEDIA_ROOT)
+            folder_prefix: Folder prefix (logos/, fire_certs/, catalogue_logos/)
+        
+        Returns:
+            Formatted filename string with folder structure
+        """
+        import re
+        
+        # Get stand codes for day1 and day2
+        stands = list(company.stand_all.all())
+        day1_stand = next((s for s in stands if s.day == 'day1'), None)
+        day2_stand = next((s for s in stands if s.day == 'day2'), None)
+        
+        # Get stand numbers, use empty string if not set or 'brak'
+        stand_code_day1 = ''
+        if day1_stand and day1_stand.stand_number and day1_stand.stand_number != 'brak':
+            stand_code_day1 = day1_stand.stand_number
+        
+        stand_code_day2 = ''
+        if day2_stand and day2_stand.stand_number and day2_stand.stand_number != 'brak':
+            stand_code_day2 = day2_stand.stand_number
+        
+        # Format stand codes in brackets: [day1][day2]
+        stand_prefix = f"[{stand_code_day1}][{stand_code_day2}]"
+        
+        # Get full company name from BasicData, fallback to company.name
+        try:
+            if hasattr(company, 'basic_data') and company.basic_data:
+                full_company_name = company.basic_data.full_name or company.name
+            else:
+                full_company_name = company.name
+        except Exception:
+            full_company_name = company.name
+        
+        # Get file extension from original filename
+        _, ext = os.path.splitext(original_filename)
+        if not ext:
+            ext = os.path.splitext(os.path.basename(original_filename))[1]
+        
+        # Sanitize company name (remove invalid filename characters)
+        sanitized_name = re.sub(r'[<>:"/\\|?*]', '_', full_company_name)
+        sanitized_name = sanitized_name.strip()
+        
+        # Combine parts: folder_prefix/[stand_code_day1][stand_code_day2] full company name.extension
+        formatted_name = f"{folder_prefix}{stand_prefix} {sanitized_name}{ext}"
+        
+        return formatted_name
+
+    def get(self, request):
+        from django.http import HttpResponse
+        from datetime import datetime
+        import zipfile
+        from io import BytesIO
+
+        buffer = BytesIO()
+        arcnames_added = set()  # Track arcnames to avoid duplicates in ZIP
+        files_count = 0
+        
+        with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            # Export logo_sign_file from StandDetails (goes to logos/ folder)
+            stand_details_with_logos = StandDetails.objects.filter(
+                logo_sign_file__isnull=False
+            ).exclude(logo_sign_file='').select_related('company').prefetch_related('company__stand_all', 'company__basic_data')
+            
+            for stand_detail in stand_details_with_logos:
+                if stand_detail.logo_sign_file:
+                    try:
+                        file_path = stand_detail.logo_sign_file.path
+                        if os.path.exists(file_path):
+                            formatted_name = self._format_filename(
+                                stand_detail.company,
+                                stand_detail.logo_sign_file.name,
+                                'logos/'
+                            )
+                            # Only add if arcname is unique (handle duplicate names)
+                            if formatted_name not in arcnames_added:
+                                zip_file.write(file_path, arcname=formatted_name)
+                                arcnames_added.add(formatted_name)
+                                files_count += 1
+                            else:
+                                # If duplicate name, append company ID to make it unique
+                                name_part, ext = os.path.splitext(formatted_name)
+                                unique_name = f"{name_part}_{stand_detail.company.id}{ext}"
+                                zip_file.write(file_path, arcname=unique_name)
+                                arcnames_added.add(unique_name)
+                                files_count += 1
+                        else:
+                            logger.warning(f"File does not exist: {file_path} for company {stand_detail.company.name}")
+                    except Exception as e:
+                        logger.warning(f"Could not add logo_sign_file for company {stand_detail.company.name}: {e}", exc_info=True)
+                        continue
+
+            # Export fire_cert from StandDetails (goes to fire_certs/ folder)
+            stand_details_with_certs = StandDetails.objects.filter(
+                fire_cert__isnull=False
+            ).exclude(fire_cert='').select_related('company').prefetch_related('company__stand_all', 'company__basic_data')
+            
+            for stand_detail in stand_details_with_certs:
+                if stand_detail.fire_cert:
+                    try:
+                        file_path = stand_detail.fire_cert.path
+                        if os.path.exists(file_path):
+                            formatted_name = self._format_filename(
+                                stand_detail.company,
+                                stand_detail.fire_cert.name,
+                                'fire_certs/'
+                            )
+                            # Only add if arcname is unique (handle duplicate names)
+                            if formatted_name not in arcnames_added:
+                                zip_file.write(file_path, arcname=formatted_name)
+                                arcnames_added.add(formatted_name)
+                                files_count += 1
+                            else:
+                                # If duplicate name, append company ID to make it unique
+                                name_part, ext = os.path.splitext(formatted_name)
+                                unique_name = f"{name_part}_{stand_detail.company.id}{ext}"
+                                zip_file.write(file_path, arcname=unique_name)
+                                arcnames_added.add(unique_name)
+                                files_count += 1
+                        else:
+                            logger.warning(f"File does not exist: {file_path} for company {stand_detail.company.name}")
+                    except Exception as e:
+                        logger.warning(f"Could not add fire_cert for company {stand_detail.company.name}: {e}", exc_info=True)
+                        continue
+
+            # Export logo_file from Description (goes to catalogue_logos/ folder)
+            descriptions_with_logos = Description.objects.filter(
+                logo_file__isnull=False
+            ).exclude(logo_file='').select_related('company').prefetch_related('company__stand_all', 'company__basic_data')
+            
+            for description in descriptions_with_logos:
+                if description.logo_file:
+                    try:
+                        file_path = description.logo_file.path
+                        if os.path.exists(file_path):
+                            formatted_name = self._format_filename(
+                                description.company,
+                                description.logo_file.name,
+                                'catalogue_logos/'
+                            )
+                            # Only add if arcname is unique (handle duplicate names)
+                            if formatted_name not in arcnames_added:
+                                zip_file.write(file_path, arcname=formatted_name)
+                                arcnames_added.add(formatted_name)
+                                files_count += 1
+                            else:
+                                # If duplicate name, append company ID to make it unique
+                                name_part, ext = os.path.splitext(formatted_name)
+                                unique_name = f"{name_part}_{description.company.id}{ext}"
+                                zip_file.write(file_path, arcname=unique_name)
+                                arcnames_added.add(unique_name)
+                                files_count += 1
+                        else:
+                            logger.warning(f"File does not exist: {file_path} for company {description.company.name}")
+                    except Exception as e:
+                        logger.warning(f"Could not add logo_file for company {description.company.name}: {e}", exc_info=True)
+                        continue
+
+        buffer.seek(0)
+        
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f'media_files_{timestamp}.zip'
+        
+        response = HttpResponse(buffer.getvalue(), content_type='application/zip')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        
+        logger.info(
+            f"Media files ZIP export initiated by user {request.user.username} - "
+            f"{files_count} files exported"
+        )
         return response

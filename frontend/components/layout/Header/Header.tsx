@@ -69,11 +69,11 @@ export function Header({ navigationItems }: HeaderProps) {
               {navigationItems.map((item) => {
                 const isActive = pathname === item.url;
                 return (
-                  <Link
-                    key={item.url}
-                    href={item.url}
-                    className={cn(
-                      "px-4 py-2 text-sm font-medium rounded-md transition-colors",
+                <Link
+                  key={item.url}
+                  href={item.url}
+                  className={cn(
+                    "px-4 py-2 text-sm font-medium rounded-md transition-colors",
                       isActive
                         ? "text-white"
                         : "text-muted-foreground hover:text-foreground"
@@ -97,9 +97,9 @@ export function Header({ navigationItems }: HeaderProps) {
                         e.currentTarget.style.backgroundColor = "transparent";
                       }
                     }}
-                  >
-                    {item.title}
-                  </Link>
+                >
+                  {item.title}
+                </Link>
                 );
               })}
             </nav>

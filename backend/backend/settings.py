@@ -54,6 +54,7 @@ INSTALLED_APPS = [
 
 AUTH_USER_MODEL = "users.User"
 FRONTEND_BASE_URL = os.environ.get("FRONTEND_BASE_URL", "http://localhost:3000")
+BACKEND_BASE_URL = os.environ.get("BACKEND_BASE_URL", "http://localhost:8000")
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',

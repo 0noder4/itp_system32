@@ -5,8 +5,7 @@ Business logic for exporting company data to CSV format
 from companies.models import (
     Company, Form, BasicData, Address, Stand,
     StandDetails, EquipmentItem, EquipmentSelection,
-    Description, FinalData, Lunch,
-    PDI, PDIAttendee, Exhibitor, Workshop, Jobwall,
+    FinalData, Lunch, Workshop, Exhibitor,
     COMPANY_STATUS_CHOICES, STAND_TYPE_CHOICES
 )
 from companies.utils.csv_generator import CSVGenerator
@@ -41,6 +40,12 @@ class ExportService:
             filters: Not used (kept for compatibility)
         """
         self.user = user
+        # Fetch active equipment items for dynamic column generation
+        self.equipment_items = list(EquipmentItem.objects.filter(is_active=True).order_by('category', 'name_pl'))
+        # Create a mapping of equipment_item.id to column header name
+        self.equipment_headers = {
+            item.id: f"{item.name_pl} (sztuk)" for item in self.equipment_items
+        }
 
     def build_queryset(self):
         """
@@ -61,12 +66,9 @@ class ExportService:
             'stand_details__equipment_selections__equipment_item',
             'stand_all',
             'workshops',
-            'jobwalls',
-            'description',
             'finaldata',
             'finaldata__lunches',
             'finaldata__pdis',
-            'finaldata__pdis__pdiattendees',
             'finaldata__pdis__exhibitors',
         ).order_by('id')
 
@@ -88,63 +90,82 @@ class ExportService:
         parts = [p for p in [first_name, last_name] if p]
         return ' '.join(parts) if parts else ''
 
-    def _safe_file_url(self, file_field) -> str:
-        """
-        Safely get URL from FileField, handling missing/corrupted files.
-
-        Args:
-            file_field: Django FileField or ImageField
-
-        Returns:
-            File URL or empty string if file doesn't exist
-        """
-        if not file_field:
-            return ''
-
-        try:
-            # Check if file exists and has a valid URL
-            if hasattr(file_field, 'url') and file_field.name:
-                return file_field.url
-        except (ValueError, AttributeError) as e:
-            logger.warning(f"Error accessing file URL: {str(e)}")
-            return ''
-
-        return ''
-
     def generate_csv(self):
         """
         Generate CSV using streaming iterator.
 
         Yields:
-            CSV chunks (header + data rows) as strings
-        """
-        queryset = self.build_queryset()
+            CSV chunks (header + data rows) as strings with UTF-8 encoding
 
-        headers = self._build_headers()
+        Raises:
+            Exception: If queryset building or header generation fails
+        """
+        try:
+            queryset = self.build_queryset()
+        except Exception as e:
+            logger.error(
+                f"Error building queryset for CSV export (user: {self.user.username}): {str(e)}",
+                exc_info=True
+            )
+            raise
+
+        try:
+            headers = self._build_headers()
+        except Exception as e:
+            logger.error(
+                f"Error building CSV headers (user: {self.user.username}): {str(e)}",
+                exc_info=True
+            )
+            raise
 
         generator = CSVGenerator(headers=headers)
 
+        # UTF-8 BOM for Excel compatibility
         yield '\ufeff'
 
-        yield generator.write_header()
+        try:
+            yield generator.write_header()
+        except Exception as e:
+            logger.error(
+                f"Error writing CSV header (user: {self.user.username}): {str(e)}",
+                exc_info=True
+            )
+            raise
 
         exported_count = 0
         error_count = 0
 
-        for company in queryset.iterator(chunk_size=100):
-            try:
-                rows = self._flatten_company_data(company)
-                for row in rows:
-                    yield generator.write_row(row)
-                exported_count += 1
-            except Exception as e:
-                error_count += 1
-                logger.error(
-                    f"Error exporting company ID {company.id} ({company.name}): {str(e)}",
-                    exc_info=True
-                )
-                # Continue with next company instead of failing entire export
-                continue
+        try:
+            for company in queryset.iterator(chunk_size=100):
+                try:
+                    rows = self._flatten_company_data(company)
+                    for row in rows:
+                        try:
+                            yield generator.write_row(row)
+                        except Exception as e:
+                            error_count += 1
+                            logger.warning(
+                                f"Error writing CSV row for company ID {company.id} "
+                                f"({company.name}): {str(e)}",
+                                exc_info=True
+                            )
+                            # Continue with next row
+                            continue
+                    exported_count += 1
+                except Exception as e:
+                    error_count += 1
+                    logger.error(
+                        f"Error exporting company ID {company.id} ({company.name}): {str(e)}",
+                        exc_info=True
+                    )
+                    # Continue with next company instead of failing entire export
+                    continue
+        except Exception as e:
+            logger.error(
+                f"Error during CSV data iteration (user: {self.user.username}): {str(e)}",
+                exc_info=True
+            )
+            raise
 
         logger.info(
             f"CSV export completed for user {self.user.username} - "
@@ -154,36 +175,40 @@ class ExportService:
     def _build_headers(self) -> List[str]:
         """
         Build CSV header - all fields always exported.
-        Headers match frontend translations from pl.json.
+        Equipment columns are dynamically generated from active EquipmentItem objects.
 
         Returns:
             List of column headers
         """
-        return [
+        headers = [
             'ID', 'Nazwa', 'Email', 'Status', 'Przedstawiciel', 'FR',
             # Basic Data (Stage 1)
             'Pełna nazwa firmy', 'NIP', 'Ulica', 'Numer budynku', 'Numer lokalu',
             'Miasto', 'Kod pocztowy', 'Kraj',
-            # Stand Info
-            'Dzień targów', 'Numer stoiska', 'Rozmiar stoiska',
+            # Stand Info - Separated by day
+            'Dzień 1 - Numer stoiska', 'Dzień 1 - Rozmiar stoiska',
+            'Dzień 2 - Numer stoiska', 'Dzień 2 - Rozmiar stoiska',
             # Stand Details (Stage 2)
-            'Typ stanowiska', 'Szczegóły zabudowy', 'Tekst na fryzie', 'Logo na szyldzie (URL)', 'Certyfikat niepalności',
-            # Equipment (Furniture) - Total quantities (package + ordered)
-            'Lada łukowa (sztuk)', 'Krzesło barowe (sztuk)', 'Krzesło (sztuk)',
-            'Stolik kawowy (sztuk)', 'Telewizor (sztuk)', 'Stojak na ulotki (sztuk)',
-            'Inne wyposażenie',
+            'Typ stanowiska', 'Szczegóły zabudowy', 'Tekst na fryzie',
+        ]
+        
+        # Add dynamically generated equipment headers
+        equipment_headers = [self.equipment_headers[item.id] for item in self.equipment_items]
+        headers.extend(equipment_headers)
+        
+        # Add remaining headers
+        headers.extend([
             # Workshops (Stage 3)
             'Poprowadzi warsztaty', 'Uwagi do warsztatów',
-            # Jobwall (Stage 4)
-            'Oferty pracy',
             # Final Data (Stage 5)
             'Urządzenia elektryczne podczas targów', 'Łączna moc urządzeń',
-            'Dzień 1 - obiady', 'Ilość obiadów - dzień 1', 'Informacje o diecie - dzień 1',
-            'Dzień 2 - obiady', 'Ilość obiadów - dzień 2', 'Informacje o diecie - dzień 2',
-            'Łączna liczba zaproszeń PDI', 'PDI - Uczestnicy', 'Delegaci firmy',
-            # Marketing (Stage 4)
-            'Opis firmy do katalogu', 'Logo do katalogu (URL)',
-        ]
+            'Dzień 1 - obiady', 'Ilość obiadów - dzień 1',
+            'Dzień 2 - obiady', 'Ilość obiadów - dzień 2',
+            # Delegates (Exhibitors)
+            'Delegaci firmy',
+        ])
+        
+        return headers
 
     def _flatten_company_data(self, company: Company) -> List[Dict]:
         """
@@ -242,19 +267,31 @@ class ExportService:
             except AttributeError as e:
                 logger.warning(f"Error extracting basic data for company {company.id}: {str(e)}")
 
-        # Stand information
+        # Stand information - Separated by day
         try:
             stands = list(company.stand_all.all())
-            if stands:
-                base_data.update({
-                    'Dzień targów': ', '.join([s.get_day_display() for s in stands]),
-                    'Numer stoiska': ', '.join([str(s.stand_number) for s in stands]),
-                    'Rozmiar stoiska': ', '.join([s.get_stand_size_display() for s in stands]),
-                })
+            day1_stand = next((s for s in stands if s.day == 'day1'), None)
+            day2_stand = next((s for s in stands if s.day == 'day2'), None)
+            
+            base_data.update({
+                'Dzień 1 - Numer stoiska': day1_stand.stand_number if day1_stand else '',
+                'Dzień 1 - Rozmiar stoiska': day1_stand.get_stand_size_display() if day1_stand else '',
+                'Dzień 2 - Numer stoiska': day2_stand.stand_number if day2_stand else '',
+                'Dzień 2 - Rozmiar stoiska': day2_stand.get_stand_size_display() if day2_stand else '',
+            })
         except (AttributeError, ValueError) as e:
             logger.warning(f"Error extracting stand info for company {company.id}: {str(e)}")
+            base_data.update({
+                'Dzień 1 - Numer stoiska': '',
+                'Dzień 1 - Rozmiar stoiska': '',
+                'Dzień 2 - Numer stoiska': '',
+                'Dzień 2 - Rozmiar stoiska': '',
+            })
 
         # Stand Details (Stage 2)
+        # Initialize equipment columns to 0 for all companies
+        equipment_totals = {header: 0 for header in self.equipment_headers.values()}
+        
         if hasattr(company, 'stand_details') and company.stand_details:
             try:
                 sd = company.stand_details
@@ -262,80 +299,45 @@ class ExportService:
                 base_data.update({
                     'Typ stanowiska': stand_type_display,
                     'Tekst na fryzie': sd.name_sign_text or '',
-                    'Logo na szyldzie (URL)': self._safe_file_url(sd.logo_sign_file),
                 })
 
                 # Self-construction specific fields (only for 'self_construction' type)
                 if sd.stand_type == 'self_construction':
                     base_data.update({
                         'Szczegóły zabudowy': sd.sc_details or '',
-                        'Certyfikat niepalności': self._safe_file_url(sd.fire_cert),
                     })
                 else:
                     base_data.update({
                         'Szczegóły zabudowy': '',
-                        'Certyfikat niepalności': '',
                     })
 
-                # Equipment selections - with TOTAL quantities (included + ordered)
+                # Equipment selections - selection.quantity is already the total quantity
                 equipment_selections = list(sd.equipment_selections.all())
                 if equipment_selections:
-                    # Initialize equipment counters
-                    equipment_totals = {
-                        'Lada łukowa (sztuk)': 0,
-                        'Krzesło barowe (sztuk)': 0,
-                        'Krzesło (sztuk)': 0,
-                        'Stolik kawowy (sztuk)': 0,
-                        'Telewizor (sztuk)': 0,
-                        'Stojak na ulotki (sztuk)': 0,
-                    }
-                    other_equipment = []
-
-                    # Map equipment names to CSV columns
-                    equipment_name_mapping = {
-                        'lada łukowa': 'Lada łukowa (sztuk)',
-                        'curved counter': 'Lada łukowa (sztuk)',
-                        'krzesło barowe': 'Krzesło barowe (sztuk)',
-                        'bar stool': 'Krzesło barowe (sztuk)',
-                        'krzesło': 'Krzesło (sztuk)',
-                        'chair': 'Krzesło (sztuk)',
-                        'stolik kawowy': 'Stolik kawowy (sztuk)',
-                        'coffee table': 'Stolik kawowy (sztuk)',
-                        'telewizor': 'Telewizor (sztuk)',
-                        'tv': 'Telewizor (sztuk)',
-                        'television': 'Telewizor (sztuk)',
-                        'stojak na ulotki': 'Stojak na ulotki (sztuk)',
-                        'brochure stand': 'Stojak na ulotki (sztuk)',
-                    }
-
+                    # Sum up all selection quantities per equipment item
+                    # Note: selection.quantity already represents the total quantity the user wants,
+                    # not an additional quantity on top of included_quantity
                     for selection in equipment_selections:
                         item = selection.equipment_item
-                        # Calculate TOTAL: included_quantity (from package) + quantity (ordered)
-                        total_quantity = item.included_quantity + selection.quantity
-
-                        # Try to match equipment name to predefined columns
-                        item_name_lower = item.name_pl.lower().strip()
-                        matched = False
-
-                        for key, column_name in equipment_name_mapping.items():
-                            if key in item_name_lower:
-                                equipment_totals[column_name] += total_quantity
-                                matched = True
-                                break
-
-                        # If not matched, add to "other equipment"
-                        if not matched:
-                            other_equipment.append(f"{item.name_pl} x{total_quantity}")
-
-                    # Update base_data with equipment totals
-                    base_data.update(equipment_totals)
-
-                    # Add other equipment as comma-separated list
-                    if other_equipment:
-                        base_data['Inne wyposażenie'] = ', '.join(other_equipment)
+                        if item.id in self.equipment_headers:
+                            header_name = self.equipment_headers[item.id]
+                            # Sum up quantities if there are multiple selections for the same item
+                            equipment_totals[header_name] += selection.quantity
+                        # Note: If equipment item is not active, it won't be in headers, so we skip it
+                        # This ensures consistency with the header generation
 
             except (AttributeError, ValueError, TypeError) as e:
                 logger.warning(f"Error extracting stand details for company {company.id}: {str(e)}")
+        else:
+            # No stand_details, initialize stand detail fields
+            base_data.update({
+                'Typ stanowiska': '',
+                'Szczegóły zabudowy': '',
+                'Tekst na fryzie': '',
+            })
+        
+        # Update base_data with equipment totals (all equipment items, even if 0)
+        base_data.update(equipment_totals)
 
         # Workshops (Stage 3)
         if hasattr(company, 'workshops') and company.workshops:
@@ -348,18 +350,7 @@ class ExportService:
             except AttributeError as e:
                 logger.warning(f"Error extracting workshop data for company {company.id}: {str(e)}")
 
-        # Jobwall (Stage 4)
-        try:
-            jobwalls = list(company.jobwalls.all())
-            if jobwalls:
-                jobwall_list = []
-                for jw in jobwalls:
-                    jobwall_list.append(
-                        f"{jw.name} ({jw.get_form_display()}, {jw.get_workload_display()}, {jw.get_contract_display()})"
-                    )
-                base_data['Oferty pracy'] = '; '.join(jobwall_list)
-        except (AttributeError, ValueError) as e:
-            logger.warning(f"Error extracting jobwall data for company {company.id}: {str(e)}")
+        # Jobwall removed from export
 
         # Final Data (Stage 5)
         if hasattr(company, 'finaldata') and company.finaldata:
@@ -378,52 +369,40 @@ class ExportService:
                             base_data.update({
                                 'Dzień 1 - obiady': lunch.get_day_display(),
                                 'Ilość obiadów - dzień 1': lunch.lunch_quantity,
-                                'Informacje o diecie - dzień 1': lunch.diet_info or '',
                             })
                         elif i == 1:
                             base_data.update({
                                 'Dzień 2 - obiady': lunch.get_day_display(),
                                 'Ilość obiadów - dzień 2': lunch.lunch_quantity,
-                                'Informacje o diecie - dzień 2': lunch.diet_info or '',
                             })
                 except (AttributeError, ValueError) as e:
                     logger.warning(f"Error extracting lunch data for company {company.id}: {str(e)}")
 
-                # PDI
+                # Exhibitors (Delegates) - Keep these
                 if hasattr(fd, 'pdis') and fd.pdis:
                     try:
                         pdi = fd.pdis
-                        base_data['Łączna liczba zaproszeń PDI'] = pdi.tickets_quantity
-
-                        pdi_attendees = list(pdi.pdiattendees.all())
-                        if pdi_attendees:
-                            attendee_list = []
-                            for att in pdi_attendees:
-                                attendee_list.append(f"{self._format_full_name(att.name, att.surname)} ({att.email})")
-                            base_data['PDI - Uczestnicy'] = '; '.join(attendee_list)
-
-                        # Exhibitors (delegates in UI)
                         exhibitors = list(pdi.exhibitors.all())
                         if exhibitors:
                             exhibitor_list = []
                             for exh in exhibitors:
                                 exhibitor_list.append(f"{self._format_full_name(exh.name, exh.surname)} ({exh.phone_number})")
                             base_data['Delegaci firmy'] = ' | '.join(exhibitor_list)
+                        else:
+                            base_data['Delegaci firmy'] = ''
                     except (AttributeError, ValueError) as e:
-                        logger.warning(f"Error extracting PDI data for company {company.id}: {str(e)}")
+                        logger.warning(f"Error extracting exhibitors/delegates for company {company.id}: {str(e)}")
+                        base_data['Delegaci firmy'] = ''
+                else:
+                    base_data['Delegaci firmy'] = ''
 
             except AttributeError as e:
                 logger.warning(f"Error extracting final data for company {company.id}: {str(e)}")
+                base_data['Delegaci firmy'] = ''
+        else:
+            # No final data, initialize delegates field
+            base_data['Delegaci firmy'] = ''
 
-        # Description (Marketing - Stage 4)
-        if hasattr(company, 'description') and company.description:
-            try:
-                desc = company.description
-                base_data.update({
-                    'Opis firmy do katalogu': desc.descr or '',
-                    'Logo do katalogu (URL)': self._safe_file_url(desc.logo_file),
-                })
-            except AttributeError as e:
-                logger.warning(f"Error extracting description for company {company.id}: {str(e)}")
+        # Description removed from export
 
         return [base_data]

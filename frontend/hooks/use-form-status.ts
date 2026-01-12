@@ -121,6 +121,7 @@ export function useFormStatus(): UseFormStatusReturn {
       ] as boolean) ?? false;
     const feedback = formStatus?.feedbacks[stageKey];
     const dataExists = formStatus?.data_exists[stageKey] ?? false;
+    const completedAt = formStatus?.completion_timestamps?.[stageKey] ?? null;
 
     stages.push({
       stageNumber: i,
@@ -130,6 +131,7 @@ export function useFormStatus(): UseFormStatusReturn {
       isCompleted,
       feedback: feedback as StageFeedback | undefined,
       dataExists,
+      completedAt: completedAt || undefined,
     });
 
     // Determine current stage (first non-accepted stage)

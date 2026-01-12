@@ -327,3 +327,126 @@ export const downloadOrderSummaryPDF = async (
     throw new Error(errorMessage);
   }
 };
+
+// Download companies CSV export
+export const downloadCompaniesCSV = async (): Promise<void> => {
+  try {
+    const response = await apiClient.get("/api/export/csv/", {
+      responseType: "blob",
+    });
+
+    // Create blob from response with UTF-8 encoding
+    const blob = new Blob([response.data], {
+      type: "text/csv;charset=utf-8;",
+    });
+
+    // Create download link
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+
+    // Extract filename from Content-Disposition header if available
+    const contentDisposition = response.headers["content-disposition"];
+    let filename = "companies_export.csv";
+    if (contentDisposition) {
+      // Handle both regular filename and RFC 5987 encoded filename (filename*=UTF-8''...)
+      const filenameMatch =
+        contentDisposition.match(/filename\*=UTF-8''(.+)/i) ||
+        contentDisposition.match(/filename="?(.+)"?/i);
+      if (filenameMatch) {
+        filename = decodeURIComponent(filenameMatch[1]);
+      }
+    }
+
+    link.setAttribute("download", filename);
+    document.body.appendChild(link);
+    link.click();
+
+    // Cleanup
+    link.parentNode?.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  } catch (error: any) {
+    const errorMessage =
+      error.response?.data?.detail ||
+      error.response?.data?.message ||
+      "An error occurred while downloading the CSV file";
+
+    // If response is a blob (error response), try to read it as text
+    if (error.response?.data instanceof Blob) {
+      const text = await error.response.data.text();
+      try {
+        const jsonError = JSON.parse(text);
+        throw new Error(jsonError.detail || jsonError.error || errorMessage);
+      } catch {
+        // If not JSON, it might be plain text error
+        if (text) {
+          throw new Error(text);
+        }
+        throw new Error(errorMessage);
+      }
+    }
+
+    throw new Error(errorMessage);
+  }
+};
+
+// Download media files export
+export const downloadMediaFiles = async (): Promise<void> => {
+  try {
+    const response = await apiClient.get("/api/export/media/", {
+      responseType: "blob",
+    });
+
+    // Create blob from response
+    const blob = new Blob([response.data], {
+      type: "application/zip",
+    });
+
+    // Create download link
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+
+    // Extract filename from Content-Disposition header if available
+    const contentDisposition = response.headers["content-disposition"];
+    let filename = "media_files.zip";
+    if (contentDisposition) {
+      const filenameMatch =
+        contentDisposition.match(/filename\*=UTF-8''(.+)/i) ||
+        contentDisposition.match(/filename="?(.+)"?/i);
+      if (filenameMatch) {
+        filename = decodeURIComponent(filenameMatch[1]);
+      }
+    }
+
+    link.setAttribute("download", filename);
+    document.body.appendChild(link);
+    link.click();
+
+    // Cleanup
+    link.parentNode?.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  } catch (error: any) {
+    const errorMessage =
+      error.response?.data?.detail ||
+      error.response?.data?.message ||
+      "An error occurred while downloading the media files";
+
+    // If response is a blob (error response), try to read it as text
+    if (error.response?.data instanceof Blob) {
+      const text = await error.response.data.text();
+      try {
+        const jsonError = JSON.parse(text);
+        throw new Error(jsonError.detail || jsonError.error || errorMessage);
+      } catch {
+        // If not JSON, it might be plain text error
+        if (text) {
+          throw new Error(text);
+        }
+        throw new Error(errorMessage);
+      }
+    }
+
+    throw new Error(errorMessage);
+  }
+};

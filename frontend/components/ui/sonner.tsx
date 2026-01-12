@@ -9,9 +9,20 @@ import {
 } from "lucide-react"
 import { useTheme } from "next-themes"
 import { Toaster as Sonner, type ToasterProps } from "sonner"
+import { getUserInfo } from "@/lib/auth"
+import { ACCENT_COLOR, STAFF_ACCENT_COLOR } from "@/lib/colors"
+import React, { useEffect, useState } from "react"
 
 const Toaster = ({ ...props }: ToasterProps) => {
   const { theme = "system" } = useTheme()
+  const [accentColor, setAccentColor] = useState(ACCENT_COLOR)
+
+  useEffect(() => {
+    // Determine accent color based on logged-in user type
+    const userInfo = getUserInfo()
+    const isStaff = userInfo?.type === "admin" || userInfo?.type === "staff"
+    setAccentColor(isStaff ? STAFF_ACCENT_COLOR : ACCENT_COLOR)
+  }, [])
 
   return (
     <Sonner
@@ -28,9 +39,9 @@ const Toaster = ({ ...props }: ToasterProps) => {
         {
           "--normal-bg": "var(--popover)",
           "--normal-text": "var(--popover-foreground)",
-          "--normal-border": "var(--border)",
+          "--normal-border": accentColor,
           "--success-bg": "var(--popover)",
-          "--success-border": "var(--border)",
+          "--success-border": accentColor,
           "--info-bg": "var(--information)",
           "--info-border": "var(--information)",
           "--info-text": "var(--information-foreground)",
@@ -43,6 +54,13 @@ const Toaster = ({ ...props }: ToasterProps) => {
           "--border-radius": "var(--radius)",
         } as React.CSSProperties
       }
+      toastOptions={{
+        classNames: {
+          toast: "!font-sans",
+          title: "!font-semibold",
+          description: "!opacity-90",
+        },
+      }}
       {...props}
     />
   )

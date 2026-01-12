@@ -101,8 +101,8 @@ export function StageReminderCard() {
   };
 
   return (
-    <Card className="flex flex-1 flex-col overflow-hidden gap-2">
-      <CardHeader>
+    <Card className="flex flex-col md:flex-1 w-full md:w-auto gap-2 shrink-0 md:overflow-hidden">
+      <CardHeader className="shrink-0">
         <div className="flex items-center gap-2">
           <div className="flex flex-col gap-1">
             <CardTitle>{t("reminders.title")}</CardTitle>
@@ -110,7 +110,7 @@ export function StageReminderCard() {
           </div>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex-1 md:overflow-auto">
         <FieldGroup>
           <Field>
             <FieldLabel htmlFor="reminder-stage-select">

@@ -101,87 +101,86 @@ export function CompaniesTable({
   };
 
   return (
-    <div className="rounded-md border">
-      <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>{t("companies.table.id")}</TableHead>
-              <TableHead>{t("companies.table.name")}</TableHead>
-              <TableHead>{t("companies.table.status")}</TableHead>
-              <TableHead>{t("companies.table.email")}</TableHead>
-              <TableHead>{t("companies.table.representative")}</TableHead>
-              <TableHead>{t("companies.table.frResp")}</TableHead>
-              <TableHead>{t("companies.table.standNumber")}</TableHead>
-              <TableHead>{t("companies.table.completedStages")}</TableHead>
-              <TableHead>{t("companies.table.createdAt")}</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rows.map((row) => {
-              const tableRow = (
-                <TableRow
-                  key={`${row.type}-${row.data.id}`}
-                  className="cursor-pointer hover:bg-muted/50"
-                  onClick={() => handleRowClick(row)}
-                >
-                  <TableCell className="font-medium">{row.data.id}</TableCell>
-                  <TableCell>
-                    {row.type === "company"
-                      ? row.data.name
-                      : row.data.company_name}
-                  </TableCell>
-                  <TableCell>
-                    <StatusBadges row={row} />
-                  </TableCell>
-                  <TableCell>{row.data.email}</TableCell>
-                  <TableCell>
-                    {row.type === "company" ? (
-                      formatRepresentativeName(
-                        row.data.representative_name,
-                        row.data.representative_surname
-                      )
-                    ) : (
-                      <span className="text-muted-foreground">—</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {row.type === "company"
-                      ? formatFrRespName(
-                          row.data.fr_resp_name,
-                          row.data.fr_resp_surname,
-                          row.data.fr_resp_email
+    <div className="rounded-md border overflow-hidden">
+      <div className="overflow-x-auto">
+        <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="text-xs sm:text-sm px-2 sm:px-4 whitespace-nowrap">{t("companies.table.name")}</TableHead>
+                <TableHead className="text-xs sm:text-sm px-2 sm:px-4 whitespace-nowrap">{t("companies.table.status")}</TableHead>
+                <TableHead className="text-xs sm:text-sm px-2 sm:px-4 whitespace-nowrap hidden sm:table-cell">{t("companies.table.email")}</TableHead>
+                <TableHead className="text-xs sm:text-sm px-2 sm:px-4 whitespace-nowrap hidden md:table-cell">{t("companies.table.representative")}</TableHead>
+                <TableHead className="text-xs sm:text-sm px-2 sm:px-4 whitespace-nowrap hidden lg:table-cell">{t("companies.table.frResp")}</TableHead>
+                <TableHead className="text-xs sm:text-sm px-2 sm:px-4 whitespace-nowrap">{t("companies.table.standNumber")}</TableHead>
+                <TableHead className="text-xs sm:text-sm px-2 sm:px-4 whitespace-nowrap">{t("companies.table.completedStages")}</TableHead>
+                <TableHead className="text-xs sm:text-sm px-2 sm:px-4 whitespace-nowrap">{t("companies.table.createdAt")}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map((row) => {
+                const tableRow = (
+                  <TableRow
+                    key={`${row.type}-${row.data.id}`}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => handleRowClick(row)}
+                  >
+                    <TableCell className="text-xs sm:text-sm px-2 sm:px-4 whitespace-nowrap">
+                      {row.type === "company"
+                        ? row.data.name
+                        : row.data.company_name}
+                    </TableCell>
+                    <TableCell className="px-2 sm:px-4 whitespace-nowrap">
+                      <StatusBadges row={row} />
+                    </TableCell>
+                    <TableCell className="text-xs sm:text-sm px-2 sm:px-4 whitespace-nowrap hidden sm:table-cell">{row.data.email}</TableCell>
+                    <TableCell className="text-xs sm:text-sm px-2 sm:px-4 whitespace-nowrap hidden md:table-cell">
+                      {row.type === "company" ? (
+                        formatRepresentativeName(
+                          row.data.representative_name,
+                          row.data.representative_surname
                         )
-                      : formatFrRespName(
-                          row.data.fr_resp_name,
-                          row.data.fr_resp_surname,
-                          row.data.fr_resp_email
-                        )}
-                  </TableCell>
-                  <TableCell>
-                    {row.type === "company" ? (
-                      <span className="text-sm">
-                        {formatStandDisplay(
-                          row.data.day1_stand,
-                          row.data.day2_stand,
-                          t
-                        )}
-                      </span>
-                    ) : (
-                      <span className="text-muted-foreground">—</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {row.type === "company" ? (
-                      <span>
-                        {row.data.completed_stages_count}/5
-                      </span>
-                    ) : (
-                      <span className="text-muted-foreground">—</span>
-                    )}
-                  </TableCell>
-                  <TableCell>{getCreatedAtCell(row)}</TableCell>
-                </TableRow>
-              );
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-xs sm:text-sm px-2 sm:px-4 whitespace-nowrap hidden lg:table-cell">
+                      {row.type === "company"
+                        ? formatFrRespName(
+                            row.data.fr_resp_name,
+                            row.data.fr_resp_surname,
+                            row.data.fr_resp_email
+                          )
+                        : formatFrRespName(
+                            row.data.fr_resp_name,
+                            row.data.fr_resp_surname,
+                            row.data.fr_resp_email
+                          )}
+                    </TableCell>
+                    <TableCell className="text-xs sm:text-sm px-2 sm:px-4 whitespace-nowrap">
+                      {row.type === "company" ? (
+                        <span className="text-xs sm:text-sm">
+                          {formatStandDisplay(
+                            row.data.day1_stand,
+                            row.data.day2_stand,
+                            t
+                          )}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-xs sm:text-sm px-2 sm:px-4 whitespace-nowrap">
+                      {row.type === "company" ? (
+                        <span>
+                          {row.data.completed_stages_count}/5
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-xs sm:text-sm px-2 sm:px-4 whitespace-nowrap">{getCreatedAtCell(row)}</TableCell>
+                  </TableRow>
+                );
 
               if (row.type === "company") {
                 return (
@@ -209,6 +208,7 @@ export function CompaniesTable({
             })}
           </TableBody>
         </Table>
+      </div>
     </div>
   );
 }

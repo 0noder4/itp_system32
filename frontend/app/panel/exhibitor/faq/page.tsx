@@ -68,17 +68,6 @@ export default function FAQPage() {
       ],
     },
     {
-      id: "ownConstruction",
-      title: t("exhibitor.faq.categories.ownConstruction"),
-      questions: [
-        {
-          id: "ownSetup",
-          question: t("exhibitor.faq.materials.ownSetup.question"),
-          answer: t("exhibitor.faq.materials.ownSetup.answer"),
-        },
-      ],
-    },
-    {
       id: "support",
       title: t("exhibitor.faq.categories.support"),
       questions: [
@@ -96,6 +85,17 @@ export default function FAQPage() {
           id: "coffee",
           question: t("exhibitor.faq.support.coffee.question"),
           answer: t("exhibitor.faq.support.coffee.answer"),
+        },
+      ],
+    },
+    {
+      id: "ownConstruction",
+      title: t("exhibitor.faq.categories.ownConstruction"),
+      questions: [
+        {
+          id: "ownSetup",
+          question: t("exhibitor.faq.materials.ownSetup.question"),
+          answer: t("exhibitor.faq.materials.ownSetup.answer"),
         },
       ],
     },
@@ -167,11 +167,11 @@ export default function FAQPage() {
                 "rounded-lg px-4 py-2.5 text-sm font-medium transition-all",
                 "data-[state=inactive]:bg-muted data-[state=inactive]:text-muted-foreground hover:bg-muted/80"
               )}
-                style={{
-                  backgroundColor:
-                    selectedCategory === "all" ? ACCENT_COLOR : undefined,
-                  color: selectedCategory === "all" ? "white" : undefined,
-                }}
+              style={{
+                backgroundColor:
+                  selectedCategory === "all" ? ACCENT_COLOR : undefined,
+                color: selectedCategory === "all" ? "white" : undefined,
+              }}
             >
               {t("exhibitor.faq.allCategories")}
             </TabsTrigger>
@@ -239,4 +239,3 @@ export default function FAQPage() {
     </div>
   );
 }
-

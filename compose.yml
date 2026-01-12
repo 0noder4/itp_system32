@@ -37,6 +37,8 @@ services:
       EMAIL_PORT: ${EMAIL_PORT}
       EMAIL_HOST_USER: ${EMAIL_HOST_USER}
       EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD}
+      EMAIL_USE_TLS: ${EMAIL_USE_TLS:-}
+      EMAIL_USE_SSL: ${EMAIL_USE_SSL:-}
     env_file:
       - .env
     ports:
@@ -73,22 +75,22 @@ services:
     depends_on:
       - backend
   mailpit:
-        image: axllent/mailpit
-        container_name: ${PROJECT_NAME}_mailpit
-        restart: unless-stopped
-        volumes:
-            - data:/data
-        ports:
-            - 8025:8025
-            - 1025:1025
-        environment:
-            MP_MAX_MESSAGES: 5000
-            MP_DATABASE: /data/mailpit.db
-            MP_SMTP_AUTH_ACCEPT_ANY: 1
-            MP_SMTP_AUTH_ALLOW_INSECURE: 1
-            MP_UI_AUTH: "${EMAIL_HOST_USER}:${EMAIL_HOST_PASSWORD}" 
-        networks:
-          - internal
+    image: axllent/mailpit
+    container_name: ${PROJECT_NAME}_mailpit
+    restart: unless-stopped
+    volumes:
+      - data:/data
+    ports:
+      - 8025:8025
+      - 1025:1025
+    environment:
+      MP_MAX_MESSAGES: 5000
+      MP_DATABASE: /data/mailpit.db
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
+      MP_UI_AUTH: "${EMAIL_HOST_USER}:${EMAIL_HOST_PASSWORD}"
+    networks:
+      - internal
 
 volumes:
   data:

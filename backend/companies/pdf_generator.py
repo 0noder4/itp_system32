@@ -116,6 +116,7 @@ if not font_registered:
 
 # Theme colors matching web application
 PRIMARY_COLOR = colors.HexColor('#333333')  # Dark gray (primary)
+ACCENT_COLOR = colors.HexColor('#F55718')   # Orange accent (matching web app)
 BORDER_COLOR = colors.HexColor('#EBEBEB')   # Light gray (border)
 MUTED_COLOR = colors.HexColor('#F5F5F5')    # Very light gray (muted)
 TEXT_COLOR = colors.HexColor('#252525')     # Dark text
@@ -136,16 +137,21 @@ class OrderSummaryPDFGenerator:
         self.company = company
         self.language = language if language in ['en', 'pl'] else 'pl'
         self.buffer = BytesIO()
+        self.generation_date = timezone.now()
         self.doc = SimpleDocTemplate(
             self.buffer,
             pagesize=A4,
             rightMargin=2*cm,
             leftMargin=2*cm,
             topMargin=2*cm,
-            bottomMargin=2*cm
+            bottomMargin=2.5*cm  # Increased bottom margin for footer
         )
         self.story = []
         self.styles = getSampleStyleSheet()
+        
+        # Set up footer callbacks
+        self.doc.onFirstPage = self._add_footer
+        self.doc.onLaterPages = self._add_footer
         
         # Set font names - use registered fonts or fallback to built-in
         from reportlab.pdfbase import pdfmetrics
@@ -195,10 +201,10 @@ class OrderSummaryPDFGenerator:
             parent=self.styles['Normal'],  # Use Normal as parent to avoid font parsing issues
             fontName=self._font_bold,
             fontSize=FONT_SIZE_TITLE,
-            textColor=PRIMARY_COLOR,
+            textColor=ACCENT_COLOR,  # Use accent color for title
             spaceAfter=20,
             spaceBefore=10,
-            alignment=TA_CENTER,
+            alignment=TA_LEFT,  # Left align title
             leading=FONT_SIZE_TITLE + 4,
             leftIndent=0,
             rightIndent=0
@@ -248,7 +254,7 @@ class OrderSummaryPDFGenerator:
             fontName=self._font_bold,
             fontSize=FONT_SIZE_HEADING + 2,
             textColor=PRIMARY_COLOR,
-            alignment=TA_CENTER,
+            alignment=TA_LEFT,  # Left align company name
             spaceAfter=10,
             leading=FONT_SIZE_HEADING + 6,
             leftIndent=0,
@@ -307,8 +313,8 @@ class OrderSummaryPDFGenerator:
         if os.path.exists(logo_path):
             try:
                 # Logo width - adjust to fit page (A4 width - margins = ~16cm)
-                # Keep aspect ratio, set width to reasonable size (e.g., 10cm)
-                logo_width = 10 * cm
+                # Keep aspect ratio, set width to reasonable size (e.g., 7cm - smaller)
+                logo_width = 7 * cm
                 logo_height = None
                 
                 # Try to get image dimensions using PIL - REQUIRED for ReportLab
@@ -350,7 +356,7 @@ class OrderSummaryPDFGenerator:
                             logo = Image(logo_path, width=logo_width_float, height=logo_height_float)
                             logo.hAlign = 'CENTER'
                             self.story.append(logo)
-                            self.story.append(Spacer(1, 0.5*cm))
+                            self.story.append(Spacer(1, 0.2*cm))  # Reduced spacing
                         except Exception as img_error:
                             # ReportLab Image creation failed, skip logo
                             logger = logging.getLogger(__name__)
@@ -367,7 +373,7 @@ class OrderSummaryPDFGenerator:
             "Podsumowanie zamówienia"
         )
         self.story.append(Paragraph(title, self.title_style))
-        self.story.append(Spacer(1, 0.4*cm))
+        self.story.append(Spacer(1, 0.2*cm))  # Reduced spacing
         
         # Company full name
         try:
@@ -379,15 +385,7 @@ class OrderSummaryPDFGenerator:
         self.story.append(Paragraph(company_full_name, self.company_name_style))
         self.story.append(Spacer(1, 0.3*cm))
         
-        # Date
-        date_str = timezone.now().strftime(
-            self._t("%B %d, %Y", "%d %B %Y")
-        )
-        date_text = self._t(
-            f"Generated on: {date_str}",
-            f"Wygenerowano: {date_str}"
-        )
-        self.story.append(Paragraph(date_text, self.subtext_style))
+        # Date (removed from header, now in footer)
         self.story.append(Spacer(1, 0.6*cm))
         
     def _add_company_data(self):
@@ -568,7 +566,7 @@ class OrderSummaryPDFGenerator:
             if len(stand_assignments_data) > 1:
                 stand_assignments_table = Table(stand_assignments_data, colWidths=[6*cm, 5*cm, 5*cm])
                 stand_assignments_table.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (-1, 0), PRIMARY_COLOR),
+                    ('BACKGROUND', (0, 0), (-1, 0), ACCENT_COLOR),  # Use accent color for header
                     ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
                     ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
                     ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
@@ -621,16 +619,16 @@ class OrderSummaryPDFGenerator:
                 
                 table = Table(table_data, colWidths=[8*cm, 2.5*cm, 2.5*cm, 3*cm])
                 table.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (-1, 0), PRIMARY_COLOR),
+                    ('BACKGROUND', (0, 0), (-1, 0), ACCENT_COLOR),  # Use accent color for header
                     ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                ('ALIGN', (1, 0), (3, -1), 'CENTER'),
-                ('ALIGN', (4, 1), (-1, -2), 'RIGHT'),
+                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                    ('ALIGN', (1, 0), (3, -1), 'CENTER'),
+                    ('ALIGN', (4, 1), (-1, -2), 'RIGHT'),
                     ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                    ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
+                    ('BOTTOMPADDING', (0, 0), (-1, 0), 10),  # Header padding
                     ('TOPPADDING', (0, 0), (-1, 0), 10),
-                    ('BOTTOMPADDING', (0, 1), (-2, -2), 8),
-                    ('TOPPADDING', (0, 1), (-2, -2), 8),
+                    ('BOTTOMPADDING', (0, 1), (-1, -1), 8),  # Body padding (standardized)
+                    ('TOPPADDING', (0, 1), (-1, -1), 8),
                     ('LEFTPADDING', (0, 0), (-1, -1), 8),
                     ('RIGHTPADDING', (0, 0), (-1, -1), 8),
                     ('BACKGROUND', (0, -1), (-1, -1), MUTED_COLOR),
@@ -651,7 +649,7 @@ class OrderSummaryPDFGenerator:
             if len(stand_assignments_data) > 1:
                 stand_assignments_table = Table(stand_assignments_data, colWidths=[6*cm, 5*cm, 5*cm])
                 stand_assignments_table.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (-1, 0), PRIMARY_COLOR),
+                    ('BACKGROUND', (0, 0), (-1, 0), ACCENT_COLOR),  # Use accent color for header
                     ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
                     ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
                     ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
@@ -793,8 +791,8 @@ class OrderSummaryPDFGenerator:
                     ('VALIGN', (0, 0), (-1, -1), 'TOP'),
                     ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
                     ('TOPPADDING', (0, 0), (-1, -1), 8),
-                    ('LEFTPADDING', (0, 0), (-1, -1), 6),
-                    ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 8),  # Standardized padding
+                    ('RIGHTPADDING', (0, 0), (-1, -1), 8),  # Standardized padding
                     ('BACKGROUND', (1, 0), (1, -1), colors.white),
                     ('TEXTCOLOR', (1, 0), (1, -1), TEXT_COLOR),
                     ('GRID', (0, 0), (-1, -1), 0.5, BORDER_COLOR),
@@ -842,11 +840,20 @@ class OrderSummaryPDFGenerator:
                     Paragraph(self._t("Diet Info", "Informacje o dietach"), header_style)
                 ])
                 
+                # Get job fair dates from settings
+                system_settings = Settings.get_settings()
+                
                 for lunch in lunches:
-                    day_display = self._t(
-                        "Day 1 (March 10, 2025)" if lunch.day == 'day1' else "Day 2 (March 11, 2025)",
-                        "Dzień 1 (10.03.2025)" if lunch.day == 'day1' else "Dzień 2 (11.03.2025)"
-                    )
+                    if lunch.day == 'day1':
+                        day_display = self._t(
+                            f"Day 1 ({system_settings.get_day1_display_en()})",
+                            f"Dzień 1 ({system_settings.get_day1_display_pl()})"
+                        )
+                    else:
+                        day_display = self._t(
+                            f"Day 2 ({system_settings.get_day2_display_en()})",
+                            f"Dzień 2 ({system_settings.get_day2_display_pl()})"
+                        )
                     lunch_data.append([
                         Paragraph(day_display, self.normal_style),
                         Paragraph(str(lunch.lunch_quantity), self.normal_style),
@@ -855,18 +862,43 @@ class OrderSummaryPDFGenerator:
                 
                 lunch_table = Table(lunch_data, colWidths=[5*cm, 3*cm, 8*cm])
                 lunch_table.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (-1, 0), PRIMARY_COLOR),
+                    ('BACKGROUND', (0, 0), (-1, 0), ACCENT_COLOR),  # Use accent color for header
                     ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
                     ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
                     ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                    ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
-                    ('TOPPADDING', (0, 0), (-1, -1), 8),
+                    ('BOTTOMPADDING', (0, 0), (-1, 0), 10),  # Header padding
+                    ('TOPPADDING', (0, 0), (-1, 0), 10),
+                    ('BOTTOMPADDING', (0, 1), (-1, -1), 8),  # Body padding
+                    ('TOPPADDING', (0, 1), (-1, -1), 8),
                     ('LEFTPADDING', (0, 0), (-1, -1), 8),
                     ('RIGHTPADDING', (0, 0), (-1, -1), 8),
                     ('GRID', (0, 0), (-1, -1), 0.5, BORDER_COLOR),
                 ]))
                 self.story.append(lunch_table)
                 self.story.append(Spacer(1, 0.3*cm))
+                
+                # Calculate extra lunches and pricing
+                # Group lunches by day and sum quantities per day
+                lunches_by_day = {}
+                for lunch in lunches:
+                    day = lunch.day
+                    quantity = lunch.lunch_quantity or 0
+                    lunches_by_day[day] = lunches_by_day.get(day, 0) + quantity
+                
+                # Calculate extra lunches: 2 free lunches per day
+                free_per_day = 2
+                extra_lunches = sum(max(0, total_for_day - free_per_day) for total_for_day in lunches_by_day.values())
+                
+                # Calculate total cost if there are extra lunches and price is set
+                lunch_price = system_settings.lunch_price or Decimal('0')
+                if extra_lunches > 0 and lunch_price > 0:
+                    total_lunch_cost = extra_lunches * lunch_price
+                    pricing_text = self._t(
+                        f"Additional lunches: {extra_lunches} × {lunch_price:.2f} PLN = {total_lunch_cost:.2f} PLN",
+                        f"Dodatkowe obiady: {extra_lunches} × {lunch_price:.2f} PLN = {total_lunch_cost:.2f} PLN"
+                    )
+                    self.story.append(Paragraph(pricing_text, self.normal_style))
+                    self.story.append(Spacer(1, 0.2*cm))
             
             # PDI
             try:
@@ -907,14 +939,16 @@ class OrderSummaryPDFGenerator:
                         
                         attendee_table = Table(attendee_data, colWidths=[4*cm, 4*cm, 5*cm, 3*cm])
                         attendee_table.setStyle(TableStyle([
-                            ('BACKGROUND', (0, 0), (-1, 0), PRIMARY_COLOR),
+                            ('BACKGROUND', (0, 0), (-1, 0), ACCENT_COLOR),  # Use accent color for header
                             ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
                             ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
                             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-                            ('TOPPADDING', (0, 0), (-1, -1), 6),
-                            ('LEFTPADDING', (0, 0), (-1, -1), 6),
-                            ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+                            ('BOTTOMPADDING', (0, 0), (-1, 0), 10),  # Header padding
+                            ('TOPPADDING', (0, 0), (-1, 0), 10),
+                            ('BOTTOMPADDING', (0, 1), (-1, -1), 8),  # Body padding
+                            ('TOPPADDING', (0, 1), (-1, -1), 8),
+                            ('LEFTPADDING', (0, 0), (-1, -1), 8),
+                            ('RIGHTPADDING', (0, 0), (-1, -1), 8),
                             ('GRID', (0, 0), (-1, -1), 0.5, BORDER_COLOR),
                         ]))
                         self.story.append(attendee_table)
@@ -953,14 +987,16 @@ class OrderSummaryPDFGenerator:
                         
                         exhibitor_table = Table(exhibitor_data, colWidths=[5*cm, 5*cm, 6*cm])
                         exhibitor_table.setStyle(TableStyle([
-                            ('BACKGROUND', (0, 0), (-1, 0), PRIMARY_COLOR),
+                            ('BACKGROUND', (0, 0), (-1, 0), ACCENT_COLOR),  # Use accent color for header
                             ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
                             ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
                             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-                            ('TOPPADDING', (0, 0), (-1, -1), 6),
-                            ('LEFTPADDING', (0, 0), (-1, -1), 6),
-                            ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+                            ('BOTTOMPADDING', (0, 0), (-1, 0), 10),  # Header padding
+                            ('TOPPADDING', (0, 0), (-1, 0), 10),
+                            ('BOTTOMPADDING', (0, 1), (-1, -1), 8),  # Body padding
+                            ('TOPPADDING', (0, 1), (-1, -1), 8),
+                            ('LEFTPADDING', (0, 0), (-1, -1), 8),
+                            ('RIGHTPADDING', (0, 0), (-1, -1), 8),
                             ('GRID', (0, 0), (-1, -1), 0.5, BORDER_COLOR),
                         ]))
                         self.story.append(exhibitor_table)
@@ -983,3 +1019,33 @@ class OrderSummaryPDFGenerator:
             "Informacje o cenach można znaleźć w ofercie oraz w regulaminie."
         )
         self.story.append(Paragraph(pricing_note, self.subtext_style))
+    
+    def _add_footer(self, canvas, doc):
+        """Add footer with generation date on every page."""
+        # Save the current state
+        canvas.saveState()
+        
+        # Format date
+        date_str = self.generation_date.strftime(
+            self._t("%B %d, %Y", "%d %B %Y")
+        )
+        footer_text = self._t(
+            f"Generated on: {date_str}",
+            f"Wygenerowano: {date_str}"
+        )
+        
+        # Set font and color
+        canvas.setFont(self._font_name, FONT_SIZE_SUBTEXT)
+        canvas.setFillColor(SUBTEXT_COLOR)
+        
+        # Calculate footer position (centered at bottom)
+        footer_y = 1*cm
+        text_width = canvas.stringWidth(footer_text, self._font_name, FONT_SIZE_SUBTEXT)
+        page_width = doc.pagesize[0]
+        footer_x = (page_width - text_width) / 2
+        
+        # Draw footer text
+        canvas.drawString(footer_x, footer_y, footer_text)
+        
+        # Restore the state
+        canvas.restoreState()

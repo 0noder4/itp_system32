@@ -36,7 +36,7 @@ export function CompanyStatusBadge({ status }: StatusBadgeProps) {
 }
 
 interface InvitationStatusBadgeProps {
-  status: "accepted" | "expired" | "not accepted";
+  status: "accepted" | "expired" | "not accepted" | "cancelled";
 }
 
 export function InvitationStatusBadge({ status }: InvitationStatusBadgeProps) {
@@ -48,6 +48,7 @@ export function InvitationStatusBadge({ status }: InvitationStatusBadgeProps) {
     expired: "bg-danger/10 text-danger dark:bg-danger/20 dark:text-danger-foreground",
     "not accepted":
       "bg-warning/10 text-warning dark:bg-warning/20 dark:text-warning-foreground",
+    cancelled: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200",
   };
 
   // Map status value to translation key (status has space, key doesn't)

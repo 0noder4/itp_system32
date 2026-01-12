@@ -55,13 +55,17 @@ class EquipmentSelectionAdmin(admin.ModelAdmin):
 @admin.register(Settings)
 class SettingsAdmin(admin.ModelAdmin):
     fieldsets = (
-        ('Jobwall Pricing', {
-            'fields': ('jobwall_price',),
-            'description': 'Set the price for each jobwall posting. This price will be charged per jobwall entry.'
+        ('Pricing', {
+            'fields': ('jobwall_price', 'lunch_price',),
+            'description': 'Set prices for jobwall postings and additional lunches. Jobwall price is charged per posting. Lunch price is charged for each lunch beyond the 2 free lunches per day included in the package (4 free lunches total for 2 days).'
         }),
         ('Stage Deadlines', {
             'fields': ('stage_1_deadline', 'stage_2_deadline', 'stage_3_deadline', 'stage_4_deadline', 'stage_5_deadline',),
             'description': 'Set global deadlines for each form stage. Deadlines are informational only and do not block form access. Leave blank if no deadline is needed for a stage.'
+        }),
+        ('Job Fair Dates', {
+            'fields': ('day1_date', 'day2_date',),
+            'description': 'Set the dates for the job fair days. These dates will be used in emails, PDFs, and throughout the system. Format: YYYY-MM-DD (e.g., 2025-03-10)'
         }),
     )
 

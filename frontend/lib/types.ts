@@ -62,7 +62,7 @@ export interface CompanyInvitation {
   expires_at: string;
   is_accepted: boolean;
   language: "en" | "pl";
-  invitation_status: "accepted" | "expired" | "not accepted";
+  invitation_status: "accepted" | "expired" | "not accepted" | "cancelled";
   invitation_link: string;
   fr_resp: number | null;
   fr_resp_name: string | null;
@@ -104,6 +104,7 @@ export interface FormStatusResponse {
   form: Form;
   feedbacks: Record<string, StageFeedback>;
   data_exists: Record<string, boolean>;
+  completion_timestamps?: Record<string, string | null>; // ISO date strings or null - timestamps when stages were completed
 }
 
 // Stage status for UI display
@@ -125,6 +126,7 @@ export interface StageInfo {
   dataExists: boolean;
   deadline?: string | null; // ISO date string or null
   daysRemaining?: number | null; // Days remaining until deadline, or null if no deadline
+  completedAt?: string | null; // ISO date string or null - timestamp when stage was completed
 }
 
 // === Stage 1: Basic Data ===

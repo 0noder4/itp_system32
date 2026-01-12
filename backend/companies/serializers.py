@@ -22,6 +22,34 @@ from .models import (
 )
 from users.models import User
 from django.contrib.auth.password_validation import validate_password
+import re
+
+
+def validate_phone_number(value):
+    """
+    Validate phone number format.
+    Accepts international format with +, Polish format, and general formats with digits, spaces, dashes, parentheses.
+    """
+    if not value:
+        return value
+    
+    # Check if it's a valid phone number format
+    # Allows: + prefix, digits, and common separators
+    phone_pattern = r'^[\+]?[(]?[0-9]{1,4}[)]?[-\s\.]?[(]?[0-9]{1,4}[)]?[-\s\.]?[0-9]{1,9}$'
+    
+    if not re.match(phone_pattern, value):
+        raise serializers.ValidationError("Please enter a valid phone number.")
+    
+    # Ensure it has at least 7 digits (minimum for a valid phone number)
+    digit_count = len(re.findall(r'\d', value))
+    if digit_count < 7:
+        raise serializers.ValidationError("Phone number must contain at least 7 digits.")
+    
+    if digit_count > 15:
+        raise serializers.ValidationError("Phone number is too long.")
+    
+    return value
+
 
 class CompanySerializer(serializers.ModelSerializer):
     representative_name = serializers.SerializerMethodField()
@@ -161,6 +189,12 @@ class CompanyInvitationSerializer(serializers.ModelSerializer):
         if obj.created_by:
             return obj.created_by.email
         return None
+    
+    def validate_email(self, value):
+        """Check if a user with this email already exists."""
+        if User.objects.filter(email=value).exists():
+            raise serializers.ValidationError("A user with this email already exists.")
+        return value
 
 
 class CompanyRegistrationSerializer(serializers.Serializer):
@@ -168,7 +202,7 @@ class CompanyRegistrationSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True, validators=[validate_password])
     first_name = serializers.CharField(write_only=True, required=True, max_length=150)
     last_name = serializers.CharField(write_only=True, required=True, max_length=150)
-    phone_number = serializers.CharField(write_only=True, required=True, max_length=20)
+    phone_number = serializers.CharField(write_only=True, required=True, max_length=20, validators=[validate_phone_number])
 
     def validate_token(self, value):
         try:
@@ -331,7 +365,7 @@ class JobwallSerializer(serializers.ModelSerializer):
 class DescriptionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Description
-        fields = '__all__'
+        exclude = ('company',)  # Company is set by Stage4Serializer.create(), not validated here
         extra_kwargs = {
             'logo_file': {'required': False, 'allow_null': True},
         }
@@ -362,6 +396,8 @@ class PDIAttendeeSerializer(serializers.ModelSerializer):
 
 
 class ExhibitorSerializer(serializers.ModelSerializer):
+    phone_number = serializers.CharField(max_length=20, validators=[validate_phone_number])
+    
     class Meta:
         model = Exhibitor
         exclude = ('form',)
@@ -542,6 +578,24 @@ class Stage4Serializer(serializers.Serializer):
     jobwalls = JobwallSerializer(many=True, required=False, allow_empty=True)
     description = DescriptionSerializer(required=False, allow_null=True)
 
+    def to_internal_value(self, data):
+        """
+        Remove company field from description data before nested serializer validation.
+        This prevents unique constraint validation error during nested serializer validation.
+        """
+        # Make a copy of data to avoid modifying the original
+        data_copy = data.copy() if hasattr(data, 'copy') else dict(data) if isinstance(data, dict) else data
+        
+        # Remove company field from description data before validation
+        if isinstance(data_copy, dict) and 'description' in data_copy:
+            if isinstance(data_copy['description'], dict):
+                description_data = data_copy['description'].copy()
+                description_data.pop('company', None)
+                data_copy['description'] = description_data
+        
+        # Call parent with modified data
+        return super().to_internal_value(data_copy)
+
     def create(self, validated_data):
         jobwalls_data = validated_data.pop('jobwalls', [])
         description_data = validated_data.pop('description', None)
@@ -550,24 +604,38 @@ class Stage4Serializer(serializers.Serializer):
         if not company:
             raise serializers.ValidationError("Company is required")
 
-        # Create jobwalls
+        # Create jobwalls - delete existing ones first to handle resubmissions
+        Jobwall.objects.filter(company=company).delete()
         jobwall_objs = []
         for jobwall_data in jobwalls_data:
             jobwall_data['company'] = company
             jobwall_objs.append(Jobwall.objects.create(**jobwall_data))
 
-        # Create description if provided
+        # Create or update description if provided
         description_obj = None
         if description_data:
             # Extract file field separately to ensure it's a file object
             logo_file = description_data.pop('logo_file', None)
             description_data['company'] = company
-            description_obj = Description.objects.create(**description_data)
             
-            # Set file field after creation if it exists
-            if logo_file:
-                description_obj.logo_file = logo_file
+            # Check if description already exists for this company
+            try:
+                description_obj = Description.objects.get(company=company)
+                # Update existing description
+                for attr, value in description_data.items():
+                    if attr != 'company':  # Don't update company
+                        setattr(description_obj, attr, value)
+                # Handle file field separately - only update if new file provided
+                if logo_file is not None and logo_file != '':
+                    description_obj.logo_file = logo_file
                 description_obj.save()
+            except Description.DoesNotExist:
+                # Create new description if it doesn't exist
+                description_obj = Description.objects.create(**description_data)
+                # Set file field after creation if it exists
+                if logo_file:
+                    description_obj.logo_file = logo_file
+                    description_obj.save()
 
         return {
             'jobwalls': jobwall_objs,

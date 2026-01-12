@@ -3,14 +3,22 @@
 import React from "react";
 import { useParams, useRouter } from "next/navigation";
 import useSWR from "swr";
-import { fetcher } from "@/lib/api";
+import { fetcher, apiClient } from "@/lib/api";
 import { CompanyInvitation } from "@/lib/types";
 import { useTranslation } from "@/lib/i18n";
 import { Header } from "@/components/layout/Header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Mail } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { ArrowLeft, Mail, X } from "lucide-react";
 import { Copy, Check } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -29,12 +37,15 @@ export default function InvitationDetailPage() {
     data: invitation,
     error: invitationError,
     isLoading: isLoadingInvitation,
+    mutate: mutateInvitation,
   } = useSWR<CompanyInvitation>(
     invitationId ? `/api/invitation/${invitationId}/` : null,
     fetcher
   );
 
   const [copiedLink, setCopiedLink] = React.useState(false);
+  const [showCancelDialog, setShowCancelDialog] = React.useState(false);
+  const [isCancelling, setIsCancelling] = React.useState(false);
 
   const isLoading = isLoadingInvitation;
   const isError = !!invitationError;
@@ -59,6 +70,31 @@ export default function InvitationDetailPage() {
       toast.success(t("companies.invitations.linkCopied"));
     } catch (err) {
       toast.error(t("companies.invitations.copyFailed"));
+    }
+  };
+
+  const handleCancelInvitation = async () => {
+    if (!invitation) return;
+
+    setIsCancelling(true);
+    try {
+      await apiClient.patch(`/api/invitation/${invitation.id}/`, {
+        is_cancelled: true,
+      });
+      toast.success(t("companies.invitations.cancel.success"), {
+        description: t("companies.invitations.cancel.successDescription"),
+      });
+      setShowCancelDialog(false);
+      mutateInvitation();
+    } catch (error: any) {
+      const errorMessage =
+        error.response?.data?.detail ||
+        t("companies.invitations.cancel.errorDescription");
+      toast.error(t("companies.invitations.cancel.error"), {
+        description: errorMessage,
+      });
+    } finally {
+      setIsCancelling(false);
     }
   };
 
@@ -97,6 +133,9 @@ export default function InvitationDetailPage() {
   }
 
   const isExpired = new Date(invitation.expires_at) < new Date();
+  const canCancel =
+    !invitation.is_accepted &&
+    invitation.invitation_status !== "cancelled";
 
   return (
     <div className="flex h-screen flex-col overflow-hidden">
@@ -226,8 +265,53 @@ export default function InvitationDetailPage() {
                 </Button>
               </div>
             </div>
+            {/* Cancel Invitation Button */}
+            {canCancel && (
+              <div className="pt-4 border-t">
+                <Button
+                  variant="destructive"
+                  onClick={() => setShowCancelDialog(true)}
+                  className="w-full sm:w-auto"
+                >
+                  <X className="h-4 w-4 mr-2" />
+                  {t("companies.invitations.cancel.button")}
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
+
+        {/* Cancel Confirmation Dialog */}
+        <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>
+                {t("companies.invitations.cancel.confirmTitle")}
+              </DialogTitle>
+              <DialogDescription>
+                {t("companies.invitations.cancel.confirmMessage")}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setShowCancelDialog(false)}
+                disabled={isCancelling}
+              >
+                {t("common.cancel")}
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleCancelInvitation}
+                disabled={isCancelling}
+              >
+                {isCancelling
+                  ? t("common.loading")
+                  : t("companies.invitations.cancel.confirmButton")}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );

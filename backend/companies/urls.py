@@ -32,6 +32,9 @@ urlpatterns = [
     # Jobwall price
     path('jobwall-price/', views.JobwallPriceView.as_view(), name='jobwall-price'),
     
+    # Lunch price
+    path('lunch-price/', views.LunchPriceView.as_view(), name='lunch-price'),
+    
     # Stage deadlines
     path('stage-deadlines/', views.StageDeadlinesView.as_view(), name='stage-deadlines'),
     
@@ -44,4 +47,5 @@ urlpatterns = [
     # Export - CSV export of company data
     path('export/csv/', views.ExportCSVView.as_view(), name='export-csv'),
     path('export/logos/', views.ExportLogosView.as_view(), name='export-logos'),
+    path('export/media/', views.ExportMediaFilesView.as_view(), name='export-media'),
 ]

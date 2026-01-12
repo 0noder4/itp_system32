@@ -21,7 +21,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 interface Stage2FormProps {
   companyId?: number;
   initialData?: Stage2Data;
-  onSubmit: (data: Stage2FormData) => void;
+  onSubmit: (data: Stage2FormData) => Promise<void>;
   isSubmitting: boolean;
   disabled?: boolean;
   isAccepted?: boolean;
@@ -293,7 +293,7 @@ export function Stage2Form({
     }
   };
 
-  const handleFormSubmit = (data: Stage2FormData) => {
+  const handleFormSubmit = async (data: Stage2FormData) => {
     // Get current form values to ensure files are included (React Hook Form might strip files during validation)
     const currentFormValues = form.getValues();
 
@@ -319,7 +319,78 @@ export function Stage2Form({
       equipment_selections:
         data.equipment_selections?.filter((sel) => sel.quantity > 0) || [],
     };
-    onSubmit(dataWithFiles);
+    
+    try {
+      await onSubmit(dataWithFiles);
+    } catch (error: any) {
+      // Handle backend validation errors and set them on form fields
+      if (error.response?.status === 400 && error.response?.data) {
+        const errorData = error.response.data;
+        let hasFieldErrors = false;
+        
+        // Handle stand_details errors
+        if (errorData.stand_details && typeof errorData.stand_details === 'object') {
+          Object.keys(errorData.stand_details).forEach((field) => {
+            const fieldErrors = errorData.stand_details[field];
+            const errorMessage = Array.isArray(fieldErrors) 
+              ? fieldErrors[0] 
+              : typeof fieldErrors === 'string' 
+              ? fieldErrors 
+              : String(fieldErrors);
+            
+            form.setError(`stand_details.${field}` as any, {
+              type: 'server',
+              message: errorMessage,
+            });
+            hasFieldErrors = true;
+          });
+        }
+        
+        // Handle equipment_selections errors
+        if (errorData.equipment_selections) {
+          if (Array.isArray(errorData.equipment_selections)) {
+            errorData.equipment_selections.forEach((selectionErrors: any, index: number) => {
+              if (selectionErrors && typeof selectionErrors === 'object') {
+                Object.keys(selectionErrors).forEach((field) => {
+                  const fieldErrors = selectionErrors[field];
+                  const errorMessage = Array.isArray(fieldErrors) 
+                    ? fieldErrors[0] 
+                    : typeof fieldErrors === 'string' 
+                    ? fieldErrors 
+                    : String(fieldErrors);
+                  
+                  form.setError(`equipment_selections.${index}.${field}` as any, {
+                    type: 'server',
+                    message: errorMessage,
+                  });
+                  hasFieldErrors = true;
+                });
+              }
+            });
+          }
+        }
+        
+        // Handle general errors (like detail field)
+        if (errorData.detail && typeof errorData.detail === 'string') {
+          form.setError('root', {
+            type: 'server',
+            message: errorData.detail,
+          });
+          hasFieldErrors = true;
+        }
+        
+        // If we set field errors, don't re-throw - let users see the errors
+        if (hasFieldErrors) {
+          return;
+        }
+        
+        // Re-throw if no field errors were set (unexpected format)
+        throw error;
+      }
+      
+      // Re-throw other errors
+      throw error;
+    }
   };
 
   return (
@@ -368,7 +439,10 @@ export function Stage2Form({
           )}
         />
         {form.formState.errors.stand_details?.stand_type && (
-          <FieldError>{t("exhibitor.form.required")}</FieldError>
+          <FieldError>
+            {form.formState.errors.stand_details.stand_type.message ||
+              t("exhibitor.form.required")}
+          </FieldError>
         )}
       </div>
 
@@ -501,6 +575,12 @@ export function Stage2Form({
               {...form.register("stand_details.sc_details")}
               disabled={disabled}
             />
+            {form.formState.errors.stand_details?.sc_details && (
+              <FieldError>
+                {form.formState.errors.stand_details.sc_details.message ||
+                  t("exhibitor.form.required")}
+              </FieldError>
+            )}
           </FieldGroup>
           <FieldGroup>
             <FieldLabel>

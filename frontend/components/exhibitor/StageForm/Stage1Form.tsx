@@ -23,7 +23,7 @@ import { Loader2, Save, FileText, ExternalLink } from "lucide-react";
 interface Stage1FormProps {
   companyId?: number;
   initialData?: Stage1Data;
-  onSubmit: (data: Stage1FormData) => void;
+  onSubmit: (data: Stage1FormData) => Promise<void>;
   isSubmitting: boolean;
   disabled?: boolean;
   isAccepted?: boolean;
@@ -60,12 +60,70 @@ export function Stage1Form({
   const [pendingFormData, setPendingFormData] =
     React.useState<Stage1FormData | null>(null);
 
-  const handleFormSubmit = (data: Stage1FormData) => {
+  const handleFormSubmit = async (data: Stage1FormData) => {
     // Always show terms dialog if terms_accepted is not explicitly true
     // This ensures the dialog shows on first save, even if the field is false/undefined
     if (data.terms_accepted === true) {
       // Terms already accepted, submit directly
-      onSubmit(data);
+      try {
+        await onSubmit(data);
+      } catch (error: any) {
+        // Handle backend validation errors and set them on form fields
+        if (error.response?.status === 400 && error.response?.data) {
+          const errorData = error.response.data;
+          let hasFieldErrors = false;
+          
+          // Handle basic_data errors
+          if (errorData.basic_data && typeof errorData.basic_data === 'object') {
+            Object.keys(errorData.basic_data).forEach((field) => {
+              const fieldErrors = errorData.basic_data[field];
+              const errorMessage = Array.isArray(fieldErrors) 
+                ? fieldErrors[0] 
+                : typeof fieldErrors === 'string' 
+                ? fieldErrors 
+                : String(fieldErrors);
+              
+              form.setError(`basic_data.${field}` as any, {
+                type: 'server',
+                message: errorMessage,
+              });
+              hasFieldErrors = true;
+            });
+          }
+          
+          // Handle address errors
+          if (errorData.address && typeof errorData.address === 'object') {
+            Object.keys(errorData.address).forEach((field) => {
+              const fieldErrors = errorData.address[field];
+              const errorMessage = Array.isArray(fieldErrors) 
+                ? fieldErrors[0] 
+                : typeof fieldErrors === 'string' 
+                ? fieldErrors 
+                : String(fieldErrors);
+              
+              form.setError(`address.${field}` as any, {
+                type: 'server',
+                message: errorMessage,
+              });
+              hasFieldErrors = true;
+            });
+          }
+          
+          // Handle general errors
+          if (errorData.detail && typeof errorData.detail === 'string') {
+            form.setError('root', {
+              type: 'server',
+              message: errorData.detail,
+            });
+            hasFieldErrors = true;
+          }
+          
+          if (hasFieldErrors) {
+            return;
+          }
+        }
+        throw error;
+      }
       return;
     }
     // Show terms dialog before submitting
@@ -75,13 +133,73 @@ export function Stage1Form({
     setShowTermsDialog(true);
   };
 
-  const handleAcceptTerms = () => {
+  const handleAcceptTerms = async () => {
     if (pendingFormData) {
       const dataWithTerms = { ...pendingFormData, terms_accepted: true };
-      onSubmit(dataWithTerms);
+      try {
+        await onSubmit(dataWithTerms);
+        setShowTermsDialog(false);
+        setPendingFormData(null);
+      } catch (error: any) {
+        // Handle backend validation errors and set them on form fields
+        if (error.response?.status === 400 && error.response?.data) {
+          const errorData = error.response.data;
+          let hasFieldErrors = false;
+          
+          // Handle basic_data errors
+          if (errorData.basic_data && typeof errorData.basic_data === 'object') {
+            Object.keys(errorData.basic_data).forEach((field) => {
+              const fieldErrors = errorData.basic_data[field];
+              const errorMessage = Array.isArray(fieldErrors) 
+                ? fieldErrors[0] 
+                : typeof fieldErrors === 'string' 
+                ? fieldErrors 
+                : String(fieldErrors);
+              
+              form.setError(`basic_data.${field}` as any, {
+                type: 'server',
+                message: errorMessage,
+              });
+              hasFieldErrors = true;
+            });
+          }
+          
+          // Handle address errors
+          if (errorData.address && typeof errorData.address === 'object') {
+            Object.keys(errorData.address).forEach((field) => {
+              const fieldErrors = errorData.address[field];
+              const errorMessage = Array.isArray(fieldErrors) 
+                ? fieldErrors[0] 
+                : typeof fieldErrors === 'string' 
+                ? fieldErrors 
+                : String(fieldErrors);
+              
+              form.setError(`address.${field}` as any, {
+                type: 'server',
+                message: errorMessage,
+              });
+              hasFieldErrors = true;
+            });
+          }
+          
+          // Handle general errors
+          if (errorData.detail && typeof errorData.detail === 'string') {
+            form.setError('root', {
+              type: 'server',
+              message: errorData.detail,
+            });
+            hasFieldErrors = true;
+          }
+          
+          if (hasFieldErrors) {
+            setShowTermsDialog(false);
+            setPendingFormData(null);
+            return;
+          }
+        }
+        throw error;
+      }
     }
-    setShowTermsDialog(false);
-    setPendingFormData(null);
   };
 
   const handleRejectTerms = () => {
@@ -106,14 +224,20 @@ export function Stage1Form({
                 disabled={disabled}
               />
               {form.formState.errors.basic_data?.full_name && (
-                <FieldError>{t("exhibitor.form.required")}</FieldError>
+                <FieldError>
+                  {form.formState.errors.basic_data.full_name.message ||
+                    t("exhibitor.form.required")}
+                </FieldError>
               )}
             </FieldGroup>
             <FieldGroup>
               <FieldLabel>{t("exhibitor.form.nip")}</FieldLabel>
               <Input {...form.register("basic_data.nip")} disabled={disabled} />
               {form.formState.errors.basic_data?.nip && (
-                <FieldError>{t("exhibitor.form.required")}</FieldError>
+                <FieldError>
+                  {form.formState.errors.basic_data.nip.message ||
+                    t("exhibitor.form.required")}
+                </FieldError>
               )}
             </FieldGroup>
           </div>
@@ -126,7 +250,10 @@ export function Stage1Form({
               <FieldLabel>{t("exhibitor.form.street")}</FieldLabel>
               <Input {...form.register("address.street")} disabled={disabled} />
               {form.formState.errors.address?.street && (
-                <FieldError>{t("exhibitor.form.required")}</FieldError>
+                <FieldError>
+                  {form.formState.errors.address.street.message ||
+                    t("exhibitor.form.required")}
+                </FieldError>
               )}
             </FieldGroup>
             <FieldGroup>
@@ -136,7 +263,10 @@ export function Stage1Form({
                 disabled={disabled}
               />
               {form.formState.errors.address?.home_number && (
-                <FieldError>{t("exhibitor.form.required")}</FieldError>
+                <FieldError>
+                  {form.formState.errors.address.home_number.message ||
+                    t("exhibitor.form.required")}
+                </FieldError>
               )}
             </FieldGroup>
             <FieldGroup>
@@ -150,7 +280,10 @@ export function Stage1Form({
               <FieldLabel>{t("exhibitor.form.city")}</FieldLabel>
               <Input {...form.register("address.city")} disabled={disabled} />
               {form.formState.errors.address?.city && (
-                <FieldError>{t("exhibitor.form.required")}</FieldError>
+                <FieldError>
+                  {form.formState.errors.address.city.message ||
+                    t("exhibitor.form.required")}
+                </FieldError>
               )}
             </FieldGroup>
             <FieldGroup>
@@ -160,7 +293,10 @@ export function Stage1Form({
                 disabled={disabled}
               />
               {form.formState.errors.address?.country && (
-                <FieldError>{t("exhibitor.form.required")}</FieldError>
+                <FieldError>
+                  {form.formState.errors.address.country.message ||
+                    t("exhibitor.form.required")}
+                </FieldError>
               )}
             </FieldGroup>
             <FieldGroup>
@@ -170,7 +306,10 @@ export function Stage1Form({
                 disabled={disabled}
               />
               {form.formState.errors.address?.postal_code && (
-                <FieldError>{t("exhibitor.form.required")}</FieldError>
+                <FieldError>
+                  {form.formState.errors.address.postal_code.message ||
+                    t("exhibitor.form.required")}
+                </FieldError>
               )}
             </FieldGroup>
           </div>

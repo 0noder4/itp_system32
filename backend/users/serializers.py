@@ -72,8 +72,7 @@ class PasswordResetRequestSerializer(serializers.Serializer):
             
             reset_link = f"{settings.FRONTEND_BASE_URL}/auth/reset-password/confirm?token={reset_request.token}&lang={language}"
             # Use backend URL for static files (logo is hosted on backend)
-            backend_url = os.environ.get('BACKEND_BASE_URL', 'http://localhost:8000')
-            logo_url = f"{backend_url}{settings.STATIC_URL}images/ITP_LOGO_horizontal_black.png"
+            logo_url = f"{settings.BACKEND_BASE_URL}{settings.STATIC_URL}images/ITP_LOGO_horizontal_black.png"
 
             # Select template based on language
             template_name = f"emails/password_reset_{language}.html"

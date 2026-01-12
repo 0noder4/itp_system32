@@ -3,6 +3,10 @@
 import { RouteGuard } from "@/components/auth/RouteGuard";
 import { Header } from "@/components/layout/Header";
 import { useTranslation } from "@/lib/i18n";
+import { useFormStatus } from "@/hooks/use-form-status";
+import useSWR from "swr";
+import { fetcher } from "@/lib/api";
+import { Company } from "@/lib/types";
 
 export default function PartnerLayout({
   children,
@@ -10,6 +14,17 @@ export default function PartnerLayout({
   children: React.ReactNode;
 }) {
   const { t } = useTranslation();
+  const { companyId } = useFormStatus();
+
+  // Fetch company data to check if stands are assigned
+  const { data: company } = useSWR<Company>(
+    companyId ? `/api/company/${companyId}/` : null,
+    fetcher
+  );
+
+  // Check if company has at least one stand assigned
+  const hasStandAssigned =
+    company?.day1_stand?.stand_number || company?.day2_stand?.stand_number;
 
   const navItems = [
     {
@@ -24,6 +39,15 @@ export default function PartnerLayout({
       title: t("exhibitor.navigation.faq"),
       url: "/panel/exhibitor/faq",
     },
+    // Only show map if company has at least one stand assigned
+    ...(hasStandAssigned
+      ? [
+          {
+            title: t("exhibitor.navigation.map"),
+            url: "/panel/exhibitor/map",
+          },
+        ]
+      : []),
   ];
 
   return (

@@ -72,7 +72,7 @@ export function CompanyFilters({
   };
 
   return (
-    <div className="mb-4 shrink-0 space-y-4">
+    <div className="mb-4 shrink-0 space-y-3 md:space-y-4">
       {/* Search Input */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -81,7 +81,7 @@ export function CompanyFilters({
           placeholder={t("companies.searchPlaceholder")}
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
-          className="pl-9 pr-9"
+          className="pl-9 pr-9 text-sm"
         />
         {searchQuery && (
           <Button
@@ -102,22 +102,27 @@ export function CompanyFilters({
           id="show-invitations"
           checked={showInvitations}
           onChange={(e) => onShowInvitationsChange(e.target.checked)}
-          className="h-4 w-4 rounded border-input text-primary focus:ring-2 focus:ring-ring focus:ring-offset-2 cursor-pointer"
+          className="h-4 w-4 rounded border border-input bg-white cursor-pointer focus:ring-2 focus:ring-ring focus:ring-offset-2 checked:bg-primary checked:border-primary"
+          style={{
+            appearance: "none",
+            WebkitAppearance: "none",
+            MozAppearance: "none",
+          }}
         />
         <Label
           htmlFor="show-invitations"
-          className="text-sm font-normal cursor-pointer"
+          className="text-xs sm:text-sm font-normal cursor-pointer"
         >
           {t("companies.invitations.showInvitations")}
         </Label>
       </div>
 
       {/* Company Status Filter */}
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm text-muted-foreground">
+      <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2">
+        <span className="text-xs sm:text-sm text-muted-foreground shrink-0">
           {t("companies.filterByStatus")}:
         </span>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {(["all", "main", "partner", "basic"] as const).map((status) => {
             const isActive = statusFilter === status;
             return (
@@ -159,11 +164,11 @@ export function CompanyFilters({
 
       {/* Invitation Status Filter */}
       {showInvitations && (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm text-muted-foreground">
+        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2">
+          <span className="text-xs sm:text-sm text-muted-foreground shrink-0">
             {t("companies.invitations.filterByStatus")}:
           </span>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {(["all", "accepted", "expired", "not accepted"] as const).map(
               (status) => {
                 const isActive = invitationStatusFilter === status;
@@ -207,11 +212,11 @@ export function CompanyFilters({
       )}
 
       {/* FR Resp Filter */}
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm text-muted-foreground">
+      <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2">
+        <span className="text-xs sm:text-sm text-muted-foreground shrink-0">
           {t("companies.filterByFrResp")}:
         </span>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button
             variant={frRespFilter === "all" ? "default" : "outline"}
             size="sm"
@@ -289,7 +294,7 @@ export function CompanyFilters({
           variant="ghost"
           size="sm"
           onClick={handleClearFilters}
-          className="ml-auto"
+          className="w-full sm:w-auto sm:ml-auto text-xs sm:text-sm"
           onMouseEnter={(e) => {
             e.currentTarget.style.color = STAFF_ACCENT_COLOR;
           }}
@@ -302,7 +307,7 @@ export function CompanyFilters({
       )}
 
       {/* Results count */}
-      <div className="text-sm text-muted-foreground">
+      <div className="text-xs sm:text-sm text-muted-foreground">
         {t("companies.showingResults", {
           filtered: filteredCount,
           total: totalCount,

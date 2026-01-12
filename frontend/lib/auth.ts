@@ -100,12 +100,25 @@ export const getUserRoute = (userType: UserType | null): string => {
 
 /**
  * Store tokens in localStorage and apply user language preference
+ * @param tokens - Token response from backend
+ * @param notifyChange - Whether to dispatch tokens-changed event (default: false)
+ *                        Only set to true when tokens change from login/initial auth
  */
-export const storeTokens = (tokens: TokenResponse): void => {
+export const storeTokens = (tokens: TokenResponse, notifyChange: boolean = false): void => {
   if (typeof window === "undefined") return;
+
+  const oldToken = localStorage.getItem(ACCESS_TOKEN_KEY);
+  const oldUserType = oldToken ? decodeToken(oldToken)?.user_type : null;
+  const newUserType = tokens.access ? decodeToken(tokens.access)?.user_type : null;
 
   localStorage.setItem(ACCESS_TOKEN_KEY, tokens.access);
   localStorage.setItem(REFRESH_TOKEN_KEY, tokens.refresh);
+
+  // Only dispatch event if user type changed or explicitly requested (e.g., on login)
+  // Don't dispatch on token refresh (normal operation)
+  if (notifyChange || (oldUserType !== newUserType && newUserType !== null)) {
+    window.dispatchEvent(new Event("tokens-changed"));
+  }
 
   // Apply language preference if provided
   if (tokens.language) {
