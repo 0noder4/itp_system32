@@ -20,7 +20,7 @@ export const stage2Schema = z.object({
   stand_details: z
     .object({
       stand_type: z.enum(["provided_stand", "self_construction"], {
-        errorMap: () => ({ message: "Stand type is required" }),
+        message: "Stand type is required",
       }),
       sc_details: z.string().max(255, "Description must be 255 characters or less").optional(),
       name_sign_text: z.string().max(255, "Name sign text must be 255 characters or less").optional(),
@@ -91,13 +91,13 @@ export const stage4Schema = z.object({
       z.object({
         name: z.string().min(1, "Position name is required"),
         form: z.enum(["s", "z", "h", "k", "m"], {
-          errorMap: () => ({ message: "Work form is required" }),
+          message: "Work form is required",
         }),
         workload: z.enum(["pelen", "pol", "trzyczwarte", "el"], {
-          errorMap: () => ({ message: "Workload is required" }),
+          message: "Workload is required",
         }),
         contract: z.enum(["uop", "uoz", "uod", "b2b", "uos"], {
-          errorMap: () => ({ message: "Contract type is required" }),
+          message: "Contract type is required",
         }),
         description: z.string().min(1, "Description is required"),
         benefits: z.string().min(1, "Benefits are required"),
@@ -156,7 +156,7 @@ export const stage5Schema = z.object({
     .array(
       z.object({
         day: z.enum(["day1", "day2"], {
-          errorMap: () => ({ message: "Day is required" }),
+          message: "Day is required",
         }),
         lunch_quantity: z.number().min(0, "Lunch quantity must be 0 or greater"),
         diet_info: z.string().max(255, "Diet info must be 255 characters or less").default("").optional(),

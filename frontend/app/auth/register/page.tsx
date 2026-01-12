@@ -160,7 +160,7 @@ function RegisterForm() {
       
       if (errorData) {
         // Map backend field names to frontend field names
-        const fieldMapping: Record<string, keyof FormInput> = {
+        const fieldMapping: Record<string, keyof FormInput | "token"> = {
           password: "password",
           first_name: "name",
           last_name: "surname",
