@@ -4,8 +4,12 @@ FROM alpine:latest
 RUN apk add --no-cache \
     mysql-client \
     gzip \
-    dcron \
-    tzdata
+    tzdata \
+    curl
+
+# Install supercronic (container-friendly cron)
+RUN curl -L https://github.com/aptible/supercronic/releases/download/v0.2.26/supercronic-linux-amd64 -o /usr/local/bin/supercronic && \
+    chmod +x /usr/local/bin/supercronic
 
 # Create backup directory
 RUN mkdir -p /backups
@@ -14,15 +18,12 @@ RUN mkdir -p /backups
 COPY backup.sh /usr/local/bin/backup.sh
 RUN chmod +x /usr/local/bin/backup.sh
 
-# Create crontab directory
-RUN mkdir -p /var/spool/cron/crontabs
-
 # Copy entrypoint script
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
-CMD ["crond", "-s", "-f", "-d", "8"]
+CMD ["/usr/local/bin/supercronic", "/etc/crontab"]
 
 
 
