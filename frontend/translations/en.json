@@ -25,6 +25,11 @@
     "english": "English",
     "polish": "Polish"
   },
+  "theme": {
+    "title": "Theme",
+    "light": "Light",
+    "dark": "Dark"
+  },
   "auth": {
     "login": {
       "title": "Login to your account",

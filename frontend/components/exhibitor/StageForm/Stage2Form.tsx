@@ -118,18 +118,51 @@ export function Stage2Form({
   const watchEquipmentSelections = form.watch("equipment_selections") || [];
 
   // Reset equipment quantities based on stand type
+  // Only reset if there's no initial data (preserve saved selections)
   React.useEffect(() => {
     if (equipmentItems.length > 0 && watchStandType) {
-      const allSelections = equipmentItems.map((item: EquipmentItem) => ({
-        equipment_item: item.id,
-        quantity:
-          watchStandType === "self_construction"
-            ? 0
-            : item.is_basic
-            ? Math.max(1, item.included_quantity || 0)
-            : 0,
-      }));
-      form.setValue("equipment_selections", allSelections);
+      // Check if we have initial data with equipment selections
+      const hasInitialSelections = (initialData?.equipment_selections?.length ?? 0) > 0;
+      
+      // If we have initial data, preserve it and only add missing items
+      if (hasInitialSelections && initialData?.equipment_selections) {
+        const existingItemIds = new Set(
+          initialData.equipment_selections.map((sel) => sel.equipment_item.id)
+        );
+        const missingItems = equipmentItems.filter(
+          (item: EquipmentItem) => !existingItemIds.has(item.id)
+        );
+        
+        // Preserve existing selections and add missing items with default quantities
+        const allSelections = [
+          ...initialData.equipment_selections.map((sel) => ({
+            equipment_item: sel.equipment_item.id,
+            quantity: sel.quantity,
+          })),
+          ...missingItems.map((item: EquipmentItem) => ({
+            equipment_item: item.id,
+            quantity:
+              watchStandType === "self_construction"
+                ? 0
+                : item.is_basic
+                ? Math.max(1, item.included_quantity || 0)
+                : 0,
+          })),
+        ];
+        form.setValue("equipment_selections", allSelections);
+      } else {
+        // No initial data, set defaults based on stand type
+        const allSelections = equipmentItems.map((item: EquipmentItem) => ({
+          equipment_item: item.id,
+          quantity:
+            watchStandType === "self_construction"
+              ? 0
+              : item.is_basic
+              ? Math.max(1, item.included_quantity || 0)
+              : 0,
+        }));
+        form.setValue("equipment_selections", allSelections);
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [watchStandType, equipmentItems.length]);

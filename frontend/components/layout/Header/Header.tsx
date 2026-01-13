@@ -8,6 +8,7 @@ import { getUserInfo, clearTokens, getUserRoute } from "@/lib/auth";
 import { useTranslation } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { LanguageSelector } from "@/components/layout/LanguageSelector/LanguageSelector";
+import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import { HeaderUserCard } from "@/components/layout/HeaderUserCard";
 import { ACCENT_COLOR, STAFF_ACCENT_COLOR } from "@/lib/colors";
 
@@ -105,8 +106,9 @@ export function Header({ navigationItems }: HeaderProps) {
             </nav>
           )}
 
-          {/* Right side: Language Selector and User Menu */}
+          {/* Right side: Theme Toggle, Language Selector and User Menu */}
           <div className="flex items-center gap-3">
+            <ThemeToggle accentColor={accentColor} />
             <LanguageSelector accentColor={accentColor} />
 
             {/* User Account Card */}

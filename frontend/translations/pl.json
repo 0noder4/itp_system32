@@ -25,6 +25,11 @@
     "english": "Angielski",
     "polish": "Polski"
   },
+  "theme": {
+    "title": "Motyw",
+    "light": "Jasny",
+    "dark": "Ciemny"
+  },
   "auth": {
     "login": {
       "title": "Zaloguj się do swojego konta",

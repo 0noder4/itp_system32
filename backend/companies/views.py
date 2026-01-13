@@ -2069,7 +2069,8 @@ class OrderSummaryPDFView(APIView):
 
 class SendStageReminderView(APIView):
     """
-    Send reminder emails to all companies that haven't completed a specific form stage.
+    Send reminder emails to all companies that haven't completed a specific form stage
+    or have a rejected stage status.
     Only accessible by admin users.
     """
     permission_classes = [IsAuthenticated, IsAdmin]
@@ -2090,8 +2091,9 @@ class SendStageReminderView(APIView):
             # Get all companies
             all_companies = Company.objects.all()
             
-            # Filter to only companies that haven't filled in the stage (no data exists)
-            # This excludes companies that submitted but weren't accepted
+            # Filter to companies that need reminders:
+            # 1. Companies that haven't filled in the stage (no data exists)
+            # 2. Companies that submitted but have rejected feedback status
             companies_to_notify = []
             for company in all_companies:
                 # Skip if no representative or email
@@ -2114,8 +2116,19 @@ class SendStageReminderView(APIView):
                 elif stage_num == 5:
                     stage_data_exists = FinalData.objects.filter(company=company).exists()
                 
-                # Only send reminder if stage data does NOT exist
+                # Send reminder if:
+                # - Stage data does NOT exist, OR
+                # - Stage data exists but latest feedback status is 'rejected'
+                should_notify = False
                 if not stage_data_exists:
+                    should_notify = True
+                else:
+                    # Check if the latest feedback status is rejected
+                    latest_feedback = get_latest_feedback(company, stage_num)
+                    if latest_feedback and latest_feedback.status == 'rejected':
+                        should_notify = True
+                
+                if should_notify:
                     companies_to_notify.append(company)
             
             if not companies_to_notify:
