@@ -35,6 +35,7 @@ if mysqldump \
     -h "$DB_HOST" \
     -P "$DB_PORT" \
     -u "$DB_USER" \
+    --default-auth=mysql_native_password \
     --single-transaction \
     --quick \
     --lock-tables=false \
