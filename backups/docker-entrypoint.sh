@@ -3,8 +3,12 @@ set -e
 
 # Set timezone if provided
 if [ -n "$TZ" ]; then
-    cp /usr/share/zoneinfo/$TZ /etc/localtime
-    echo $TZ > /etc/timezone
+    if [ -f "/usr/share/zoneinfo/$TZ" ]; then
+        cp /usr/share/zoneinfo/$TZ /etc/localtime
+        echo $TZ > /etc/timezone
+    else
+        echo "WARNING: Invalid timezone $TZ, using default" >&2
+    fi
 fi
 
 # Create crontab file for supercronic
@@ -27,7 +31,9 @@ cat "$CRONTAB_FILE"
 # Run initial backup if BACKUP_ON_START is set
 if [ "${BACKUP_ON_START:-false}" = "true" ]; then
     echo "Running initial backup..."
-    /usr/local/bin/backup.sh
+    if ! /usr/local/bin/backup.sh; then
+        echo "WARNING: Initial backup failed" >&2
+    fi
 fi
 
 # Execute the command passed to the container

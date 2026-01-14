@@ -12,8 +12,22 @@ DB_USER="${DATABASE_USER:-root}"
 DB_PASSWORD="${DATABASE_PASSWORD:-${DATABASE_ROOT_PASSWORD}}"
 DB_PORT="${DATABASE_PORT:-3306}"
 
+# Validate required variables
+if [ -z "$DB_NAME" ]; then
+    echo "ERROR: DATABASE_NAME is not set" >&2
+    exit 1
+fi
+
+if [ -z "$DB_PASSWORD" ]; then
+    echo "ERROR: DATABASE_PASSWORD or DATABASE_ROOT_PASSWORD is not set" >&2
+    exit 1
+fi
+
 # Create backup directory if it doesn't exist
 mkdir -p "$BACKUP_DIR"
+
+# Ensure backup.log exists for error redirection
+touch "${BACKUP_DIR}/backup.log"
 
 # Generate timestamp
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
@@ -35,7 +49,6 @@ if mysqldump \
     -h "$DB_HOST" \
     -P "$DB_PORT" \
     -u "$DB_USER" \
-    --default-auth=mysql_native_password \
     --single-transaction \
     --quick \
     --lock-tables=false \
@@ -43,6 +56,13 @@ if mysqldump \
     --triggers \
     "$DB_NAME" > "$BACKUP_FILE" 2>> "${BACKUP_DIR}/backup.log"; then
     unset MYSQL_PWD
+    # Verify the backup file was created and has content
+    if [ ! -f "$BACKUP_FILE" ] || [ ! -s "$BACKUP_FILE" ]; then
+        log "ERROR: Backup file was not created or is empty"
+        unset MYSQL_PWD
+        rm -f "$BACKUP_FILE"
+        exit 1
+    fi
     log "Dump created successfully: $BACKUP_FILE"
 else
     log "ERROR: Failed to create dump"
@@ -53,7 +73,7 @@ fi
 
 # Compress the backup
 log "Compressing backup..."
-if gzip "$BACKUP_FILE"; then
+if [ -f "$BACKUP_FILE" ] && gzip "$BACKUP_FILE"; then
     log "Backup compressed successfully: $BACKUP_FILE_COMPRESSED"
     BACKUP_SIZE=$(du -h "$BACKUP_FILE_COMPRESSED" | cut -f1)
     log "Backup size: $BACKUP_SIZE"
@@ -64,9 +84,13 @@ fi
 
 # Clean up old backups
 log "Cleaning up backups older than $RETENTION_DAYS days..."
-find "$BACKUP_DIR" -name "${DB_NAME}_*.sql.gz" -type f -mtime +$RETENTION_DAYS -delete
-REMAINING_BACKUPS=$(find "$BACKUP_DIR" -name "${DB_NAME}_*.sql.gz" -type f | wc -l)
-log "Cleanup complete. Remaining backups: $REMAINING_BACKUPS"
+if [ -d "$BACKUP_DIR" ]; then
+    find "$BACKUP_DIR" -name "${DB_NAME}_*.sql.gz" -type f -mtime +$RETENTION_DAYS -delete 2>/dev/null || true
+    REMAINING_BACKUPS=$(find "$BACKUP_DIR" -name "${DB_NAME}_*.sql.gz" -type f 2>/dev/null | wc -l)
+    log "Cleanup complete. Remaining backups: $REMAINING_BACKUPS"
+else
+    log "WARNING: Backup directory $BACKUP_DIR does not exist for cleanup"
+fi
 
 log "Backup completed successfully"
 exit 0
