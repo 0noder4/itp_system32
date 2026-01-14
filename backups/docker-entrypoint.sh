@@ -4,6 +4,8 @@ set -e
 # Set timezone if provided
 if [ -n "$TZ" ]; then
     if [ -f "/usr/share/zoneinfo/$TZ" ]; then
+        # Remove existing /etc/localtime (file or symlink) before setting new timezone
+        rm -f /etc/localtime
         cp /usr/share/zoneinfo/$TZ /etc/localtime
         echo $TZ > /etc/timezone
     else
