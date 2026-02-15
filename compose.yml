@@ -79,7 +79,7 @@ services:
     container_name: ${PROJECT_NAME}_mailpit
     restart: unless-stopped
     volumes:
-      - data:/data
+      - mailpit_data:/data
     ports:
       - 8025:8025
       - 1025:1025
@@ -117,6 +117,7 @@ services:
       - db
 
 volumes:
+  mailpit_data:
   data:
   backups:
 networks:

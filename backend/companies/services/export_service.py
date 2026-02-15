@@ -181,7 +181,7 @@ class ExportService:
             List of column headers
         """
         headers = [
-            'ID', 'Nazwa', 'Email', 'Status', 'Przedstawiciel', 'FR',
+            'ID', 'Nazwa', 'Email', 'Status', 'Przedstawiciel', 'Telefon przedstawiciela', 'FR', 'Telefon FR',
             # Basic Data (Stage 1)
             'Pełna nazwa firmy', 'NIP', 'Ulica', 'Numer budynku', 'Numer lokalu',
             'Miasto', 'Kod pocztowy', 'Kraj',
@@ -236,10 +236,12 @@ class ExportService:
                     company.representative.first_name if company.representative else None,
                     company.representative.last_name if company.representative else None
                 ),
+                'Telefon przedstawiciela': (company.representative.phone_number or '') if company.representative else '',
                 'FR': self._format_full_name(
                     company.fr_resp.first_name if company.fr_resp else None,
                     company.fr_resp.last_name if company.fr_resp else None
                 ),
+                'Telefon FR': (company.fr_resp.phone_number or '') if company.fr_resp else '',
             }
         except AttributeError as e:
             logger.error(f"Error extracting base data for company {company.id}: {str(e)}")

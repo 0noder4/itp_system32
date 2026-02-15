@@ -3,7 +3,9 @@
 import React from "react";
 import { useTranslation } from "@/lib/i18n";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ExternalLink } from "lucide-react";
 import { Stage4Data } from "@/lib/types";
+import { getFileUrl } from "./utils";
 
 interface Stage4ViewerProps {
   data: Stage4Data;
@@ -42,6 +44,22 @@ export function Stage4Viewer({ data }: Stage4ViewerProps) {
                 {data.description.descr || "—"}
               </p>
             </div>
+            {data.description.logo_file && typeof data.description.logo_file === "string" && (
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">
+                  {t("exhibitor.form.uploadCatalogueLogo")}
+                </p>
+                <a
+                  href={getFileUrl(data.description.logo_file) || "#"}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-1 inline-flex items-center gap-2 text-primary hover:underline"
+                >
+                  <span>View file</span>
+                  <ExternalLink className="h-4 w-4" />
+                </a>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
