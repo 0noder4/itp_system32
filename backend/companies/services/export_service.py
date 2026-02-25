@@ -6,7 +6,7 @@ from companies.models import (
     Company, Form, BasicData, Address, Stand,
     StandDetails, EquipmentItem, EquipmentSelection,
     FinalData, Lunch, Workshop, Exhibitor,
-    COMPANY_STATUS_CHOICES, STAND_TYPE_CHOICES
+    COMPANY_STATUS_CHOICES, STAND_TYPE_CHOICES, DAY_OPT,
 )
 from companies.utils.csv_generator import CSVGenerator
 from typing import Dict, List, Any
@@ -89,6 +89,28 @@ class ExportService:
         """
         parts = [p for p in [first_name, last_name] if p]
         return ' '.join(parts) if parts else ''
+
+    def _format_lunches_for_day(self, day_lunches: List[Lunch]) -> tuple:
+        """
+        Compute total quantity and formatted comment string for a day's lunches.
+
+        Returns:
+            (total_quantity, formatted_value) where formatted_value is either
+            "sum" or "sum (comment (n), ...)" with optional merge of identical comments.
+        """
+        if not day_lunches:
+            return 0, ''
+        total = sum(l.lunch_quantity for l in day_lunches)
+        # Build comment parts: merge identical diet_info by summing quantities
+        comment_counts: Dict[str, int] = {}
+        for l in day_lunches:
+            info = (l.diet_info or '').strip()
+            if info:
+                comment_counts[info] = comment_counts.get(info, 0) + l.lunch_quantity
+        if not comment_counts:
+            return total, str(total) if total else ''
+        parts = [f"{text} ({count})" for text, count in comment_counts.items()]
+        return total, f"{total} ({', '.join(parts)})"
 
     def generate_csv(self):
         """
@@ -363,22 +385,31 @@ class ExportService:
                     'Łączna moc urządzeń': fd.el_power or '',
                 })
 
-                # Lunches
+                # Lunches: group by day, sum quantities, add comments (diet_info) with counts in brackets
                 try:
                     lunches = list(fd.lunches.all())
-                    for i, lunch in enumerate(lunches[:2]):  # Max 2 days
-                        if i == 0:
-                            base_data.update({
-                                'Dzień 1 - obiady': lunch.get_day_display(),
-                                'Ilość obiadów - dzień 1': lunch.lunch_quantity,
-                            })
-                        elif i == 1:
-                            base_data.update({
-                                'Dzień 2 - obiady': lunch.get_day_display(),
-                                'Ilość obiadów - dzień 2': lunch.lunch_quantity,
-                            })
+                    day_labels = dict(DAY_OPT)
+                    by_day: Dict[str, List[Lunch]] = {'day1': [], 'day2': []}
+                    for lunch in lunches:
+                        if lunch.day in by_day:
+                            by_day[lunch.day].append(lunch)
+
+                    for day_key, col_suffix in [('day1', '1'), ('day2', '2')]:
+                        day_lunches = by_day.get(day_key, [])
+                        label = day_labels.get(day_key, '')
+                        _, formatted = self._format_lunches_for_day(day_lunches)
+                        base_data.update({
+                            f'Dzień {col_suffix} - obiady': label,
+                            f'Ilość obiadów - dzień {col_suffix}': formatted,
+                        })
                 except (AttributeError, ValueError) as e:
                     logger.warning(f"Error extracting lunch data for company {company.id}: {str(e)}")
+                    base_data.update({
+                        'Dzień 1 - obiady': dict(DAY_OPT).get('day1', ''),
+                        'Ilość obiadów - dzień 1': '',
+                        'Dzień 2 - obiady': dict(DAY_OPT).get('day2', ''),
+                        'Ilość obiadów - dzień 2': '',
+                    })
 
                 # Exhibitors (Delegates) - Keep these
                 if hasattr(fd, 'pdis') and fd.pdis:
@@ -402,8 +433,14 @@ class ExportService:
                 logger.warning(f"Error extracting final data for company {company.id}: {str(e)}")
                 base_data['Delegaci firmy'] = ''
         else:
-            # No final data, initialize delegates field
+            # No final data, initialize delegates and lunch columns
             base_data['Delegaci firmy'] = ''
+            base_data.update({
+                'Dzień 1 - obiady': '',
+                'Ilość obiadów - dzień 1': '',
+                'Dzień 2 - obiady': '',
+                'Ilość obiadów - dzień 2': '',
+            })
 
         # Description removed from export
 
