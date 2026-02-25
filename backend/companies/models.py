@@ -23,7 +23,8 @@ DAY_OPT = [
 SIZE_OPT = [
     ('podstawowy', '4m2'),
     ('standardowy', '6m2'),
-    ('rozszerzony', '8m2')
+    ('rozszerzony', '8m2'),
+    ('12m2', '12m2'),
 ]
 
 STATE_OPT = [

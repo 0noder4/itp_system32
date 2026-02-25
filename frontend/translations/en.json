@@ -250,7 +250,8 @@
       "sizes": {
         "podstawowy": "4m²",
         "standardowy": "6m²",
-        "rozszerzony": "8m²"
+        "rozszerzony": "8m²",
+        "12m2": "12m²"
       }
     }
   },

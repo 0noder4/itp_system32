@@ -162,15 +162,15 @@ class CompanyDetailView(APIView):
         
         if day1_stand_data is not None:
             if day1_stand_data.get('stand_number') and day1_stand_data.get('stand_size'):
-                # Validate stand_number length (2-3 characters)
+                # Validate stand_number length (2-10 characters, matches DB max_length)
                 stand_number = day1_stand_data.get('stand_number').strip()
-                if len(stand_number) < 2 or len(stand_number) > 3:
+                if len(stand_number) < 2 or len(stand_number) > 10:
                     return Response(
-                        {"detail": "Stand number must be 2-3 characters"},
+                        {"detail": "Stand number must be 2-10 characters"},
                         status=status.HTTP_400_BAD_REQUEST
                     )
                 # Validate stand_size
-                valid_sizes = ['podstawowy', 'standardowy', 'rozszerzony']
+                valid_sizes = ['podstawowy', 'standardowy', 'rozszerzony', '12m2']
                 if day1_stand_data.get('stand_size') not in valid_sizes:
                     return Response(
                         {"detail": f"Stand size must be one of: {', '.join(valid_sizes)}"},
@@ -195,15 +195,15 @@ class CompanyDetailView(APIView):
         
         if day2_stand_data is not None:
             if day2_stand_data.get('stand_number') and day2_stand_data.get('stand_size'):
-                # Validate stand_number length (2-3 characters)
+                # Validate stand_number length (2-10 characters, matches DB max_length)
                 stand_number = day2_stand_data.get('stand_number').strip()
-                if len(stand_number) < 2 or len(stand_number) > 3:
+                if len(stand_number) < 2 or len(stand_number) > 10:
                     return Response(
-                        {"detail": "Stand number must be 2-3 characters"},
+                        {"detail": "Stand number must be 2-10 characters"},
                         status=status.HTTP_400_BAD_REQUEST
                     )
                 # Validate stand_size
-                valid_sizes = ['podstawowy', 'standardowy', 'rozszerzony']
+                valid_sizes = ['podstawowy', 'standardowy', 'rozszerzony', '12m2']
                 if day2_stand_data.get('stand_size') not in valid_sizes:
                     return Response(
                         {"detail": f"Stand size must be one of: {', '.join(valid_sizes)}"},
@@ -266,6 +266,7 @@ class CompanyDetailView(APIView):
             'podstawowy': {'en': '4m²', 'pl': '4m²'},
             'standardowy': {'en': '6m²', 'pl': '6m²'},
             'rozszerzony': {'en': '8m²', 'pl': '8m²'},
+            '12m2': {'en': '12m²', 'pl': '12m²'},
         }
         
         # Prepare stand data for template

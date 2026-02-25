@@ -143,7 +143,7 @@ export function StandEditDialog({
                     })
                   }
                   placeholder="2B"
-                  maxLength={3}
+                  maxLength={10}
                 />
               </div>
               <div>
@@ -173,6 +173,9 @@ export function StandEditDialog({
                   <option value="rozszerzony">
                     {t("companies.stand.sizes.rozszerzony")}
                   </option>
+                  <option value="12m2">
+                    {t("companies.stand.sizes.12m2")}
+                  </option>
                 </select>
               </div>
             </div>
@@ -197,7 +200,7 @@ export function StandEditDialog({
                     })
                   }
                   placeholder="4ab"
-                  maxLength={3}
+                  maxLength={10}
                 />
               </div>
               <div>
@@ -226,6 +229,9 @@ export function StandEditDialog({
                   </option>
                   <option value="rozszerzony">
                     {t("companies.stand.sizes.rozszerzony")}
+                  </option>
+                  <option value="12m2">
+                    {t("companies.stand.sizes.12m2")}
                   </option>
                 </select>
               </div>

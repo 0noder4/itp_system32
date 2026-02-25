@@ -81,8 +81,11 @@
   <g id="B2">
     <polygon class="cls-1" points="94.3 189.5 84.9 192.8 75.4 196.1 72.2 186.6 65.6 167.7 62.4 158.3 71.8 155 81.3 151.7 84.5 161.2 87.8 170.6 91.1 180.1 94.3 189.5"/>
   </g>
-  <g id="B3">
-    <rect class="cls-1" x="87.4" y="147.3" width="40" height="20"/>
+  <g id="B3a">
+    <rect class="cls-1" x="87.4" y="147.3" width="20" height="20"/>
+  </g>
+  <g id="B3b">
+    <rect class="cls-1" x="107.4" y="147.3" width="20" height="20"/>
   </g>
   <g id="C6">
     <rect class="cls-1" x="247.4" y="97.3" width="40" height="20"/>
@@ -117,8 +120,11 @@
   <g id="D4b">
     <rect class="cls-1" x="347.4" y="127.3" width="20" height="20"/>
   </g>
-  <g id="D3">
-    <rect class="cls-1" x="327.4" y="127.3" width="20" height="40"/>
+  <g id="D3a">
+    <rect class="cls-1" x="327.4" y="127.3" width="20" height="20"/>
+  </g>
+  <g id="D3b">
+    <rect class="cls-1" x="327.4" y="147.3" width="20" height="20"/>
   </g>
   <g id="D4a">
     <rect class="cls-1" x="347.4" y="147.3" width="20" height="20"/>

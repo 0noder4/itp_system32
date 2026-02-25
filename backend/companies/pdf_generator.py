@@ -530,6 +530,7 @@ class OrderSummaryPDFGenerator:
                 'podstawowy': self._t("4m²", "4m²"),
                 'standardowy': self._t("6m²", "6m²"),
                 'rozszerzony': self._t("8m²", "8m²"),
+                '12m2': self._t("12m²", "12m²"),
             }
             
             if day1_stand:
