@@ -19,6 +19,100 @@ Przykładowe logowanie:
 ssh <uzytkownik>@<adres-vps>
 ```
 
+## Publikacja obrazów na Docker Registry (produkcja)
+
+Produkcja korzysta z obrazów opublikowanych w rejestrze Docker (np. Docker Hub). Nazwy obrazów są zdefiniowane w `compose.prod.yml`:
+
+- `${DOCKER_REGISTRY}/itp_system32_backend:${BACKEND_VERSION}`
+- `${DOCKER_REGISTRY}/itp_system32_frontend:${FRONTEND_VERSION}`
+
+Zmienna `DOCKER_REGISTRY` (np. `docker.io/0noder4`) oraz wersje `BACKEND_VERSION` / `FRONTEND_VERSION` ustawia się w pliku `.env` lokalnie (przy buildzie) i na VPS (przy `pull`).
+
+### Wymagania wstępne
+
+1. Zainstalowany Docker na maszynie, z której budujesz obrazy (lokalny komputer lub CI).
+2. Konto w rejestrze obrazów z uprawnieniem do push.
+3. Zalogowanie do rejestru:
+
+```bash
+docker login
+```
+
+Dla Docker Hub podaj login i token/hasło. Dla innego rejestru użyj odpowiedniego hosta, np. `docker login registry.example.com`.
+
+4. W katalogu głównym projektu plik `.env` z poprawnym `DOCKER_REGISTRY` (zgodnym z `.env.example`).
+
+### Backend
+
+Z katalogu głównego repozytorium:
+
+```bash
+chmod +x scripts/build-push-backend.sh
+./scripts/build-push-backend.sh
+```
+
+Opcjonalnie z inną wersją tagu:
+
+```bash
+BACKEND_VERSION=0.1 ./scripts/build-push-backend.sh
+```
+
+Skrypt buduje obraz z targetem `production` (`backend/Dockerfile`) i wykonuje `docker push`.
+
+### Frontend
+
+Frontend wymaga podania publicznego URL API w czasie buildu (`NEXT_PUBLIC_API_URL`). Wartość bierze się z `API_URL` w `.env` (na produkcji: pełny adres backendu, np. `https://api.example.com`).
+
+```bash
+chmod +x scripts/build-push-frontend.sh
+./scripts/build-push-frontend.sh
+```
+
+Opcjonalnie z inną wersją:
+
+```bash
+FRONTEND_VERSION=0.1 ./scripts/build-push-frontend.sh
+```
+
+### Ręczny build i push (bez skryptów)
+
+Backend:
+
+```bash
+source .env
+docker build -f backend/Dockerfile -t "${DOCKER_REGISTRY}/itp_system32_backend:${BACKEND_VERSION}" --target production ./backend
+docker push "${DOCKER_REGISTRY}/itp_system32_backend:${BACKEND_VERSION}"
+```
+
+Frontend:
+
+```bash
+source .env
+docker build -f frontend/Dockerfile -t "${DOCKER_REGISTRY}/itp_system32_frontend:${FRONTEND_VERSION}" \
+  --target production \
+  --build-arg NEXT_PUBLIC_API_URL="${API_URL}" \
+  ./frontend
+docker push "${DOCKER_REGISTRY}/itp_system32_frontend:${FRONTEND_VERSION}"
+```
+
+### Po opublikowaniu obrazów (na VPS)
+
+1. Zaktualizuj w `.env` na serwerze wartości `BACKEND_VERSION` i/lub `FRONTEND_VERSION` do tagów, które właśnie wypchnąłeś.
+2. Pobierz obrazy i uruchom ponownie usługi:
+
+```bash
+docker compose -f compose.prod.yml pull backend frontend
+docker compose -f compose.prod.yml up -d backend frontend
+```
+
+Możesz też zaktualizować cały stack: `docker compose -f compose.prod.yml pull` oraz `up -d`.
+
+### Uwagi
+
+- Przed buildem frontendu upewnij się, że `API_URL` w `.env` na maszynie buildującej wskazuje **produkcyjny** adres API (wartość jest „wypiekana” w obrazie Next.js).
+- Po każdej zmianie wersji obrazu zwiększ tag (`BACKEND_VERSION` / `FRONTEND_VERSION`) lub nadpisz istniejący tag świadomie — na VPS musi być ten sam tag co w rejestrze.
+- Obrazy `db` i `backup` na produkcji są budowane lokalnie na VPS lub z publicznych obrazów bazowych; do rejestru projektu trafiają głównie `backend` i `frontend`.
+
 ## Podstawowe kroki wdrożenia
 
 1. Zaloguj się na serwer VPS przez SSH.
