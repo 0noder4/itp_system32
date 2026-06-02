@@ -52,7 +52,15 @@ Po uruchomieniu sprawdź:
 - backend: [http://localhost:8000](http://localhost:8000)
 - Mailpit UI: [http://localhost:8025](http://localhost:8025)
 
-Jeżeli backend korzysta z migracji, uruchom je:
+Jeżeli uruchamiasz projekt po raz pierwszy albo w repo są zmiany w modelach bez gotowych migracji, najpierw wygeneruj migracje, a następnie je zastosuj.
+
+Wygenerowanie migracji (jeśli potrzebne):
+
+```bash
+docker compose exec backend python manage.py makemigrations
+```
+
+Zastosowanie migracji:
 
 ```bash
 docker compose exec backend python manage.py migrate

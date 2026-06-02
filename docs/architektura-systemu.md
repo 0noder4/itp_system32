@@ -1,6 +1,11 @@
 # Architektura systemu
 
-Ten dokument opisuje architekturę środowiska uruchamianego przez `compose.yml` (lokalne/testowe), ze szczególnym naciskiem na kontenery, porty i ich przeznaczenie.
+Ten dokument opisuje architekturę środowiska uruchamianego przez Docker Compose, ze szczególnym naciskiem na kontenery, porty i ich przeznaczenie.
+
+W repozytorium są dwa główne pliki Compose:
+
+- `compose.yml` - środowisko lokalne/testowe (development),
+- `compose.prod.yml` - środowisko produkcyjne (production).
 
 ## Przegląd
 
@@ -11,6 +16,35 @@ System składa się z pięciu głównych usług działających w sieci `internal
 - `frontend` - aplikacja Next.js.
 - `mailpit` - lokalny serwer SMTP + web UI do podglądu maili.
 - `backup` - kontener wykonujący cykliczne kopie zapasowe bazy.
+
+## `compose.yml` vs `compose.prod.yml` (różnice kluczowe)
+
+### Źródło obrazów
+
+- `compose.yml`:
+  - dopuszcza lokalny build `backend` i `frontend` (sekcja `build`, target zależny od `ENV`),
+  - używa obrazów z tagami (np. `0noder4/itp_system32_backend:${BACKEND_VERSION}`), ale podczas pracy lokalnej typowo bazujemy na buildzie z repo.
+- `compose.prod.yml`:
+  - uruchamia `backend` i `frontend` z obrazów w rejestrze `${DOCKER_REGISTRY}` (bez lokalnego buildu),
+  - oczekuje, że obrazy zostały wcześniej zbudowane i wypchnięte do registry.
+
+### Wolumeny i kod źródłowy
+
+- `compose.yml`:
+  - montuje kod źródłowy do kontenerów (`./backend:/app`, `./frontend:/app`) dla pracy developerskiej.
+- `compose.prod.yml`:
+  - nie montuje kodu źródłowego (uruchamia gotowe obrazy),
+  - utrzymuje tylko wolumeny danych/plików: `data`, `staticfiles`, `mediafiles`, `backups`.
+
+### Usługi pomocnicze
+
+- `compose.yml` zawiera `mailpit` (SMTP + UI) do testowania wysyłki e-maili.
+- `compose.prod.yml` nie uruchamia `mailpit` (produkcja używa zewnętrznego SMTP).
+
+### Healthcheck i odporność na start
+
+- `compose.prod.yml` zawiera healthchecki i warunki `depends_on` (np. backend startuje po zdrowej bazie).
+- `compose.yml` jest uproszczony pod szybki start lokalny.
 
 ## Kontenery i porty
 
