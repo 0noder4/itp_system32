@@ -1,47 +1,65 @@
 # System32
 
-Web application for Job Fair's partners management.
+System32 to aplikacja webowa do zarządzania partnerami Targów Pracy.
 
-## Quick Start
+## O projekcie
 
-1. Copy `.env.example` to `.env` and configure your environment variables
-2. Run the application with Docker Compose:
+Projekt składa się z:
+
+- `frontend` - aplikacji Next.js,
+- `backend` - API Django REST,
+- `db` - bazy danych MySQL,
+- usług pomocniczych do testów i utrzymania.
+
+Domyślnie aplikacja uruchamiana jest kontenerowo przez Docker Compose.
+
+## Szybki start
+
+1. Skopiuj plik `.env.example` do `.env` i uzupełnij wymagane zmienne:
 
 ```bash
-docker compose up -d
+cp .env.example .env
 ```
 
-3. Access the application:
-   - Frontend: http://localhost:3000
-   - Backend API: http://localhost:8000
+2. Uruchom środowisko:
 
-## Services
+```bash
+docker compose up -d --build
+```
 
-- **Frontend**: Next.js application
-- **Backend**: Django REST API
-- **Database**: MySQL
+3. Otwórz usługi:
+   - Frontend: [http://localhost:3000](http://localhost:3000)
+   - Backend API: [http://localhost:8000](http://localhost:8000)
 
-## Requirements
+## Dokumentacja
 
-- Docker and Docker Compose
+Szczegółowa dokumentacja znajduje się w katalogu `docs`:
 
-## Production Deployment
+- [Architektura systemu](./docs/architektura-systemu.md) - kontenery, porty i przeznaczenie usług.
+- [Instrukcja uruchomienia środowiska testowego](./docs/srodowisko-testowe.md) - konfiguracja i uruchomienie środowiska lokalnego.
+- [Zmienne środowiskowe `.env`](./docs/zmienne-srodowiskowe-env.md) - pełna lista zmiennych, miejsca użycia i przeznaczenie.
+- [Wdrożenie produkcyjne](./docs/wdrozenie-produkcyjne.md) - informacje o VPS (`home.pl`), dostępie SSH i aktualizacji usług.
+- [Zgłoszenia użytkowników](./docs/zgloszenia-uzytkownikow.md) - zweryfikowana lista zgłoszeń z podziałem na wdrożone elementy i braki.
+- [Panel admina i `Settings`](./docs/panel-admina-i-settings.md) - opis możliwości panelu administracyjnego i globalnych ustawień systemu.
 
-For production deployment instructions, see [DEPLOYMENT.md](./DEPLOYMENT.md).
+## Wdrożenie produkcyjne
 
-The project includes a GitHub Actions CI/CD pipeline that automatically:
+Instrukcja wdrożenia produkcyjnego: [docs/wdrozenie-produkcyjne.md](./docs/wdrozenie-produkcyjne.md).
 
-- Runs tests on every push and pull request
-- Builds and pushes Docker images to Docker Hub when code is merged to `main`
-- Optionally deploys to production servers
+Potok CI/CD (GitHub Actions) automatycznie:
 
-## Documentation
+- uruchamia testy dla push i pull requestów,
+- buduje i publikuje obrazy Docker po mergu do gałęzi `main`,
+- umożliwia wdrożenie na środowisko produkcyjne.
 
-For documentation please view itp_system32 plane project docs
+## Kontakt
 
-## Team
+- Kontakt techniczny: `bartosz.kuklewski@best.pw.edu.pl`.
+- System został przygotowany na potrzeby 32. edycji Targów Pracy.
+- W sprawach organizacyjnych i sposobu pracy z formularzami można konsultować się z osobami, które korzystały z systemu.
+## Zespół
 
-Special thanks to the development team
+Podziękowania dla zespołu projektowego:
 
 - Patrycja Lubowiecka
 - Dominika Zarzycka
