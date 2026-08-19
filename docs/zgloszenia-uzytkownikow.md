@@ -1,6 +1,6 @@
 # Weryfikacja zgłoszeń użytkowników
 
-Data weryfikacji: `2026-06-02`.
+Data weryfikacji: `2026-06-02`. Ostatnia aktualizacja: `2026-08-20`.
 
 Dokument zawiera przegląd zgłoszeń od użytkowników wraz ze statusem w aktualnej wersji systemu.
 
@@ -12,12 +12,13 @@ Dokument zawiera przegląd zgłoszeń od użytkowników wraz ze statusem w aktua
   - widok FR (podgląd etapów) również ma linki do plików.
 - W tabeli firm po stronie staff jest licznik ukończonych etapów (`x/5`).
 - Zaproszenia można anulować (status `cancelled`) z poziomu panelu staff.
+- Mail zaproszeniowy wyraźnie wyróżnia login firmy (dedykowane, wizualnie wyróżnione pole w szablonie HTML i plain text).
+- Logowanie loginem firmy lub adresem e-mail (bez rozróżniania wielkości liter); spójne nazewnictwo „login” w UI i tłumaczeniach PL/EN.
 
 ## Częściowo wdrożone / wymaga doprecyzowania
 
 - Warsztaty są w systemie jako etap 3, ale brakuje dedykowanych pól osoby kontaktowej do warsztatów.
 - Pole mocy elektrycznej istnieje (`łączna moc urządzeń` w etapie 5), ale nie jest opisane jako wymagane szczególnie dla własnej zabudowy.
-- W mailu zaproszeniowym login jest podany (nazwa firmy), ale nie jest wystarczająco mocno wyróżniony instrukcją "loguj się nazwą użytkownika, nie e-mailem/telefonem".
 
 ## Braki do realizacji
 
@@ -37,5 +38,5 @@ Dokument zawiera przegląd zgłoszeń od użytkowników wraz ze statusem w aktua
 1. Mailing do FR o nowych/przesłanych etapach.
 2. Przypomnienia o wygasaniu zaproszeń.
 3. Wymagalność kluczowych pól (obiady, delegaci, dane warsztatowe).
-4. Poprawa statusów i komunikatów UI (statusy etapów, login w zaproszeniu).
+4. Poprawa statusów i komunikatów UI (statusy etapów).
 5. Rozszerzenie mapki o wiele stoisk dla jednej firmy.
