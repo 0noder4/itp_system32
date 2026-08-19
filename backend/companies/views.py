@@ -1,5 +1,6 @@
 import logging
 import os
+from textwrap import dedent
 
 from django.core.mail import EmailMultiAlternatives
 from django.conf import settings
@@ -488,22 +489,28 @@ class CompanyInvitationView(generics.CreateAPIView):
         # Subject and plain text based on language
         if language == 'pl':
             subject = "Zaproszenie do firmy - ITP System"
-            plain_message = f"""Zostałeś zaproszony do platformy dla wystawców Inżynierkisch targów Pracy. 
-                            Twój unikalny login: 
-                            {invitation.company_name}
-                            Aby dokończyć rejestrację, kliknij poniższy link i ustaw hasło:
-                            {registration_link}
-                            Link do zaproszenia wygaśnie za 7 dni.
-                            Jeśli nie spodziewałeś się tego zaproszenia, możesz zignorować tę wiadomość."""
+            plain_message = dedent(f"""
+                Zostałeś zaproszony do platformy wystawców Inżynierskich Targów Pracy.
+                Twój login: {invitation.company_name}
+
+                Aby dokończyć rejestrację, kliknij poniższy link i ustaw hasło:
+                {registration_link}
+
+                Link do zaproszenia wygaśnie za 7 dni.
+                Jeśli nie spodziewałeś się tego zaproszenia, możesz zignorować tę wiadomość.
+            """).strip()
         else:
             subject = "Company Invitation - ITP System"
-            plain_message = f"""You have been invited to join the ITP System platform for exhibitors of the Engineering Job Fair.
-                            Your unique login: 
-                            {invitation.company_name}
-                            To complete your registration, click the link below and set your password:
-                            {registration_link}
-                            This invitation link will expire in 7 days.
-                            If you did not expect this invitation, you can safely ignore this email."""
+            plain_message = dedent(f"""
+                You have been invited to join the ITP System platform for exhibitors of the Engineering Job Fair.
+                Your login: {invitation.company_name}
+
+                To complete your registration, click the link below and set your password:
+                {registration_link}
+
+                This invitation link will expire in 7 days.
+                If you did not expect this invitation, you can safely ignore this email.
+            """).strip()
 
         # Get staff contact email (fr_resp) or default
         # First, try to get from the user who created the invitation

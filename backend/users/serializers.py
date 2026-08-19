@@ -22,6 +22,14 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         return token
 
     def validate(self, attrs):
+        identifier = (attrs.get("username") or "").strip()
+        attrs["username"] = identifier
+
+        if not User.objects.filter(username=identifier).exists():
+            email_matches = User.objects.filter(email__iexact=identifier)
+            if email_matches.count() == 1:
+                attrs["username"] = email_matches.first().username
+
         data = super().validate(attrs)
 
         data['user_type'] = self.user.type

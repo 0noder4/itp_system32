@@ -33,9 +33,9 @@
   "auth": {
     "login": {
       "title": "Zaloguj się do swojego konta",
-      "description": "Wprowadź swoją nazwę użytkownika i hasło poniżej",
-      "usernameLabel": "Nazwa użytkownika",
-      "usernamePlaceholder": "Wprowadź nazwę użytkownika",
+      "description": "Wprowadź login lub e-mail oraz hasło poniżej",
+      "usernameLabel": "Login lub e-mail",
+      "usernamePlaceholder": "Wprowadź login lub e-mail",
       "passwordLabel": "Hasło",
       "passwordPlaceholder": "Wprowadź hasło",
       "forgotPassword": "Zapomniałeś hasła?",
@@ -44,7 +44,7 @@
       "success": "Zalogowano pomyślnie!",
       "successDescription": "Przekierowywanie do panelu...",
       "error": "Logowanie nieudane",
-      "errorDescription": "Nieprawidłowa nazwa użytkownika lub hasło. Spróbuj ponownie."
+      "errorDescription": "Nieprawidłowy login, e-mail lub hasło. Spróbuj ponownie."
     },
     "register": {
       "title": "Dokończ rejestrację",
@@ -55,8 +55,8 @@
       "lastNamePlaceholder": "Wprowadź swoje nazwisko",
       "phoneLabel": "Numer telefonu",
       "phonePlaceholder": "Wprowadź swój numer telefonu",
-      "usernameLabel": "Nazwa użytkownika",
-      "usernamePlaceholder": "Nazwa użytkownika",
+      "usernameLabel": "Login",
+      "usernamePlaceholder": "Login",
       "emailLabel": "E-mail",
       "emailPlaceholder": "Adres e-mail",
       "passwordLabel": "Hasło",
@@ -66,7 +66,7 @@
       "submitButton": "Utwórz konto",
       "submitting": "Tworzenie konta...",
       "success": "Konto utworzone!",
-      "successDescription": "Możesz teraz zalogować się swoimi danymi.",
+      "successDescription": "Możesz się zalogować podanym loginem.",
       "error": "Rejestracja nieudana",
       "errorDescription": "Nie udało się dokończyć rejestracji. Spróbuj ponownie.",
       "loadingInvitation": "Ładowanie zaproszenia...",
@@ -110,7 +110,7 @@
       "invalidTokenDescription": "Token jest nieprawidłowy lub wygasł. Poproś o nowy link resetowania hasła."
     },
     "validation": {
-      "usernameRequired": "Nazwa użytkownika jest wymagana.",
+      "usernameRequired": "Login lub e-mail jest wymagany.",
       "passwordRequired": "Hasło jest wymagane.",
       "passwordMin": "Hasło musi mieć co najmniej 8 znaków.",
       "passwordMax": "Hasło może mieć maksymalnie 128 znaków.",
@@ -629,7 +629,7 @@
     }
   },
   "userAccountCard": {
-    "username": "Nazwa użytkownika",
+    "username": "Login",
     "email": "E-mail",
     "dateJoined": "Data dołączenia",
     "phoneNumber": "Numer telefonu"

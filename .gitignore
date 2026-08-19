@@ -45,3 +45,6 @@ backups/*.log
 # ignore vscode specific
 .vscode/
 frontend/package-lock.json
+
+# Local private notes (not committed)
+private_notes/
