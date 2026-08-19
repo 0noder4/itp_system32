@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from django.conf import settings
+from django.utils import timezone
 from .models import (
     Company,
     CompanyInvitation,
@@ -191,9 +192,21 @@ class CompanyInvitationSerializer(serializers.ModelSerializer):
         return None
     
     def validate_email(self, value):
-        """Check if a user with this email already exists."""
-        if User.objects.filter(email=value).exists():
+        """Reject email if a user exists or an active invitation is pending."""
+        if User.objects.filter(email__iexact=value).exists():
             raise serializers.ValidationError("A user with this email already exists.")
+
+        has_active_invitation = CompanyInvitation.objects.filter(
+            email__iexact=value,
+            is_accepted=False,
+            is_cancelled=False,
+            expires_at__gt=timezone.now(),
+        ).exists()
+        if has_active_invitation:
+            raise serializers.ValidationError(
+                "An active invitation for this email already exists."
+            )
+
         return value
 
 
