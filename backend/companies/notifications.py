@@ -123,9 +123,10 @@ def today_in_invitation_tz():
 
 
 def send_invitation_expiry_reminder_exhibitor(invitation, days_before):
+    """Return True if email was sent, False if skipped (no recipient)."""
     if not invitation.email:
         logger.warning("No exhibitor email for invitation %s", invitation.id)
-        return
+        return False
 
     language = invitation.language if invitation.language in ("en", "pl") else "en"
     registration_link = (
@@ -171,13 +172,15 @@ def send_invitation_expiry_reminder_exhibitor(invitation, days_before):
         },
         to_email=invitation.email,
     )
+    return True
 
 
 def send_invitation_expiry_reminder_staff(invitation, days_before):
+    """Return True if email was sent, False if skipped (no recipient)."""
     staff = invitation.created_by
     if not staff or not staff.email:
         logger.warning("No staff email for invitation %s", invitation.id)
-        return
+        return False
 
     language = _user_language(staff)
     invitation_link = f"{settings.FRONTEND_BASE_URL}/panel/staff/invitations/{invitation.id}"
@@ -218,3 +221,4 @@ def send_invitation_expiry_reminder_staff(invitation, days_before):
         },
         to_email=staff.email,
     )
+    return True

@@ -271,6 +271,27 @@ class StagePendingFrEmailTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
         self.assertEqual(len(mail.outbox), 0)
 
+    def test_failed_patch_after_accepted_keeps_stage_completed(self):
+        self.client.force_authenticate(self.company_user)
+        self.client.post(
+            f"/api/company/{self.company.id}/form/stage-1/",
+            self._stage1_payload(),
+            format="json",
+        )
+        Feedback.objects.filter(company=self.company, form="stage_1").update(status="accepted")
+        Form.objects.filter(company=self.company).update(stage_1_completed=True)
+
+        response = self.client.patch(
+            f"/api/company/{self.company.id}/form/stage-1/",
+            {"basic_data": {"nip": "x" * 21}},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, response.data)
+        form = Form.objects.get(company=self.company)
+        self.assertTrue(form.stage_1_completed)
+        feedback = Feedback.objects.get(company=self.company, form="stage_1")
+        self.assertEqual(feedback.status, "accepted")
+
 
 class InvitationSettingsValidationTests(TestCase):
     def test_count_zero_skips_slot_validation(self):
@@ -508,4 +529,23 @@ class InvitationExpiryReminderCommandTests(TestCase):
         call_command("send_invitation_expiry_reminders")
         self.assertEqual(len(mail.outbox), 1)
         self.assertEqual(mail.outbox[0].to, ["staff@example.com"])
+
+    def test_missing_recipient_email_does_not_mark_sent(self):
+        invitation = self._invitation(2, email="")
+        self.staff.email = ""
+        self.staff.save()
+        call_command("send_invitation_expiry_reminders")
+        self.assertEqual(len(mail.outbox), 0)
+        self.assertFalse(InvitationExpiryReminderSent.objects.exists())
+        # Later, when emails exist, reminders can still be sent
+        invitation.email = "invitee@example.com"
+        invitation.save(update_fields=["email"])
+        self.staff.email = "staff@example.com"
+        self.staff.save(update_fields=["email"])
+        call_command("send_invitation_expiry_reminders")
+        self.assertEqual(len(mail.outbox), 2)
+        self.assertEqual(
+            InvitationExpiryReminderSent.objects.filter(invitation=invitation).count(),
+            2,
+        )
 

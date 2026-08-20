@@ -665,12 +665,8 @@ class FormStage1View(APIView):
             basic_data = BasicData.objects.get(company=company)
             address = Address.objects.filter(form=basic_data).first()
             
-            # Check feedback status
+            # Check feedback status (completion flag is reset only after a successful save below)
             latest_feedback = get_latest_feedback(company, 1)
-            # If stage was accepted and user is editing, cancel the acceptance by resetting feedback
-            if latest_feedback and latest_feedback.status == 'accepted':
-                form.stage_1_completed = False
-                form.save()
         except ValidationError as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except Company.DoesNotExist:
@@ -695,6 +691,10 @@ class FormStage1View(APIView):
         )
         if serializer.is_valid():
             serializer.save()
+            # If stage was accepted and user is editing, cancel acceptance only after successful save
+            if latest_feedback and latest_feedback.status == 'accepted':
+                form.stage_1_completed = False
+                form.save()
             # Create or update feedback with pending status
             create_or_update_feedback(company, 1, 'pending', '', notify_fr=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
@@ -1019,12 +1019,8 @@ class FormStage2View(APIView):
             stand = StandDetails.objects.get(company=company)
             equipment_selections = list(EquipmentSelection.objects.filter(stand_details=stand))
             
-            # Check feedback status
+            # Check feedback status (completion flag is reset only after a successful save below)
             latest_feedback = get_latest_feedback(company, 2)
-            # If stage was accepted and user is editing, cancel the acceptance by resetting feedback
-            if latest_feedback and latest_feedback.status == 'accepted':
-                form.stage_2_completed = False
-                form.save()
         except ValidationError as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except Company.DoesNotExist:
@@ -1142,6 +1138,10 @@ class FormStage2View(APIView):
         serializer = Stage2Serializer(instance_data, data=data, partial=True)
         if serializer.is_valid():
             result = serializer.save()
+            # If stage was accepted and user is editing, cancel acceptance only after successful save
+            if latest_feedback and latest_feedback.status == 'accepted':
+                form.stage_2_completed = False
+                form.save()
             # Create or update feedback with pending status
             create_or_update_feedback(company, 2, 'pending', '', notify_fr=True)
             
@@ -1215,12 +1215,8 @@ class FormStage3View(APIView):
             form = Form.objects.get(company=company)
             workshop = Workshop.objects.get(company=company)
             
-            # Check feedback status
+            # Check feedback status (completion flag is reset only after a successful save below)
             latest_feedback = get_latest_feedback(company, 3)
-            # If stage was accepted and user is editing, cancel the acceptance by resetting feedback
-            if latest_feedback and latest_feedback.status == 'accepted':
-                form.stage_3_completed = False
-                form.save()
         except ValidationError as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except Company.DoesNotExist:
@@ -1236,6 +1232,10 @@ class FormStage3View(APIView):
         serializer = WorkshopSerializer(workshop, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
+            # If stage was accepted and user is editing, cancel acceptance only after successful save
+            if latest_feedback and latest_feedback.status == 'accepted':
+                form.stage_3_completed = False
+                form.save()
             # Create or update feedback with pending status
             create_or_update_feedback(company, 3, 'pending', '', notify_fr=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
@@ -1384,12 +1384,8 @@ class FormStage4View(APIView):
             company = Company.objects.get(id=company_id, representative=request.user)
             form = Form.objects.get(company=company)
             
-            # Check feedback status
+            # Check feedback status (completion flag is reset only after a successful save below)
             latest_feedback = get_latest_feedback(company, 4)
-            # If stage was accepted and user is editing, cancel the acceptance by resetting feedback
-            if latest_feedback and latest_feedback.status == 'accepted':
-                form.stage_4_completed = False
-                form.save()
         except ValidationError as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except Company.DoesNotExist:
@@ -1482,6 +1478,10 @@ class FormStage4View(APIView):
         serializer = Stage4Serializer(instance_data, data=data, partial=True, context={'company': company})
         if serializer.is_valid():
             result = serializer.save()
+            # If stage was accepted and user is editing, cancel acceptance only after successful save
+            if latest_feedback and latest_feedback.status == 'accepted':
+                form.stage_4_completed = False
+                form.save()
             # Create or update feedback with pending status
             create_or_update_feedback(company, 4, 'pending', '', notify_fr=True)
             
@@ -1608,12 +1608,8 @@ class FormStage5View(APIView):
             company = Company.objects.get(id=company_id, representative=request.user)
             form = Form.objects.get(company=company)
             
-            # Check feedback status
+            # Check feedback status (completion flag is reset only after a successful save below)
             latest_feedback = get_latest_feedback(company, 5)
-            # If stage was accepted and user is editing, cancel the acceptance by resetting feedback
-            if latest_feedback and latest_feedback.status == 'accepted':
-                form.stage_5_completed = False
-                form.save()
         except ValidationError as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except Company.DoesNotExist:
@@ -1652,6 +1648,10 @@ class FormStage5View(APIView):
         serializer = Stage5Serializer(instance_data, data=data, partial=True, context={'company': company})
         if serializer.is_valid():
             serializer.save()
+            # If stage was accepted and user is editing, cancel acceptance only after successful save
+            if latest_feedback and latest_feedback.status == 'accepted':
+                form.stage_5_completed = False
+                form.save()
             # Create or update feedback with pending status
             create_or_update_feedback(company, 5, 'pending', '', notify_fr=True)
             return Response(serializer.data, status=status.HTTP_200_OK)

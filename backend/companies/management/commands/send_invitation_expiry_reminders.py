@@ -60,7 +60,10 @@ class Command(BaseCommand):
                         skipped += 1
                         continue
                     try:
-                        send_fn(invitation, days_before)
+                        was_sent = send_fn(invitation, days_before)
+                        if not was_sent:
+                            skipped += 1
+                            continue
                         InvitationExpiryReminderSent.objects.create(
                             invitation=invitation,
                             days_before=days_before,
