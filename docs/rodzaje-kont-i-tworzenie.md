@@ -42,7 +42,7 @@ Konto `staff` tworzymy przez panel Django Admin:
 Konto `company` tworzy się przez proces zaproszenia:
 
 1. Użytkownik `admin`/`staff` wysyła zaproszenie do firmy.
-2. System wysyła mail z linkiem rejestracyjnym (token ważny 7 dni).
+2. System wysyła mail z linkiem rejestracyjnym. Ważność tokenu ustawia się w panelu admina (`Settings` → Invitation settings, pole `invitation_validity_days`; domyślnie 7 dni). Zmiana tego pola dotyczy tylko **nowych** zaproszeń.
 3. Przedstawiciel firmy otwiera link i ustawia hasło.
 4. System automatycznie tworzy konto użytkownika typu `company` oraz rekord firmy.
 

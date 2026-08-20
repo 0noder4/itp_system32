@@ -14,6 +14,8 @@ Dokument zawiera przegląd zgłoszeń od użytkowników wraz ze statusem w aktua
 - Zaproszenia można anulować (status `cancelled`) z poziomu panelu staff.
 - Mail zaproszeniowy wyraźnie wyróżnia login firmy (dedykowane, wizualnie wyróżnione pole w szablonie HTML i plain text).
 - Logowanie loginem firmy lub adresem e-mail (bez rozróżniania wielkości liter); spójne nazewnictwo „login” w UI i tłumaczeniach PL/EN.
+- Mail do opiekuna FR po przesłaniu lub poprawie etapu (sygnał „oczekuje na akceptację”); bez ponownego maila przy kolejnym zapisie tego samego etapu w statusie pending.
+- Automatyczne przypomnienia o zbliżającym się wygaśnięciu zaproszenia (do wystawcy i opiekuna); progi dni, liczba przypomnień (`0` = wyłączone) i ważność nowych linków w `Settings` (Invitation settings).
 
 ## Częściowo wdrożone / wymaga doprecyzowania
 
@@ -23,8 +25,6 @@ Dokument zawiera przegląd zgłoszeń od użytkowników wraz ze statusem w aktua
 ## Braki do realizacji
 
 - Brak pytań zbierających komplet danych organizacyjnych na starcie (pakiet, rozmiar stoiska, własna zabudowa, dzień wystawiania) w jednym spójnym miejscu procesu.
-- Brak automatycznego mailingu do FR po przesłaniu/poprawieniu etapu przez firmę (sygnał "oczekuje na akceptację").
-- Brak automatycznego mailingu przypominającego o zbliżającym się wygaśnięciu linku zaproszenia.
 - Nazewnictwo statusów etapów jest dla użytkowników nieintuicyjne (szczególnie odróżnienie "w trakcie" vs "oczekuje na akceptację").
 - FR nie ma trybu "podglądu formularza przed wysłaniem" (wgląd jest dopiero po zapisaniu danych przez firmę).
 - Mapka nie wspiera przypisania jednej firmy do wielu stoisk w tym samym dniu (np. `E11` + `E12`) jako osobnych pozycji.
@@ -35,8 +35,6 @@ Dokument zawiera przegląd zgłoszeń od użytkowników wraz ze statusem w aktua
 
 ## Rekomendowany priorytet
 
-1. Mailing do FR o nowych/przesłanych etapach.
-2. Przypomnienia o wygasaniu zaproszeń.
-3. Wymagalność kluczowych pól (obiady, delegaci, dane warsztatowe).
-4. Poprawa statusów i komunikatów UI (statusy etapów).
-5. Rozszerzenie mapki o wiele stoisk dla jednej firmy.
+1. Wymagalność kluczowych pól (obiady, delegaci, dane warsztatowe).
+2. Poprawa statusów i komunikatów UI (statusy etapów).
+3. Rozszerzenie mapki o wiele stoisk dla jednej firmy.

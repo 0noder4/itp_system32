@@ -49,6 +49,43 @@ services:
       - db
     volumes:
       - ./backend:/app
+  scheduler:
+    image: 0noder4/itp_system32_backend:${BACKEND_VERSION}
+    container_name: ${PROJECT_NAME}_scheduler
+    build:
+      context: backend
+      target: ${ENV}
+    environment:
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
+      DEBUG: ${DEBUG}
+      DJANGO_LOGLEVEL: ${DJANGO_LOGLEVEL}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS}
+      DATABASE_ENGINE: ${DATABASE_ENGINE}
+      DATABASE_NAME: ${DATABASE_NAME}
+      DATABASE_USERNAME: ${DATABASE_USER}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      DATABASE_HOST: ${DATABASE_HOST}
+      DATABASE_PORT: ${DATABASE_PORT}
+      EMAIL_HOST: ${EMAIL_HOST}
+      EMAIL_PORT: ${EMAIL_PORT}
+      EMAIL_HOST_USER: ${EMAIL_HOST_USER}
+      EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD}
+      EMAIL_USE_TLS: ${EMAIL_USE_TLS:-}
+      EMAIL_USE_SSL: ${EMAIL_USE_SSL:-}
+      FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-http://localhost:3000}
+      BACKEND_BASE_URL: ${BACKEND_BASE_URL:-http://localhost:8000}
+      NOTIFICATIONS_HOUR: ${NOTIFICATIONS_HOUR:-9}
+      NOTIFICATIONS_MINUTE: ${NOTIFICATIONS_MINUTE:-0}
+    env_file:
+      - .env
+    networks:
+      - internal
+    depends_on:
+      - db
+    volumes:
+      - ./backend:/app
+    command: ["/bin/bash", "/app/docker-entrypoint-notifications.sh"]
+    restart: unless-stopped
   frontend:
     image: 0noder4/itp_system32_frontend:${FRONTEND_VERSION}
     container_name: ${PROJECT_NAME}_frontend

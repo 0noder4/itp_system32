@@ -4,7 +4,7 @@ Dokument opisuje wszystkie zmienne z pliku `.env.example`, ich przeznaczenie ora
 
 ## Jak czytać ten dokument
 
-- **Gdzie**: kontener/usługa, która dostaje zmienną (`db`, `backend`, `frontend`, `backup`, `mailpit`).
+- **Gdzie**: kontener/usługa, która dostaje zmienną (`db`, `backend`, `scheduler`, `frontend`, `backup`, `mailpit`).
 - **Po co**: praktyczne znaczenie zmiennej.
 - Wartości domyślne/fallbacki wynikają z kodu lub z definicji w `compose*.yml`.
 
@@ -63,6 +63,10 @@ BACKUP_SCHEDULE=0 2 * * *
 BACKUP_RETENTION_DAYS=30
 BACKUP_ON_START=false
 TZ=UTC
+
+# Invitation expiry reminder scheduler
+NOTIFICATIONS_HOUR=9
+NOTIFICATIONS_MINUTE=0
 ```
 
 ## 1) Konfiguracja projektu i obrazów
@@ -208,6 +212,14 @@ TZ=UTC
 ### `TZ`
 - **Gdzie**: `backup`.
 - **Po co**: strefa czasowa używana przez harmonogram backupów.
+
+### `NOTIFICATIONS_HOUR`
+- **Gdzie**: `scheduler`.
+- **Po co**: godzina (0–23, zegar Europe/Warsaw), o której command `send_invitation_expiry_reminders` ma się uruchomić raz dziennie. Domyślnie `9`.
+
+### `NOTIFICATIONS_MINUTE`
+- **Gdzie**: `scheduler`.
+- **Po co**: minuta w tej godzinie. Domyślnie `0`.
 
 ## Uwaga praktyczna
 

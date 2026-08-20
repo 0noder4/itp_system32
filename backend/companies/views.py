@@ -17,7 +17,9 @@ from .models import (
     Company, CompanyInvitation, Form, Feedback, BasicData, Address,
     StandDetails, Stand, EquipmentItem, EquipmentSelection, Workshop, Jobwall,
     Description, FinalData, Lunch, PDI, PDIAttendee, Exhibitor, Settings,
+    compute_invitation_expires_at,
 )
+from .notifications import send_stage_pending_fr_email
 from .serializers import (
     CompanySerializer, CompanyInvitationSerializer, CompanyRegistrationSerializer,
     FormSerializer, FeedbackSerializer, BasicDataSerializer, AddressSerializer,
@@ -62,8 +64,10 @@ def get_latest_feedback(company, stage_num):
         return None
 
 
-def create_or_update_feedback(company, stage_num, feedback_status='pending', comment=''):
+def create_or_update_feedback(company, stage_num, feedback_status='pending', comment='', notify_fr=False):
     """Create or update feedback for a stage."""
+    previous = Feedback.objects.filter(company=company, form=f'stage_{stage_num}').first()
+    previous_status = previous.status if previous else None
     feedback, created = Feedback.objects.update_or_create(
         company=company,
         form=f'stage_{stage_num}',
@@ -72,6 +76,11 @@ def create_or_update_feedback(company, stage_num, feedback_status='pending', com
             'comment': comment,
         }
     )
+    if notify_fr and feedback_status == 'pending' and previous_status != 'pending':
+        try:
+            send_stage_pending_fr_email(company, stage_num, previous_status)
+        except Exception as e:
+            logger.error(f"Error sending stage pending FR email: {e}", exc_info=True)
     return feedback
 
 # --- COMPANY VIEWS ---
@@ -303,7 +312,7 @@ class CompanyDetailView(APIView):
         staff_email = None
         if company.fr_resp and company.fr_resp.email:
             staff_email = company.fr_resp.email
-        default_email = 'best@best.pw.edu.pl'
+        default_email = Settings.get_settings().get_general_contact_email()
         
         # Build contact text for plain messages
         if staff_email:
@@ -472,6 +481,9 @@ class CompanyInvitationView(generics.CreateAPIView):
     def perform_create(self, serializer):
         # Set the creator to the current user (staff member who created the invitation)
         invitation = serializer.save(created_by=self.request.user)
+        invitation.expires_at = compute_invitation_expires_at()
+        invitation.save(update_fields=['expires_at'])
+        validity_days = Settings.get_settings().invitation_validity_days
         
         # Get language from invitation model (default to English)
         language = invitation.language or 'en'
@@ -496,7 +508,7 @@ class CompanyInvitationView(generics.CreateAPIView):
                 Aby dokończyć rejestrację, kliknij poniższy link i ustaw hasło:
                 {registration_link}
 
-                Link do zaproszenia wygaśnie za 7 dni.
+                Link do zaproszenia wygaśnie za {validity_days} dni.
                 Jeśli nie spodziewałeś się tego zaproszenia, możesz zignorować tę wiadomość.
             """).strip()
         else:
@@ -508,14 +520,14 @@ class CompanyInvitationView(generics.CreateAPIView):
                 To complete your registration, click the link below and set your password:
                 {registration_link}
 
-                This invitation link will expire in 7 days.
+                This invitation link will expire in {validity_days} days.
                 If you did not expect this invitation, you can safely ignore this email.
             """).strip()
 
         # Get staff contact email (fr_resp) or default
         # First, try to get from the user who created the invitation
         staff_email = None
-        default_email = 'best@best.pw.edu.pl'
+        default_email = Settings.get_settings().get_general_contact_email()
         if invitation.created_by and invitation.created_by.email:
             staff_email = invitation.created_by.email
         else:
@@ -534,6 +546,7 @@ class CompanyInvitationView(generics.CreateAPIView):
             'logo_url': logo_url,
             'staff_email': staff_email,
             'default_email': default_email,
+            'validity_days': validity_days,
         })
 
         # Send email with HTML and plain text alternatives
@@ -638,7 +651,7 @@ class FormStage1View(APIView):
         if serializer.is_valid():
             serializer.save()
             # Create feedback with pending status
-            create_or_update_feedback(company, 1, 'pending', '')
+            create_or_update_feedback(company, 1, 'pending', '', notify_fr=True)
             # Reset completion flag when creating new submission
             form.stage_1_completed = False
             form.save()
@@ -658,8 +671,6 @@ class FormStage1View(APIView):
             if latest_feedback and latest_feedback.status == 'accepted':
                 form.stage_1_completed = False
                 form.save()
-                # Reset feedback status to pending to cancel the acceptance
-                create_or_update_feedback(company, 1, 'pending', '')
         except ValidationError as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except Company.DoesNotExist:
@@ -685,7 +696,7 @@ class FormStage1View(APIView):
         if serializer.is_valid():
             serializer.save()
             # Create or update feedback with pending status
-            create_or_update_feedback(company, 1, 'pending', '')
+            create_or_update_feedback(company, 1, 'pending', '', notify_fr=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -986,7 +997,7 @@ class FormStage2View(APIView):
         if serializer.is_valid():
             result = serializer.save()
             # Create feedback with pending status
-            create_or_update_feedback(company, 2, 'pending', '')
+            create_or_update_feedback(company, 2, 'pending', '', notify_fr=True)
             # Reset completion flag when creating new submission
             form.stage_2_completed = False
             form.save()
@@ -1014,8 +1025,6 @@ class FormStage2View(APIView):
             if latest_feedback and latest_feedback.status == 'accepted':
                 form.stage_2_completed = False
                 form.save()
-                # Reset feedback status to pending to cancel the acceptance
-                create_or_update_feedback(company, 2, 'pending', '')
         except ValidationError as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except Company.DoesNotExist:
@@ -1134,7 +1143,7 @@ class FormStage2View(APIView):
         if serializer.is_valid():
             result = serializer.save()
             # Create or update feedback with pending status
-            create_or_update_feedback(company, 2, 'pending', '')
+            create_or_update_feedback(company, 2, 'pending', '', notify_fr=True)
             
             # Return serialized response
             response_data = {
@@ -1192,7 +1201,7 @@ class FormStage3View(APIView):
         if serializer.is_valid():
             serializer.save()
             # Create feedback with pending status
-            create_or_update_feedback(company, 3, 'pending', '')
+            create_or_update_feedback(company, 3, 'pending', '', notify_fr=True)
             # Reset completion flag when creating new submission
             form.stage_3_completed = False
             form.save()
@@ -1212,8 +1221,6 @@ class FormStage3View(APIView):
             if latest_feedback and latest_feedback.status == 'accepted':
                 form.stage_3_completed = False
                 form.save()
-                # Reset feedback status to pending to cancel the acceptance
-                create_or_update_feedback(company, 3, 'pending', '')
         except ValidationError as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except Company.DoesNotExist:
@@ -1230,7 +1237,7 @@ class FormStage3View(APIView):
         if serializer.is_valid():
             serializer.save()
             # Create or update feedback with pending status
-            create_or_update_feedback(company, 3, 'pending', '')
+            create_or_update_feedback(company, 3, 'pending', '', notify_fr=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -1358,7 +1365,7 @@ class FormStage4View(APIView):
         if serializer.is_valid():
             result = serializer.save()
             # Create feedback with pending status
-            create_or_update_feedback(company, 4, 'pending', '')
+            create_or_update_feedback(company, 4, 'pending', '', notify_fr=True)
             # Reset completion flag when creating new submission
             form.stage_4_completed = False
             form.save()
@@ -1383,8 +1390,6 @@ class FormStage4View(APIView):
             if latest_feedback and latest_feedback.status == 'accepted':
                 form.stage_4_completed = False
                 form.save()
-                # Reset feedback status to pending to cancel the acceptance
-                create_or_update_feedback(company, 4, 'pending', '')
         except ValidationError as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except Company.DoesNotExist:
@@ -1478,7 +1483,7 @@ class FormStage4View(APIView):
         if serializer.is_valid():
             result = serializer.save()
             # Create or update feedback with pending status
-            create_or_update_feedback(company, 4, 'pending', '')
+            create_or_update_feedback(company, 4, 'pending', '', notify_fr=True)
             
             # Return serialized response
             response_data = {
@@ -1590,7 +1595,7 @@ class FormStage5View(APIView):
         if serializer.is_valid():
             serializer.save()
             # Create feedback with pending status
-            create_or_update_feedback(company, 5, 'pending', '')
+            create_or_update_feedback(company, 5, 'pending', '', notify_fr=True)
             # Reset completion flag when creating new submission
             form.stage_5_completed = False
             form.save()
@@ -1609,8 +1614,6 @@ class FormStage5View(APIView):
             if latest_feedback and latest_feedback.status == 'accepted':
                 form.stage_5_completed = False
                 form.save()
-                # Reset feedback status to pending to cancel the acceptance
-                create_or_update_feedback(company, 5, 'pending', '')
         except ValidationError as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except Company.DoesNotExist:
@@ -1650,7 +1653,7 @@ class FormStage5View(APIView):
         if serializer.is_valid():
             serializer.save()
             # Create or update feedback with pending status
-            create_or_update_feedback(company, 5, 'pending', '')
+            create_or_update_feedback(company, 5, 'pending', '', notify_fr=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -1748,7 +1751,7 @@ class FormReviewView(APIView):
         staff_email = None
         if company.fr_resp and company.fr_resp.email:
             staff_email = company.fr_resp.email
-        default_email = 'best@best.pw.edu.pl'
+        default_email = Settings.get_settings().get_general_contact_email()
         
         # Build contact text for plain messages
         if staff_email:
@@ -1761,44 +1764,36 @@ class FormReviewView(APIView):
         # Plain text message
         if status == 'accepted':
             if language == 'en':
-                plain_message = f"""Hello {representative.username or representative.email},
-
-Your submission for {stage_name} for {company.name} has been accepted by our staff.
+                plain_message = f"""{stage_name} for {company.name} has been accepted by our staff.
 
 {f'Staff Comment: {comment}' if comment else ''}
 
-You can continue with the next stage of your application or check your progress in the platform: {dashboard_link}
+You can continue with the next stage of your application or check your progress in the panel: {dashboard_link}
 
 If you have any questions, please contact{contact_text_en}."""
             else:
-                plain_message = f"""Cześć {representative.username or representative.email},
-
-Twoje zgłoszenie dla {stage_name} dla {company.name} zostało zaakceptowane przez nasz zespół.
+                plain_message = f"""{stage_name} dla firmy {company.name} został zaakceptowany przez nasz zespół.
 
 {f'Komentarz zespołu: {comment}' if comment else ''}
 
-Możesz kontynuować z następnym etapem swojego zgłoszenia lub sprawdzić postęp w platformie: {dashboard_link}
+Możesz przejść do kolejnego etapu zgłoszenia lub sprawdzić postęp w panelu: {dashboard_link}
 
 Jeśli masz pytania, skontaktuj się{contact_text_pl}."""
         else:  # rejected
             if language == 'en':
-                plain_message = f"""Hello {representative.username or representative.email},
-
-Your submission for {stage_name} for {company.name} requires corrections before it can be accepted.
+                plain_message = f"""{stage_name} for {company.name} requires corrections before it can be accepted.
 
 {f'Staff Feedback: {comment}' if comment else 'Please review your submission and make the necessary corrections.'}
 
-Please review the feedback above and make the necessary corrections. Once you've updated your submission, you can resubmit it for review: {dashboard_link}
+Please review the feedback and make the necessary corrections. Once updated, you can resubmit it for review: {dashboard_link}
 
 If you have any questions, please contact{contact_text_en}."""
             else:
-                plain_message = f"""Cześć {representative.username or representative.email},
-
-Twoje zgłoszenie dla {stage_name} dla {company.name} wymaga poprawek przed akceptacją.
+                plain_message = f"""{stage_name} dla firmy {company.name} wymaga poprawek przed akceptacją.
 
 {f'Uwagi zespołu: {comment}' if comment else 'Prosimy o przejrzenie zgłoszenia i wprowadzenie niezbędnych poprawek.'}
 
-Prosimy o przejrzenie uwag powyżej i wprowadzenie niezbędnych poprawek. Po zaktualizowaniu zgłoszenia możesz ponownie je przesłać do weryfikacji: {dashboard_link}
+Prosimy o przejrzenie uwag i wprowadzenie niezbędnych poprawek. Po aktualizacji możesz ponownie przesłać zgłoszenie do weryfikacji: {dashboard_link}
 
 Jeśli masz pytania, skontaktuj się{contact_text_pl}."""
         
@@ -2210,13 +2205,11 @@ class SendStageReminderView(APIView):
         staff_email = None
         if company.fr_resp and company.fr_resp.email:
             staff_email = company.fr_resp.email
-        default_email = 'best@best.pw.edu.pl'
+        default_email = Settings.get_settings().get_general_contact_email()
         
         # Plain text message
         if language == 'en':
-            plain_message = f"""Hello {representative.username or representative.email},
-
-This is a friendly reminder that {stage_name} for {company.name} has not yet been completed.
+            plain_message = f"""This is a reminder that {stage_name} for {company.name} has not yet been completed.
 
 Please complete this stage of your application as soon as possible to ensure your participation in the Engineering Job Fair.
 
@@ -2224,11 +2217,9 @@ You can access your dashboard here: {dashboard_link}
 
 If you have any questions, please contact{' your staff contact at ' + staff_email + ' or' if staff_email else ''} us at {default_email}."""
         else:
-            plain_message = f"""Witaj {representative.username or representative.email},
+            plain_message = f"""Przypominamy, że {stage_name} dla {company.name} nie został jeszcze uzupełniony.
 
-To przyjazne przypomnienie, że {stage_name} dla {company.name} nie zostało jeszcze uzupełnione.
-
-Prosimy o uzupełnienie tego etapu zgłoszenia jak najszybciej, aby zapewnić udział w Inżynierskich Targach Pracy.
+Prosimy o uzupełnienie tego etapu zgłoszenia jak najszybciej, aby zapewnić Państwu udział w Inżynierskich Targach Pracy.
 
 Możesz uzyskać dostęp do panelu tutaj: {dashboard_link}
 

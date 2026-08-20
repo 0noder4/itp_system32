@@ -88,9 +88,7 @@ class PasswordResetRequestSerializer(serializers.Serializer):
             # Subject based on language
             if language == 'en':
                 subject = "Password Reset - ITP System"
-                plain_message = f"""Hello {user.username},
-
-We received a request to reset your password. Click the link below to set a new password:
+                plain_message = f"""We received a request to reset your password. Click the link below to set a new password:
 {reset_link}
 
 This link will expire in 24 hours.
@@ -98,9 +96,7 @@ This link will expire in 24 hours.
 If you did not request a password reset, you can safely ignore this email."""
             else:
                 subject = "Reset hasła - ITP System"
-                plain_message = f"""Cześć {user.username},
-
-Otrzymaliśmy prośbę o reset hasła. Kliknij poniższy link, aby ustawić nowe hasło:
+                plain_message = f"""Otrzymaliśmy prośbę o reset hasła. Kliknij poniższy link, aby ustawić nowe hasło:
 {reset_link}
 
 Link wygaśnie za 24 godziny.
@@ -109,9 +105,9 @@ Jeśli nie prosiłeś o reset hasła, możesz zignorować tę wiadomość."""
 
             # Get staff contact email if user is a company user
             staff_email = None
-            default_email = 'best@best.pw.edu.pl'
+            from companies.models import Company, Settings as CompanySettings
+            default_email = CompanySettings.get_settings().get_general_contact_email()
             if user.type == 'company':
-                from companies.models import Company
                 try:
                     company = Company.objects.get(representative=user)
                     if company.fr_resp and company.fr_resp.email:

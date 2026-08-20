@@ -22,7 +22,6 @@ import { CompanyFilters } from "@/components/staff/Companies/CompanyFilters";
 import { CompaniesTable } from "@/components/staff/Companies/CompaniesTable";
 import { useFilteredRows } from "@/components/staff/Companies/useFilteredRows";
 import { useStaffDashboardFilters } from "@/hooks/useStaffDashboardFilters";
-import { StageReminderCard } from "@/components/staff/StageReminder/StageReminderCard";
 import { STAFF_ACCENT_COLOR } from "@/lib/colors";
 
 export default function Index() {
@@ -136,8 +135,8 @@ export default function Index() {
   return (
     <div className="flex flex-col md:h-screen md:overflow-hidden min-h-screen md:min-h-0">
       <Header navigationItems={navItems} />
-      <div className="flex flex-col md:flex-row flex-1 md:overflow-hidden p-3 md:p-6 gap-4">
-        <Card className="flex flex-col md:flex-[3] md:overflow-hidden gap-2 md:flex-initial">
+      <div className="flex flex-col flex-1 md:overflow-hidden p-3 md:p-6">
+        <Card className="flex flex-col flex-1 md:overflow-hidden gap-2">
           <CardHeader className="shrink-0">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
               <div className="flex flex-col gap-2">
@@ -246,7 +245,6 @@ export default function Index() {
             </div>
           </CardContent>
         </Card>
-        <StageReminderCard />
       </div>
       <footer className="shrink-0 border-t border-border bg-muted/30 py-2 md:py-3 px-3 md:px-6">
         <div className="flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 text-xs sm:text-sm text-muted-foreground">

@@ -1,5 +1,7 @@
 from django.db import models
 from django.conf import settings
+from django.core.exceptions import ValidationError
+from django.core.validators import MaxValueValidator, MinValueValidator
 import uuid
 import datetime
 import django.utils
@@ -98,8 +100,16 @@ class Company(models.Model):
         return self.name
 
 
+INVITATION_VALIDITY_DAYS_FALLBACK = 7
+
+
 def get_expiry_time():
-    return django.utils.timezone.now() + datetime.timedelta(days=7)
+    return django.utils.timezone.now() + datetime.timedelta(days=INVITATION_VALIDITY_DAYS_FALLBACK)
+
+
+def compute_invitation_expires_at():
+    days = Settings.get_settings().invitation_validity_days or INVITATION_VALIDITY_DAYS_FALLBACK
+    return django.utils.timezone.now() + datetime.timedelta(days=days)
 
 class CompanyInvitation(models.Model):
     LANGUAGE_CHOICES = [
@@ -368,6 +378,55 @@ class Settings(models.Model):
         verbose_name="dzień 2 targów",
         help_text="Data drugiego dnia targów (np. 2025-03-11)"
     )
+    invitation_validity_days = models.PositiveSmallIntegerField(
+        default=7,
+        validators=[MinValueValidator(1), MaxValueValidator(30)],
+        verbose_name="ważność zaproszenia (dni)",
+        help_text="Liczba dni ważności nowo wysłanych linków zaproszenia (1–30). Nie zmienia już wysłanych zaproszeń."
+    )
+    invitation_reminder_count = models.PositiveSmallIntegerField(
+        default=2,
+        validators=[MinValueValidator(0), MaxValueValidator(5)],
+        verbose_name="liczba przypomnień o wygaśnięciu",
+        help_text="Set to 0 to disable invitation expiry reminders."
+    )
+    invitation_reminder_1_days = models.PositiveSmallIntegerField(
+        default=2,
+        null=True,
+        blank=True,
+        verbose_name="przypomnienie 1 (dni przed wygaśnięciem)",
+    )
+    invitation_reminder_2_days = models.PositiveSmallIntegerField(
+        default=1,
+        null=True,
+        blank=True,
+        verbose_name="przypomnienie 2 (dni przed wygaśnięciem)",
+    )
+    invitation_reminder_3_days = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        verbose_name="przypomnienie 3 (dni przed wygaśnięciem)",
+    )
+    invitation_reminder_4_days = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        verbose_name="przypomnienie 4 (dni przed wygaśnięciem)",
+    )
+    invitation_reminder_5_days = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        verbose_name="przypomnienie 5 (dni przed wygaśnięciem)",
+    )
+    general_contact_email = models.EmailField(
+        default="best@best.pw.edu.pl",
+        verbose_name="ogólny kontakt (maile do firm)",
+        help_text="Adres w stopkach maili do wystawców/firm (zaproszenia, akceptacje, przypomnienia etapów itd.).",
+    )
+    system_admin_email = models.EmailField(
+        default="admin@example.com",
+        verbose_name="administrator systemu (maile do staff/FR)",
+        help_text="Adres w stopkach maili do opiekunów FR i staff. Ustaw właściwy adres w panelu admina na produkcji.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -424,5 +483,86 @@ class Settings(models.Model):
         if self.day2_date:
             return self.day2_date.strftime('%d.%m.%Y')
         return "11.03.2025"
+
+    def reminder_day_slots(self):
+        return [
+            self.invitation_reminder_1_days,
+            self.invitation_reminder_2_days,
+            self.invitation_reminder_3_days,
+            self.invitation_reminder_4_days,
+            self.invitation_reminder_5_days,
+        ]
+
+    def get_invitation_reminder_days(self):
+        if not self.invitation_reminder_count:
+            return []
+        days = [
+            d for d in self.reminder_day_slots()[: self.invitation_reminder_count]
+            if d is not None
+        ]
+        return sorted(set(days), reverse=True)
+
+    def get_general_contact_email(self):
+        return self.general_contact_email or "best@best.pw.edu.pl"
+
+    def get_system_admin_email(self):
+        return self.system_admin_email or "admin@example.com"
+
+    def clean(self):
+        super().clean()
+        if self.invitation_reminder_count == 0:
+            return
+
+        slots = self.reminder_day_slots()
+        active = []
+        for index in range(self.invitation_reminder_count):
+            value = slots[index]
+            if value is None:
+                raise ValidationError(
+                    {
+                        f"invitation_reminder_{index + 1}_days": (
+                            "This reminder slot must be filled when reminder count is greater than 0."
+                        )
+                    }
+                )
+            if value < 1 or value >= self.invitation_validity_days:
+                raise ValidationError(
+                    {
+                        f"invitation_reminder_{index + 1}_days": (
+                            f"Must be between 1 and {self.invitation_validity_days - 1} "
+                            "(less than invitation validity)."
+                        )
+                    }
+                )
+            active.append(value)
+
+        if len(active) != len(set(active)):
+            raise ValidationError("Active invitation reminder slots must not contain duplicate day values.")
+
+
+class InvitationExpiryReminderSent(models.Model):
+    RECIPIENT_EXHIBITOR = "exhibitor"
+    RECIPIENT_STAFF = "staff"
+    RECIPIENT_CHOICES = [
+        (RECIPIENT_EXHIBITOR, "Exhibitor"),
+        (RECIPIENT_STAFF, "Staff"),
+    ]
+
+    invitation = models.ForeignKey(
+        CompanyInvitation,
+        on_delete=models.CASCADE,
+        related_name="expiry_reminders_sent",
+    )
+    days_before = models.PositiveSmallIntegerField()
+    recipient = models.CharField(max_length=20, choices=RECIPIENT_CHOICES)
+    sent_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Company reminder"
+        verbose_name_plural = "Company reminders"
+        unique_together = ("invitation", "days_before", "recipient")
+
+    def __str__(self):
+        return f"{self.invitation.company_name} reminder {self.days_before}d ({self.recipient})"
 
 

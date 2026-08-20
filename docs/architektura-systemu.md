@@ -9,12 +9,13 @@ W repozytorium są dwa główne pliki Compose:
 
 ## Przegląd
 
-System składa się z pięciu głównych usług działających w sieci `internal`:
+System składa się z usług działających w sieci `internal`:
 
 - `db` - baza danych MySQL.
 - `backend` - API Django REST.
 - `frontend` - aplikacja Next.js.
-- `mailpit` - lokalny serwer SMTP + web UI do podglądu maili.
+- `scheduler` - raz dziennie odpalany command przypomnień o wygasających zaproszeniach.
+- `mailpit` - lokalny serwer SMTP + web UI do podglądu maili (tylko `compose.yml`).
 - `backup` - kontener wykonujący cykliczne kopie zapasowe bazy.
 
 ## `compose.yml` vs `compose.prod.yml` (różnice kluczowe)
@@ -69,6 +70,16 @@ System składa się z pięciu głównych usług działających w sieci `internal
   - wysyłka e-maili przez SMTP (np. do `mailpit` w środowisku testowym).
 - Wolumen: `./backend:/app` (live-reload podczas developmentu/testów).
 
+### `scheduler` (przypomnienia e-mail)
+
+- Obraz: ten sam co `backend`.
+- Kontener: `${PROJECT_NAME}_scheduler`
+- Porty: brak.
+- Przeznaczenie:
+  - o godzinie `NOTIFICATIONS_HOUR`:`NOTIFICATIONS_MINUTE` (zegar Europe/Warsaw) uruchamia `python manage.py send_invitation_expiry_reminders`.
+  - przy niezerowym exit code **nie** oznacza dnia jako wykonanego i ponawia próbę, dopóki trwa ta sama minuta (co ~20 s).
+- Wolumen (dev): `./backend:/app`.
+
 ### `frontend` (Next.js)
 
 - Obraz: `0noder4/itp_system32_frontend:${FRONTEND_VERSION}` (z możliwością lokalnego buildu z `frontend/`)
@@ -106,6 +117,7 @@ System składa się z pięciu głównych usług działających w sieci `internal
 ## Zależności między usługami
 
 - `backend` zależy od `db`.
+- `scheduler` zależy od `db`.
 - `frontend` zależy od `backend`.
 - `backup` zależy od `db`.
 - `mailpit` działa niezależnie, ale jest wykorzystywany przez `backend` do testów maili.

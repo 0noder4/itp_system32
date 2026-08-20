@@ -68,8 +68,14 @@ docker compose exec backend python manage.py migrate
 
 ## 4. Dane testowe i scenariusze e-mail
 
-- UI Mailpit (`localhost:8025`) pokazuje wszystkie wiadomości wysłane przez aplikację.
-- SMTP Mailpit (`localhost:1025`) powinien być wskazany w konfiguracji backendu dla testów.
+- Maile zaproszeniowe i przypomnienia o wygasaniu: [`localhost:8025`](http://localhost:8025).
+- Ręczne odpalenie przypomnień o wygasających zaproszeniach:
+
+```bash
+docker compose exec backend python manage.py send_invitation_expiry_reminders
+```
+
+Harmonogram automatyczny: usługa `scheduler` (godzina `NOTIFICATIONS_HOUR`/`NOTIFICATIONS_MINUTE` w strefie Europe/Warsaw). Konfiguracja progów dni i ważności linku: panel Django Admin → Companies → Settings → Invitation settings (`0` wyłącza przypomnienia).
 
 ### Konfiguracja konta produkcyjnego (SMTP)
 

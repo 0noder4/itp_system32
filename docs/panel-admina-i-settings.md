@@ -55,6 +55,23 @@ Uwaga: terminy są obecnie informacyjne (nie blokują technicznie zapisu formula
 - `day1_date`, `day2_date` - daty dni targów używane w prezentacji danych (UI, e-maile, PDF).
 - model zawiera metody formatujące te daty dla PL/EN.
 
+### 4. Ustawienia zaproszeń
+
+W tym samym rekordzie `Settings` (sekcja **Invitation settings**):
+
+- `invitation_validity_days` - ważność **nowo utworzonych** linków zaproszenia (1–30 dni, domyślnie 7). Nie przesuwa już wysłanych zaproszeń.
+- `invitation_reminder_count` - liczba automatycznych przypomnień o zbliżającym się wygaśnięciu (0–5). **`0` wyłącza** przypomnienia.
+- `invitation_reminder_1_days` … `invitation_reminder_5_days` - ile dni przed wygaśnięciem wysłać kolejne przypomnienie. Aktywne sloty muszą być wypełnione, bez duplikatów i mniejsze niż `invitation_validity_days`.
+
+Przypomnienia idą do adresu zaproszenia oraz do opiekuna (`created_by`), jeśli ma e-mail. Każdy odbiorca jest oznaczany osobno (`InvitationExpiryReminderSent.recipient`), więc awaria maila do staff nie powoduje ponownego wysłania do wystawcy. Command: `python manage.py send_invitation_expiry_reminders` (przy błędach wysyłki kończy się kodem ≠ 0).
+
+### 5. Kontakt e-mail (stopki wiadomości)
+
+W tym samym rekordzie `Settings` (sekcja **Email contact**):
+
+- `general_contact_email` - ogólny kontakt w mailach do firm/wystawców (domyślnie `best@best.pw.edu.pl`).
+- `system_admin_email` - kontakt do administratora systemu w mailach do staff/FR (domyślnie generyczny `admin@example.com`; na produkcji ustaw właściwy adres w adminie).
+
 ## Ograniczenia i zasady działania `Settings`
 
 - W panelu admina można mieć tylko jeden rekord `Settings`.

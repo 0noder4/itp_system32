@@ -57,7 +57,7 @@ ENV PYTHONUNBUFFERED=1
 COPY . .
 
 # Make entrypoint script executable
-RUN chmod +x /app/docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh /app/docker-entrypoint-notifications.sh
 
 # Expose the application port
 EXPOSE 8000

@@ -61,6 +61,45 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+
+  scheduler:
+    image: ${DOCKER_REGISTRY}/itp_system32_backend:${BACKEND_VERSION}
+    container_name: ${PROJECT_NAME}_scheduler
+    restart: unless-stopped
+    environment:
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
+      DEBUG: ${DEBUG}
+      DJANGO_LOGLEVEL: ${DJANGO_LOGLEVEL}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS}
+      DATABASE_ENGINE: ${DATABASE_ENGINE}
+      DATABASE_NAME: ${DATABASE_NAME}
+      DATABASE_USERNAME: ${DATABASE_USER}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      DATABASE_HOST: ${DATABASE_HOST}
+      DATABASE_PORT: ${DATABASE_PORT}
+      EMAIL_HOST: ${EMAIL_HOST}
+      EMAIL_PORT: ${EMAIL_PORT}
+      EMAIL_HOST_USER: ${EMAIL_HOST_USER}
+      EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD}
+      EMAIL_USE_TLS: ${EMAIL_USE_TLS:-}
+      EMAIL_USE_SSL: ${EMAIL_USE_SSL:-}
+      DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-noreply@targipracy.org.pl}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
+      CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS}
+      FRONTEND_BASE_URL: ${FRONTEND_BASE_URL}
+      BACKEND_BASE_URL: ${BACKEND_BASE_URL}
+      NOTIFICATIONS_HOUR: ${NOTIFICATIONS_HOUR:-9}
+      NOTIFICATIONS_MINUTE: ${NOTIFICATIONS_MINUTE:-0}
+    volumes:
+      - staticfiles:/app/staticfiles
+      - mediafiles:/app/mediafiles
+    networks:
+      - internal
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["/bin/bash", "/app/docker-entrypoint-notifications.sh"]
+
   frontend:
     image: ${DOCKER_REGISTRY}/itp_system32_frontend:${FRONTEND_VERSION}
     container_name: ${PROJECT_NAME}_frontend
