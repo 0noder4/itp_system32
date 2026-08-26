@@ -88,15 +88,7 @@ export default function Index() {
       const next = new Set(
         [...prev].filter((key) => visibleKeys.has(key))
       );
-      if (next.size === prev.size) {
-        for (const key of next) {
-          if (!prev.has(key)) {
-            return next;
-          }
-        }
-        return prev;
-      }
-      return next;
+      return next.size === prev.size ? prev : next;
     });
   }, [filteredRows]);
 

@@ -34,10 +34,45 @@ class CompanyInvitationAdmin(admin.ModelAdmin):
         super().save_model(request, obj, form, change)
 
 
+@admin.register(InvitationExpiryReminderSent)
+class InvitationExpiryReminderSentAdmin(admin.ModelAdmin):
+    list_display = (
+        'company_name',
+        'email_address',
+        'sent_at',
+        'days_before',
+        'recipient',
+        'sent_by',
+    )
+    list_filter = ('recipient', 'days_before', 'invitation__language', 'sent_at')
+    search_fields = (
+        'invitation__company_name',
+        'invitation__email',
+        'invitation__created_by__username',
+        'invitation__created_by__email',
+    )
+    ordering = ('-sent_at',)
+    list_select_related = ('invitation', 'invitation__created_by')
+
+    @admin.display(description='Company name', ordering='invitation__company_name')
+    def company_name(self, obj):
+        return obj.invitation.company_name
+
+    @admin.display(description='Email address')
+    def email_address(self, obj):
+        if obj.recipient == InvitationExpiryReminderSent.RECIPIENT_STAFF:
+            staff = obj.invitation.created_by
+            return staff.email if staff and staff.email else '—'
+        return obj.invitation.email
+
+    @admin.display(description='Sent by', ordering='invitation__created_by')
+    def sent_by(self, obj):
+        return obj.invitation.created_by or '—'
+
+
 admin.site.register(Company, CompanyAdmin)
 admin.site.register(Form)
 admin.site.register(Feedback)
-admin.site.register(InvitationExpiryReminderSent)
 
 
 @admin.register(EquipmentItem)
