@@ -11,6 +11,7 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from companies.models import (
+    BasicData,
     Company,
     CompanyInvitation,
     Feedback,
@@ -548,4 +549,231 @@ class InvitationExpiryReminderCommandTests(TestCase):
             InvitationExpiryReminderSent.objects.filter(invitation=invitation).count(),
             2,
         )
+
+
+@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+class SendStageReminderApiTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = User.objects.create_user(
+            username="stage-admin",
+            email="stage-admin@example.com",
+            password="TestPass123!",
+            type="admin",
+        )
+        self.staff = User.objects.create_user(
+            username="stage-staff",
+            email="stage-staff@example.com",
+            password="TestPass123!",
+            type="staff",
+        )
+        self.company_user = User.objects.create_user(
+            username="Stage Co",
+            email="stage-co@example.com",
+            password="TestPass123!",
+            type="company",
+        )
+        self.company = Company.objects.create(
+            name="Stage Co",
+            email="stage-co@example.com",
+            representative=self.company_user,
+            fr_resp=self.staff,
+        )
+        self.done_user = User.objects.create_user(
+            username="Done Co",
+            email="done-co@example.com",
+            password="TestPass123!",
+            type="company",
+        )
+        self.done_company = Company.objects.create(
+            name="Done Co",
+            email="done-co@example.com",
+            representative=self.done_user,
+            fr_resp=self.staff,
+        )
+        BasicData.objects.create(
+            company=self.done_company,
+            full_name="Done Co Sp. z o.o.",
+            nip="1234567890",
+        )
+
+    def test_filters_company_ids_and_skips_completed(self):
+        self.client.force_authenticate(self.admin)
+        response = self.client.post(
+            "/api/companies/send-stage-reminders/",
+            {"stage": 1, "company_ids": [self.company.id, self.done_company.id]},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(response.data["emails_sent"], 1)
+        self.assertEqual(response.data["skipped"], 1)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ["stage-co@example.com"])
+
+    def test_requires_company_ids(self):
+        self.client.force_authenticate(self.admin)
+        response = self.client.post(
+            "/api/companies/send-stage-reminders/",
+            {"stage": 1},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_staff_allowed_company_forbidden(self):
+        self.client.force_authenticate(self.staff)
+        response = self.client.post(
+            "/api/companies/send-stage-reminders/",
+            {"stage": 1, "company_ids": [self.company.id]},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+
+        self.client.force_authenticate(self.company_user)
+        response = self.client.post(
+            "/api/companies/send-stage-reminders/",
+            {"stage": 1, "company_ids": [self.company.id]},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
+@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+class SendInvitationRemindersApiTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.staff = User.objects.create_user(
+            username="inv-rem-staff",
+            email="inv-rem-staff@example.com",
+            password="TestPass123!",
+            type="staff",
+            language="pl",
+        )
+        self.company_user = User.objects.create_user(
+            username="inv-rem-company",
+            email="inv-rem-company@example.com",
+            password="TestPass123!",
+            type="company",
+        )
+
+    def _invitation(self, days_before, **kwargs):
+        today = today_in_invitation_tz()
+        expires = datetime.combine(
+            today + timedelta(days=days_before),
+            time(12, 0),
+            tzinfo=INVITATION_REMINDER_TZ,
+        )
+        defaults = {
+            "email": "invitee-api@example.com",
+            "company_name": "API Inv Co",
+            "language": "pl",
+            "created_by": self.staff,
+            "expires_at": expires,
+        }
+        defaults.update(kwargs)
+        return CompanyInvitation.objects.create(**defaults)
+
+    def test_sends_and_records_registry(self):
+        invitation = self._invitation(2)
+        self.client.force_authenticate(self.staff)
+        response = self.client.post(
+            "/api/invitations/send-reminders/",
+            {"invitation_ids": [invitation.id]},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(response.data["emails_sent"], 1)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ["invitee-api@example.com"])
+        self.assertTrue(
+            InvitationExpiryReminderSent.objects.filter(
+                invitation=invitation,
+                days_before=2,
+                recipient=InvitationExpiryReminderSent.RECIPIENT_EXHIBITOR,
+            ).exists()
+        )
+
+        mail.outbox.clear()
+        response = self.client.post(
+            "/api/invitations/send-reminders/",
+            {"invitation_ids": [invitation.id]},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(response.data["emails_sent"], 0)
+        self.assertEqual(response.data["skipped"], 1)
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_skips_accepted_cancelled_expired(self):
+        accepted = self._invitation(2, is_accepted=True, company_name="Acc", email="a@example.com")
+        cancelled = self._invitation(
+            2, is_cancelled=True, company_name="Can", email="c@example.com"
+        )
+        expired = self._invitation(
+            2,
+            company_name="Exp",
+            email="e@example.com",
+            expires_at=timezone.now() - timedelta(days=1),
+        )
+        self.client.force_authenticate(self.staff)
+        response = self.client.post(
+            "/api/invitations/send-reminders/",
+            {"invitation_ids": [accepted.id, cancelled.id, expired.id]},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(response.data["emails_sent"], 0)
+        self.assertEqual(response.data["skipped"], 3)
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_missing_email_skips_without_registry(self):
+        invitation = self._invitation(2, email="")
+        self.client.force_authenticate(self.staff)
+        response = self.client.post(
+            "/api/invitations/send-reminders/",
+            {"invitation_ids": [invitation.id]},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(response.data["skipped"], 1)
+        self.assertFalse(InvitationExpiryReminderSent.objects.exists())
+
+    def test_days_before_zero_ok(self):
+        today = today_in_invitation_tz()
+        expires = datetime.combine(
+            today,
+            time(23, 59),
+            tzinfo=INVITATION_REMINDER_TZ,
+        )
+        invitation = CompanyInvitation.objects.create(
+            email="invitee-zero@example.com",
+            company_name="Zero Day Co",
+            language="pl",
+            created_by=self.staff,
+            expires_at=expires,
+        )
+        self.client.force_authenticate(self.staff)
+        response = self.client.post(
+            "/api/invitations/send-reminders/",
+            {"invitation_ids": [invitation.id]},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(response.data["emails_sent"], 1)
+        self.assertTrue(
+            InvitationExpiryReminderSent.objects.filter(
+                invitation=invitation,
+                days_before=0,
+                recipient=InvitationExpiryReminderSent.RECIPIENT_EXHIBITOR,
+            ).exists()
+        )
+
+    def test_company_forbidden(self):
+        invitation = self._invitation(2)
+        self.client.force_authenticate(self.company_user)
+        response = self.client.post(
+            "/api/invitations/send-reminders/",
+            {"invitation_ids": [invitation.id]},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 

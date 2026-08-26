@@ -11,15 +11,23 @@ from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from users.permissions import IsAdminOrStaff, IsAdmin
+from users.permissions import IsAdminOrStaff
+
+from django.db import IntegrityError
+from django.utils import timezone
 
 from .models import (
     Company, CompanyInvitation, Form, Feedback, BasicData, Address,
     StandDetails, Stand, EquipmentItem, EquipmentSelection, Workshop, Jobwall,
     Description, FinalData, Lunch, PDI, PDIAttendee, Exhibitor, Settings,
-    compute_invitation_expires_at,
+    InvitationExpiryReminderSent, compute_invitation_expires_at,
 )
-from .notifications import send_stage_pending_fr_email
+from .notifications import (
+    invitation_calendar_date,
+    send_invitation_expiry_reminder_exhibitor,
+    send_stage_pending_fr_email,
+    today_in_invitation_tz,
+)
 from .serializers import (
     CompanySerializer, CompanyInvitationSerializer, CompanyRegistrationSerializer,
     FormSerializer, FeedbackSerializer, BasicDataSerializer, AddressSerializer,
@@ -1972,6 +1980,30 @@ class StageDeadlinesView(APIView):
             return Response({"detail": "An error occurred while retrieving stage deadlines"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+class InvitationReminderSettingsView(APIView):
+    """Current automatic invitation expiry reminder configuration from Settings."""
+    permission_classes = [IsAuthenticated, IsAdminOrStaff]
+
+    def get(self, request):
+        try:
+            settings_obj = Settings.get_settings()
+            reminder_days = settings_obj.get_invitation_reminder_days()
+            return Response(
+                {
+                    "invitation_validity_days": settings_obj.invitation_validity_days,
+                    "invitation_reminder_days": reminder_days,
+                    "invitation_reminders_enabled": bool(reminder_days),
+                },
+                status=status.HTTP_200_OK,
+            )
+        except Exception as e:
+            logger.error(f"Error in InvitationReminderSettingsView.get: {e}", exc_info=True)
+            return Response(
+                {"detail": "An error occurred while retrieving invitation reminder settings"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
 class OrderSummaryPDFView(APIView):
     """
     Generate and download order summary PDF for a company.
@@ -2072,97 +2104,115 @@ class OrderSummaryPDFView(APIView):
 
 class SendStageReminderView(APIView):
     """
-    Send reminder emails to all companies that haven't completed a specific form stage
-    or have a rejected stage status.
-    Only accessible by admin users.
+    Send stage reminder emails for selected companies that haven't completed
+    a stage or have rejected feedback. Accessible by admin and staff.
     """
-    permission_classes = [IsAuthenticated, IsAdmin]
-    
+    permission_classes = [IsAuthenticated, IsAdminOrStaff]
+
     def post(self, request):
         try:
             stage = request.data.get('stage')
-            if not stage:
+            company_ids = request.data.get('company_ids')
+
+            if stage is None or stage == '':
                 return Response({"detail": "Stage parameter is required"}, status=status.HTTP_400_BAD_REQUEST)
-            
+
             try:
                 stage_num = int(stage)
                 if stage_num not in [1, 2, 3, 4, 5]:
                     return Response({"detail": "Stage must be between 1 and 5"}, status=status.HTTP_400_BAD_REQUEST)
             except (ValueError, TypeError):
                 return Response({"detail": "Stage must be a valid integer"}, status=status.HTTP_400_BAD_REQUEST)
-            
-            # Get all companies
-            all_companies = Company.objects.all()
-            
-            # Filter to companies that need reminders:
-            # 1. Companies that haven't filled in the stage (no data exists)
-            # 2. Companies that submitted but have rejected feedback status
-            companies_to_notify = []
-            for company in all_companies:
-                # Skip if no representative or email
-                if not company.representative or not company.representative.email:
-                    continue
-                
-                # Check if stage data exists
-                stage_data_exists = False
-                if stage_num == 1:
-                    stage_data_exists = BasicData.objects.filter(company=company).exists()
-                elif stage_num == 2:
-                    stage_data_exists = StandDetails.objects.filter(company=company).exists()
-                elif stage_num == 3:
-                    stage_data_exists = Workshop.objects.filter(company=company).exists()
-                elif stage_num == 4:
-                    stage_data_exists = (
-                        Jobwall.objects.filter(company=company).exists() or 
-                        Description.objects.filter(company=company).exists()
-                    )
-                elif stage_num == 5:
-                    stage_data_exists = FinalData.objects.filter(company=company).exists()
-                
-                # Send reminder if:
-                # - Stage data does NOT exist, OR
-                # - Stage data exists but latest feedback status is 'rejected'
-                should_notify = False
-                if not stage_data_exists:
-                    should_notify = True
-                else:
-                    # Check if the latest feedback status is rejected
-                    latest_feedback = get_latest_feedback(company, stage_num)
-                    if latest_feedback and latest_feedback.status == 'rejected':
-                        should_notify = True
-                
-                if should_notify:
-                    companies_to_notify.append(company)
-            
-            if not companies_to_notify:
-                return Response({
-                    "message": "No companies found that need reminders for this stage",
-                    "emails_sent": 0
-                }, status=status.HTTP_200_OK)
-            
-            # Send reminder emails
+
+            if not isinstance(company_ids, list) or not company_ids:
+                return Response(
+                    {"detail": "company_ids must be a non-empty list"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            try:
+                unique_ids = list({int(cid) for cid in company_ids})
+            except (ValueError, TypeError):
+                return Response(
+                    {"detail": "company_ids must contain valid integers"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            selected_count = len(unique_ids)
+            companies = list(
+                Company.objects.filter(id__in=unique_ids).select_related(
+                    "representative", "fr_resp"
+                )
+            )
+            found_ids = {c.id for c in companies}
+            skipped = selected_count - len(found_ids)
+
             emails_sent = 0
             emails_failed = 0
-            
-            for company in companies_to_notify:
+
+            for company in companies:
+                if not company.representative or not company.representative.email:
+                    skipped += 1
+                    continue
+
+                if not self._company_needs_stage_reminder(company, stage_num):
+                    skipped += 1
+                    continue
+
                 try:
                     self._send_stage_reminder_email(company, stage_num)
                     emails_sent += 1
-                    logger.info(f"Stage {stage_num} reminder email sent to {company.representative.email} for company {company.id}")
+                    logger.info(
+                        f"Stage {stage_num} reminder email sent to "
+                        f"{company.representative.email} for company {company.id}"
+                    )
                 except Exception as e:
                     emails_failed += 1
-                    logger.error(f"Error sending stage {stage_num} reminder email to {company.representative.email} for company {company.id}: {e}", exc_info=True)
-            
-            return Response({
-                "message": f"Reminder emails sent for stage {stage_num}",
-                "emails_sent": emails_sent,
-                "emails_failed": emails_failed,
-                "total_companies": len(companies_to_notify)
-            }, status=status.HTTP_200_OK)
-            
+                    logger.error(
+                        f"Error sending stage {stage_num} reminder email to "
+                        f"{company.representative.email} for company {company.id}: {e}",
+                        exc_info=True,
+                    )
+
+            return Response(
+                {
+                    "message": f"Reminder emails sent for stage {stage_num}",
+                    "selected_count": selected_count,
+                    "emails_sent": emails_sent,
+                    "emails_failed": emails_failed,
+                    "skipped": skipped,
+                    "total_companies": len(companies),
+                },
+                status=status.HTTP_200_OK,
+            )
+
         except Exception as e:
             logger.error(f"Error in SendStageReminderView.post: {e}", exc_info=True)
-            return Response({"detail": "An error occurred while sending reminder emails"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                {"detail": "An error occurred while sending reminder emails"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    def _company_needs_stage_reminder(self, company, stage_num):
+        stage_data_exists = False
+        if stage_num == 1:
+            stage_data_exists = BasicData.objects.filter(company=company).exists()
+        elif stage_num == 2:
+            stage_data_exists = StandDetails.objects.filter(company=company).exists()
+        elif stage_num == 3:
+            stage_data_exists = Workshop.objects.filter(company=company).exists()
+        elif stage_num == 4:
+            stage_data_exists = (
+                Jobwall.objects.filter(company=company).exists()
+                or Description.objects.filter(company=company).exists()
+            )
+        elif stage_num == 5:
+            stage_data_exists = FinalData.objects.filter(company=company).exists()
+
+        if not stage_data_exists:
+            return True
+        latest_feedback = get_latest_feedback(company, stage_num)
+        return bool(latest_feedback and latest_feedback.status == "rejected")
     
     def _send_stage_reminder_email(self, company, stage_num):
         """Send reminder email for a specific stage"""
@@ -2254,6 +2304,109 @@ Jeśli masz pytania, skontaktuj się{' ze swoim opiekunem pod adresem ' + staff_
         except Exception as e:
             logger.error(f"Error sending email to {representative.email}: {e}", exc_info=True)
             raise
+
+
+class SendInvitationRemindersView(APIView):
+    """
+    Manually send invitation expiry reminder emails to exhibitors for selected
+    invitations. Writes InvitationExpiryReminderSent (exhibitor) after a real send.
+    """
+    permission_classes = [IsAuthenticated, IsAdminOrStaff]
+
+    def post(self, request):
+        try:
+            invitation_ids = request.data.get("invitation_ids")
+            if not isinstance(invitation_ids, list) or not invitation_ids:
+                return Response(
+                    {"detail": "invitation_ids must be a non-empty list"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            try:
+                unique_ids = list({int(iid) for iid in invitation_ids})
+            except (ValueError, TypeError):
+                return Response(
+                    {"detail": "invitation_ids must contain valid integers"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            selected_count = len(unique_ids)
+            today = today_in_invitation_tz()
+            now = timezone.now()
+            invitations = list(
+                CompanyInvitation.objects.filter(id__in=unique_ids).select_related(
+                    "created_by"
+                )
+            )
+            found_ids = {inv.id for inv in invitations}
+            skipped = selected_count - len(found_ids)
+            emails_sent = 0
+            emails_failed = 0
+
+            for invitation in invitations:
+                if (
+                    invitation.is_accepted
+                    or invitation.is_cancelled
+                    or invitation.expires_at <= now
+                    or not invitation.email
+                ):
+                    skipped += 1
+                    continue
+
+                days_before = (invitation_calendar_date(invitation.expires_at) - today).days
+                if days_before < 0:
+                    skipped += 1
+                    continue
+
+                if InvitationExpiryReminderSent.objects.filter(
+                    invitation=invitation,
+                    days_before=days_before,
+                    recipient=InvitationExpiryReminderSent.RECIPIENT_EXHIBITOR,
+                ).exists():
+                    skipped += 1
+                    continue
+
+                try:
+                    was_sent = send_invitation_expiry_reminder_exhibitor(
+                        invitation, days_before
+                    )
+                    if not was_sent:
+                        skipped += 1
+                        continue
+                    InvitationExpiryReminderSent.objects.create(
+                        invitation=invitation,
+                        days_before=days_before,
+                        recipient=InvitationExpiryReminderSent.RECIPIENT_EXHIBITOR,
+                    )
+                    emails_sent += 1
+                except IntegrityError:
+                    skipped += 1
+                except Exception as e:
+                    emails_failed += 1
+                    logger.error(
+                        f"Error sending invitation expiry reminder for "
+                        f"invitation {invitation.id}: {e}",
+                        exc_info=True,
+                    )
+
+            return Response(
+                {
+                    "message": "Invitation expiry reminders processed",
+                    "selected_count": selected_count,
+                    "emails_sent": emails_sent,
+                    "emails_failed": emails_failed,
+                    "skipped": skipped,
+                    "total_companies": len(invitations),
+                },
+                status=status.HTTP_200_OK,
+            )
+        except Exception as e:
+            logger.error(f"Error in SendInvitationRemindersView.post: {e}", exc_info=True)
+            return Response(
+                {"detail": "An error occurred while sending invitation reminders"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
 
 class ExportCSVView(APIView):
     """

@@ -35,11 +35,17 @@ urlpatterns = [
     # Lunch price
     path('lunch-price/', views.LunchPriceView.as_view(), name='lunch-price'),
     
-    # Stage deadlines
+    # Stage deadlines / invitation reminder settings
     path('stage-deadlines/', views.StageDeadlinesView.as_view(), name='stage-deadlines'),
+    path(
+        'invitation-reminder-settings/',
+        views.InvitationReminderSettingsView.as_view(),
+        name='invitation-reminder-settings',
+    ),
     
-    # Send stage reminders
+    # Send stage / invitation reminders
     path('companies/send-stage-reminders/', views.SendStageReminderView.as_view(), name='send-stage-reminders'),
+    path('invitations/send-reminders/', views.SendInvitationRemindersView.as_view(), name='send-invitation-reminders'),
     
     # Order summary PDF
     path('company/<int:company_id>/order-summary-pdf/', views.OrderSummaryPDFView.as_view(), name='order-summary-pdf'),

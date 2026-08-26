@@ -25,6 +25,8 @@ interface CompanyFiltersProps {
   staffMembers?: StaffUser[];
   filteredCount: number;
   totalCount: number;
+  onSendReminders?: () => void;
+  sendRemindersDisabled?: boolean;
 }
 
 export function CompanyFilters({
@@ -41,6 +43,8 @@ export function CompanyFilters({
   staffMembers,
   filteredCount,
   totalCount,
+  onSendReminders,
+  sendRemindersDisabled = false,
 }: CompanyFiltersProps) {
   const { t } = useTranslation();
 
@@ -95,26 +99,54 @@ export function CompanyFilters({
         )}
       </div>
 
-      {/* Show Invitations Checkbox */}
-      <div className="flex items-center gap-2">
-        <input
-          type="checkbox"
-          id="show-invitations"
-          checked={showInvitations}
-          onChange={(e) => onShowInvitationsChange(e.target.checked)}
-          className="h-4 w-4 rounded border border-input bg-white cursor-pointer focus:ring-2 focus:ring-ring focus:ring-offset-2 checked:bg-primary checked:border-primary"
-          style={{
-            appearance: "none",
-            WebkitAppearance: "none",
-            MozAppearance: "none",
-          }}
-        />
-        <Label
-          htmlFor="show-invitations"
-          className="text-xs sm:text-sm font-normal cursor-pointer"
-        >
-          {t("companies.invitations.showInvitations")}
-        </Label>
+      {/* Show Invitations + Send Reminders */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            id="show-invitations"
+            checked={showInvitations}
+            onChange={(e) => onShowInvitationsChange(e.target.checked)}
+            className="h-4 w-4 rounded border border-input bg-white cursor-pointer focus:ring-2 focus:ring-ring focus:ring-offset-2 checked:bg-primary checked:border-primary"
+            style={{
+              appearance: "none",
+              WebkitAppearance: "none",
+              MozAppearance: "none",
+            }}
+          />
+          <Label
+            htmlFor="show-invitations"
+            className="text-xs sm:text-sm font-normal cursor-pointer"
+          >
+            {t("companies.invitations.showInvitations")}
+          </Label>
+        </div>
+        {onSendReminders && (
+          <Button
+            type="button"
+            className="text-xs sm:text-sm whitespace-nowrap self-start sm:self-auto"
+            size="sm"
+            disabled={sendRemindersDisabled}
+            style={{
+              backgroundColor: sendRemindersDisabled
+                ? undefined
+                : STAFF_ACCENT_COLOR,
+            }}
+            onMouseEnter={(e) => {
+              if (!sendRemindersDisabled) {
+                e.currentTarget.style.backgroundColor = "#C84FA8";
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!sendRemindersDisabled) {
+                e.currentTarget.style.backgroundColor = STAFF_ACCENT_COLOR;
+              }
+            }}
+            onClick={onSendReminders}
+          >
+            {t("reminders.sendButton")}
+          </Button>
+        )}
       </div>
 
       {/* Company Status Filter */}

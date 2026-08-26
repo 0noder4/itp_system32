@@ -19,10 +19,15 @@ import { toast } from "sonner";
 import { Header } from "@/components/layout/Header";
 import { InvitationFormDialog } from "@/components/staff/Invitations/InvitationFormDialog";
 import { CompanyFilters } from "@/components/staff/Companies/CompanyFilters";
-import { CompaniesTable } from "@/components/staff/Companies/CompaniesTable";
+import {
+  CompaniesTable,
+  rowSelectionKey,
+} from "@/components/staff/Companies/CompaniesTable";
 import { useFilteredRows } from "@/components/staff/Companies/useFilteredRows";
 import { useStaffDashboardFilters } from "@/hooks/useStaffDashboardFilters";
+import { ReminderDialog } from "@/components/staff/Reminders/ReminderDialog";
 import { STAFF_ACCENT_COLOR } from "@/lib/colors";
+import type { TableRow as TableRowType } from "@/components/staff/Companies/StatusBadges";
 
 export default function Index() {
   const { t } = useTranslation();
@@ -71,6 +76,37 @@ export default function Index() {
     invitationStatusFilter,
     showInvitations,
   });
+
+  const [selectedKeys, setSelectedKeys] = React.useState<Set<string>>(
+    () => new Set()
+  );
+  const [reminderDialogOpen, setReminderDialogOpen] = React.useState(false);
+
+  React.useEffect(() => {
+    const visibleKeys = new Set(filteredRows.map(rowSelectionKey));
+    setSelectedKeys((prev) => {
+      const next = new Set(
+        [...prev].filter((key) => visibleKeys.has(key))
+      );
+      if (next.size === prev.size) {
+        for (const key of next) {
+          if (!prev.has(key)) {
+            return next;
+          }
+        }
+        return prev;
+      }
+      return next;
+    });
+  }, [filteredRows]);
+
+  const selectedRows = React.useMemo(
+    () =>
+      filteredRows.filter((row: TableRowType) =>
+        selectedKeys.has(rowSelectionKey(row))
+      ),
+    [filteredRows, selectedKeys]
+  );
 
   const handleInvitationSuccess = () => {
     mutate();
@@ -216,6 +252,8 @@ export default function Index() {
                 staffMembers={staffMembers}
                 filteredCount={filteredRows.length}
                 totalCount={totalCount}
+                onSendReminders={() => setReminderDialogOpen(true)}
+                sendRemindersDisabled={selectedKeys.size === 0}
               />
             )}
 
@@ -231,7 +269,11 @@ export default function Index() {
                   <p>{t("companies.loadError")}</p>
                 </div>
               ) : filteredRows && filteredRows.length > 0 ? (
-                <CompaniesTable rows={filteredRows} />
+                <CompaniesTable
+                  rows={filteredRows}
+                  selectedKeys={selectedKeys}
+                  onSelectionChange={setSelectedKeys}
+                />
               ) : (companies && companies.length > 0) ||
                 (invitations && invitations.length > 0) ? (
                 <div className="text-center py-8 text-muted-foreground">
@@ -246,6 +288,12 @@ export default function Index() {
           </CardContent>
         </Card>
       </div>
+      <ReminderDialog
+        open={reminderDialogOpen}
+        onOpenChange={setReminderDialogOpen}
+        selectedRows={selectedRows}
+        onSuccess={() => setSelectedKeys(new Set())}
+      />
       <footer className="shrink-0 border-t border-border bg-muted/30 py-2 md:py-3 px-3 md:px-6">
         <div className="flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 text-xs sm:text-sm text-muted-foreground">
           <span className="font-medium">{t("staff.footer.authors")}:</span>
