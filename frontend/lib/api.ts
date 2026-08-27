@@ -264,6 +264,12 @@ export interface StageDeadlinesResponse {
   stage_5_deadline: string | null;
 }
 
+export interface LunchPriceResponse {
+  lunch_price: string;
+  day1: string;
+  day2: string;
+}
+
 // Download order summary PDF
 export const downloadOrderSummaryPDF = async (
   companyId: number

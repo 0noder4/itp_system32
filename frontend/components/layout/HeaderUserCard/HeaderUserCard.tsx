@@ -10,44 +10,75 @@ import {
 } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { LogOut } from "lucide-react";
-import { ACCENT_COLOR, STAFF_ACCENT_COLOR } from "@/lib/colors";
+import { ACCENT_COLOR } from "@/lib/colors";
+import type { UserType } from "@/lib/auth";
 
 interface HeaderUserCardProps {
   email: string;
   username: string;
+  firstName?: string;
+  lastName?: string;
+  userType?: UserType;
   onLogout: () => void;
   accentColor?: string;
 }
 
-function getInitials(email: string, username: string): string {
-  if (email) {
-    return email.charAt(0).toUpperCase();
-  }
-  if (username) {
-    return username.charAt(0).toUpperCase();
-  }
-  return "?";
+function getFullName(firstName?: string, lastName?: string): string {
+  return [firstName, lastName].filter(Boolean).join(" ").trim();
 }
 
-function getDisplayName(email: string, username: string): string {
-  if (email) {
-    return email;
+function getPrimaryLabel(
+  userType: UserType | undefined,
+  username: string,
+  email: string,
+  firstName?: string,
+  lastName?: string
+): string {
+  if (userType === "admin" || userType === "staff") {
+    const fullName = getFullName(firstName, lastName);
+    if (fullName) return fullName;
   }
-  if (username) {
-    return username;
-  }
+  if (username) return username;
+  if (email) return email;
   return "—";
+}
+
+function getInitials(
+  userType: UserType | undefined,
+  username: string,
+  email: string,
+  firstName?: string,
+  lastName?: string
+): string {
+  if (userType === "admin" || userType === "staff") {
+    const first = firstName?.charAt(0) || "";
+    const last = lastName?.charAt(0) || "";
+    if (first || last) return `${first}${last}`.toUpperCase();
+  }
+  if (username) return username.charAt(0).toUpperCase();
+  if (email) return email.charAt(0).toUpperCase();
+  return "?";
 }
 
 export function HeaderUserCard({
   email,
   username,
+  firstName = "",
+  lastName = "",
+  userType,
   onLogout,
   accentColor = ACCENT_COLOR,
 }: HeaderUserCardProps) {
   const { t } = useTranslation();
-  const displayName = getDisplayName(email, username);
-  const initials = getInitials(email, username);
+  const primaryLabel = getPrimaryLabel(
+    userType,
+    username,
+    email,
+    firstName,
+    lastName
+  );
+  const initials = getInitials(userType, username, email, firstName, lastName);
+  const showEmailBelow = Boolean(email && email !== primaryLabel);
 
   return (
     <Popover>
@@ -71,8 +102,8 @@ export function HeaderUserCard({
               </AvatarFallback>
             </Avatar>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate">{displayName}</p>
-              {email && (
+              <p className="text-sm font-medium truncate">{primaryLabel}</p>
+              {showEmailBelow && (
                 <p className="text-xs text-muted-foreground truncate">
                   {email}
                 </p>
@@ -93,8 +124,8 @@ export function HeaderUserCard({
               </AvatarFallback>
             </Avatar>
             <div className="flex-1 min-w-0">
-              <p className="font-semibold text-lg truncate">{displayName}</p>
-              {email && (
+              <p className="font-semibold text-lg truncate">{primaryLabel}</p>
+              {showEmailBelow && (
                 <p className="text-sm text-muted-foreground truncate">
                   {email}
                 </p>
@@ -142,7 +173,3 @@ export function HeaderUserCard({
     </Popover>
   );
 }
-
-
-
-

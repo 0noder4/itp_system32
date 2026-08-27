@@ -265,7 +265,7 @@ export function StageFeedbackForm({
                   {t("staff.companyDetail.submitting")}
                 </>
               ) : (
-                t("staff.companyDetail.reject")
+                t("staff.companyDetail.rejectSend")
               )}
             </Button>
           </DialogFooter>

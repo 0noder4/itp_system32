@@ -29,6 +29,8 @@ class CurrentUserView(APIView):
             "id": user.id,
             "username": user.username,
             "email": user.email,
+            "first_name": user.first_name or "",
+            "last_name": user.last_name or "",
             "user_type": user.type,
             "language": user.language,
             "is_active": user.is_active,

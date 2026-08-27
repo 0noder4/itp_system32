@@ -45,6 +45,8 @@ export interface UserValidationResponse {
   id: number;
   username: string;
   email: string;
+  first_name?: string;
+  last_name?: string;
   user_type: "admin" | "staff" | "company";
   language: "en" | "pl";
   is_active: boolean;
@@ -237,16 +239,27 @@ export interface FinalData {
   company: number;
   el_devices: string;
   el_power: string;
+  el_low_power?: boolean;
+  lunches_declined?: boolean;
+  no_other_delegates?: boolean;
+  main_rep_name?: string;
+  main_rep_surname?: string;
+  main_rep_phone?: string;
+  main_rep_attendance?: AttendanceOption | "";
   dl?: number | null;
 }
 
 export type DayOption = "day1" | "day2";
 
+export type DietOption = "meat" | "vegetarian" | "vegan";
+
+export type AttendanceOption = "both" | "day1" | "day2" | "none";
+
 export interface Lunch {
   id?: number;
   day: DayOption;
   lunch_quantity: number;
-  diet_info: string;
+  diet_info: DietOption;
 }
 
 export interface PDI {
@@ -267,6 +280,7 @@ export interface Exhibitor {
   name: string;
   surname: string;
   phone_number: string;
+  attendance: AttendanceOption | "";
 }
 
 export interface Stage5Data {

@@ -17,6 +17,8 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         token['user_type'] = user.type
         token['username'] = user.username
         token['email'] = user.email
+        token['first_name'] = user.first_name or ''
+        token['last_name'] = user.last_name or ''
         token['language'] = user.language
 
         return token
@@ -35,6 +37,8 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         data['user_type'] = self.user.type
         data['username'] = self.user.username
         data['email'] = self.user.email
+        data['first_name'] = self.user.first_name or ''
+        data['last_name'] = self.user.last_name or ''
         data['language'] = self.user.language
 
         return data

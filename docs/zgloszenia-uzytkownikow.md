@@ -1,6 +1,6 @@
 # Weryfikacja zgłoszeń użytkowników
 
-Data weryfikacji: `2026-06-02`. Ostatnia aktualizacja: `2026-08-20`.
+Data weryfikacji: `2026-06-02`. Ostatnia aktualizacja: `2026-08-27`.
 
 Dokument zawiera przegląd zgłoszeń od użytkowników wraz ze statusem w aktualnej wersji systemu.
 
@@ -17,6 +17,8 @@ Dokument zawiera przegląd zgłoszeń od użytkowników wraz ze statusem w aktua
 - Mail do opiekuna FR po przesłaniu lub poprawie etapu (sygnał „oczekuje na akceptację”); bez ponownego maila przy kolejnym zapisie tego samego etapu w statusie pending.
 - Automatyczne przypomnienia o zbliżającym się wygaśnięciu zaproszenia (do wystawcy i opiekuna); progi dni, liczba przypomnień (`0` = wyłączone) i ważność nowych linków w `Settings` (Invitation settings).
 
+- Etap 5: obiady i delegaci wymagają jawnej decyzji przed finalnym przesłaniem (rezygnacja z obiadów / zamówienie, główny przedstawiciel, brak innych delegatów lub lista delegatów, pokrycie obecności każdego dnia targów).
+
 ## Częściowo wdrożone / wymaga doprecyzowania
 
 - Warsztaty są w systemie jako etap 3, ale brakuje dedykowanych pól osoby kontaktowej do warsztatów.
@@ -31,10 +33,9 @@ Dokument zawiera przegląd zgłoszeń od użytkowników wraz ze statusem w aktua
 - Brak opcji trwałego usuwania zaproszeń (jest anulowanie, ale bez usuwania rekordu).
 - Jobwall: brak logiki i komunikatu "2 pierwsze ogłoszenia darmowe, kolejne płatne" (obecnie koszt liczony od każdej oferty).
 - Warsztaty: brak komunikatu kosztowego po zaznaczeniu zainteresowania (ikona/tooltip + cena).
-- Etap 5: obiady i delegaci nie są wymagalne przed finalnym przesłaniem etapu.
 
 ## Rekomendowany priorytet
 
-1. Wymagalność kluczowych pól (obiady, delegaci, dane warsztatowe).
+1. Wymagalność kluczowych pól (dane warsztatowe).
 2. Poprawa statusów i komunikatów UI (statusy etapów).
 3. Rozszerzenie mapki o wiele stoisk dla jednej firmy.

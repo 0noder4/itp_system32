@@ -18,8 +18,21 @@ COMPANY_STATUS_CHOICES = [
 ]
 
 DAY_OPT = [
-    ('day1', '10.03.2025'),
-    ('day2', '11.03.2025')
+    ('day1', '09.03.2027'),
+    ('day2', '10.03.2027')
+]
+
+ATTENDANCE_OPT = [
+    ('both', 'Oba dni'),
+    ('day1', 'Pierwszy dzień'),
+    ('day2', 'Drugi dzień'),
+    ('none', 'Nie będzie mnie osobiście'),
+]
+
+DIET_OPT = [
+    ('meat', 'Mięsna (zwykła)'),
+    ('vegetarian', 'Wegetariańska'),
+    ('vegan', 'Wegańska'),
 ]
 
 SIZE_OPT = [
@@ -297,8 +310,25 @@ class Description(models.Model):
 
 class FinalData(models.Model):
     company = models.OneToOneField(Company, on_delete=models.CASCADE, related_name='finaldata')
-    el_devices = models.CharField(max_length=255, verbose_name="urządzenia elektryczne w trakcie targów")
-    el_power = models.CharField(max_length=255, verbose_name="łączna moc urządzeń")
+    el_devices = models.CharField(max_length=255, verbose_name="urządzenia elektryczne w trakcie targów", blank=True, default="")
+    el_power = models.CharField(max_length=255, verbose_name="łączna moc urządzeń", blank=True, default="")
+    el_low_power = models.BooleanField(
+        default=False,
+        verbose_name="niska moc (około 100 W lub mniej)",
+        help_text="Zaznacz, jeśli łączna moc urządzeń to około 100 W lub mniej — wtedy nie trzeba podawać szczegółów.",
+    )
+    lunches_declined = models.BooleanField(default=False, verbose_name="rezygnacja z obiadów")
+    no_other_delegates = models.BooleanField(default=False, verbose_name="brak innych delegatów")
+    main_rep_name = models.CharField(max_length=100, blank=True, default="", verbose_name="imię głównego przedstawiciela")
+    main_rep_surname = models.CharField(max_length=100, blank=True, default="", verbose_name="nazwisko głównego przedstawiciela")
+    main_rep_phone = models.CharField(max_length=20, blank=True, default="", verbose_name="telefon głównego przedstawiciela")
+    main_rep_attendance = models.CharField(
+        max_length=10,
+        choices=ATTENDANCE_OPT,
+        blank=True,
+        default="",
+        verbose_name="obecność głównego przedstawiciela",
+    )
     dl = models.ForeignKey(Deadline, on_delete=models.SET_NULL, null=True)
 
 class Lunch(models.Model):
@@ -317,6 +347,13 @@ class PDIAttendee(Person):
 
 class Exhibitor(Person):
     form = models.ForeignKey(PDI, on_delete=models.CASCADE, related_name="exhibitors")
+    attendance = models.CharField(
+        max_length=10,
+        choices=ATTENDANCE_OPT,
+        blank=True,
+        default="",
+        verbose_name="obecność delegata",
+    )
 
 class Settings(models.Model):
     """
@@ -386,9 +423,9 @@ class Settings(models.Model):
     )
     invitation_reminder_count = models.PositiveSmallIntegerField(
         default=2,
-        validators=[MinValueValidator(0), MaxValueValidator(5)],
+        validators=[MinValueValidator(0), MaxValueValidator(3)],
         verbose_name="liczba przypomnień o wygaśnięciu",
-        help_text="Set to 0 to disable invitation expiry reminders."
+        help_text="Set to 0 to disable invitation expiry reminders. Max 3 reminders."
     )
     invitation_reminder_1_days = models.PositiveSmallIntegerField(
         default=2,
@@ -406,16 +443,6 @@ class Settings(models.Model):
         null=True,
         blank=True,
         verbose_name="przypomnienie 3 (dni przed wygaśnięciem)",
-    )
-    invitation_reminder_4_days = models.PositiveSmallIntegerField(
-        null=True,
-        blank=True,
-        verbose_name="przypomnienie 4 (dni przed wygaśnięciem)",
-    )
-    invitation_reminder_5_days = models.PositiveSmallIntegerField(
-        null=True,
-        blank=True,
-        verbose_name="przypomnienie 5 (dni przed wygaśnięciem)",
     )
     general_contact_email = models.EmailField(
         default="best@best.pw.edu.pl",
@@ -456,41 +483,39 @@ class Settings(models.Model):
             ]
         # Fallback to defaults if not set
         return [
-            ('day1', '10.03.2025'),
-            ('day2', '11.03.2025')
+            ('day1', '09.03.2027'),
+            ('day2', '10.03.2027')
         ]
     
     def get_day1_display_en(self):
-        """Get English display format for day 1 (e.g., 'March 10, 2025')"""
+        """Get English display format for day 1 (e.g., 'March 9, 2027')"""
         if self.day1_date:
             return self.day1_date.strftime('%B %d, %Y')
-        return "March 10, 2025"
+        return "March 9, 2027"
     
     def get_day1_display_pl(self):
-        """Get Polish display format for day 1 (e.g., '10.03.2025')"""
+        """Get Polish display format for day 1 (e.g., '09.03.2027')"""
         if self.day1_date:
             return self.day1_date.strftime('%d.%m.%Y')
-        return "10.03.2025"
+        return "09.03.2027"
     
     def get_day2_display_en(self):
-        """Get English display format for day 2 (e.g., 'March 11, 2025')"""
+        """Get English display format for day 2 (e.g., 'March 10, 2027')"""
         if self.day2_date:
             return self.day2_date.strftime('%B %d, %Y')
-        return "March 11, 2025"
+        return "March 10, 2027"
     
     def get_day2_display_pl(self):
-        """Get Polish display format for day 2 (e.g., '11.03.2025')"""
+        """Get Polish display format for day 2 (e.g., '10.03.2027')"""
         if self.day2_date:
             return self.day2_date.strftime('%d.%m.%Y')
-        return "11.03.2025"
+        return "10.03.2027"
 
     def reminder_day_slots(self):
         return [
             self.invitation_reminder_1_days,
             self.invitation_reminder_2_days,
             self.invitation_reminder_3_days,
-            self.invitation_reminder_4_days,
-            self.invitation_reminder_5_days,
         ]
 
     def get_invitation_reminder_days(self):

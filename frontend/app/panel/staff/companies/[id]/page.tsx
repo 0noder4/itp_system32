@@ -72,9 +72,12 @@ function computeStageStatus(
 
   // Stage not completed
   if (dataExists) {
-    // Data exists but not completed - either in progress or rejected
+    // Data exists but not completed - check feedback
     if (feedback && feedback.status === "rejected") return "rejected";
-    return "in_progress";
+    if (feedback && feedback.status === "pending") return "pending_approval";
+    if (feedback && feedback.status === "accepted") return "accepted";
+    // Submitted data awaiting review (no feedback yet) or draft edits
+    return "pending_approval";
   }
 
   // No data exists
@@ -405,19 +408,11 @@ export default function CompanyDetailPage() {
                                 : stage.status === "rejected"
                                 ? "bg-danger/10 text-danger dark:bg-danger/20 dark:text-danger-foreground"
                                 : stage.status === "pending_approval"
-                                ? ""
+                                ? "bg-information/10 text-information dark:bg-information/20 dark:text-information-foreground"
                                 : stage.status === "in_progress"
                                 ? "bg-warning/10 text-warning dark:bg-warning/20 dark:text-warning-foreground"
                                 : "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200"
                             }`}
-                            style={
-                              stage.status === "pending_approval"
-                                ? {
-                                    backgroundColor: `${STAFF_ACCENT_COLOR}1A`,
-                                    color: STAFF_ACCENT_COLOR,
-                                  }
-                                : undefined
-                            }
                           >
                             {t(
                               `exhibitor.status.${statusToTranslationKey(

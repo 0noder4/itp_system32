@@ -60,8 +60,8 @@ Uwaga: terminy są obecnie informacyjne (nie blokują technicznie zapisu formula
 W tym samym rekordzie `Settings` (sekcja **Invitation settings**):
 
 - `invitation_validity_days` - ważność **nowo utworzonych** linków zaproszenia (1–30 dni, domyślnie 7). Nie przesuwa już wysłanych zaproszeń.
-- `invitation_reminder_count` - liczba automatycznych przypomnień o zbliżającym się wygaśnięciu (0–5). **`0` wyłącza** przypomnienia.
-- `invitation_reminder_1_days` … `invitation_reminder_5_days` - ile dni przed wygaśnięciem wysłać kolejne przypomnienie. Aktywne sloty muszą być wypełnione, bez duplikatów i mniejsze niż `invitation_validity_days`.
+- `invitation_reminder_count` - liczba automatycznych przypomnień o zbliżającym się wygaśnięciu (0–3). **`0` wyłącza** przypomnienia.
+- `invitation_reminder_1_days` … `invitation_reminder_3_days` - ile dni przed wygaśnięciem wysłać kolejne przypomnienie. Aktywne sloty muszą być wypełnione, bez duplikatów i mniejsze niż `invitation_validity_days`.
 
 Przypomnienia idą do adresu zaproszenia oraz do opiekuna (`created_by`), jeśli ma e-mail. Każdy odbiorca jest oznaczany osobno (`InvitationExpiryReminderSent.recipient`), więc awaria maila do staff nie powoduje ponownego wysłania do wystawcy. Command: `python manage.py send_invitation_expiry_reminders` (przy błędach wysyłki kończy się kodem ≠ 0).
 

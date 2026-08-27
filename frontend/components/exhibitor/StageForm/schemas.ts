@@ -147,53 +147,233 @@ export const stage4Schema = z.object({
     .optional(),
 });
 
-export const stage5Schema = z.object({
-  final_data: z.object({
-    el_devices: z.string().min(1, "Electric devices information is required").max(255, "Electric devices must be 255 characters or less"),
-    el_power: z.string().min(1, "Electric power is required").max(255, "Electric power must be 255 characters or less"),
-  }),
-  lunches: z
-    .array(
+export const stage5Schema = z
+  .object({
+    final_data: z.object({
+      el_devices: z.string().max(255, "Electric devices must be 255 characters or less"),
+      el_power: z.string().max(255, "Electric power must be 255 characters or less"),
+      el_low_power: z.boolean(),
+      lunches_declined: z.boolean(),
+      no_other_delegates: z.boolean(),
+      main_rep_name: z.string(),
+      main_rep_surname: z.string(),
+      main_rep_phone: z.string(),
+      main_rep_attendance: z.enum(["both", "day1", "day2", "none", ""]),
+    }),
+    lunches: z.array(
       z.object({
         day: z.enum(["day1", "day2"], {
           message: "Day is required",
         }),
-        lunch_quantity: z.number().min(0, "Lunch quantity must be 0 or greater"),
-        diet_info: z.string().max(255, "Diet info must be 255 characters or less").default("").optional(),
+        lunch_quantity: z
+          .number()
+          .min(0, "Lunch quantity must be 0 or greater"),
+        diet_info: z.enum(["meat", "vegetarian", "vegan"], {
+          message: "Diet selection is required",
+        }),
       })
-    )
-    .optional(),
-  pdi: z
-    .object({
-      tickets_quantity: z.number().min(0, "Tickets quantity must be 0 or greater"),
-    })
-    .nullable()
-    .optional(),
-  exhibitors: z
-    .array(
+    ),
+    pdi: z
+      .object({
+        tickets_quantity: z
+          .number()
+          .min(0, "Tickets quantity must be 0 or greater"),
+      })
+      .nullable()
+      .optional(),
+    exhibitors: z.array(
       z.object({
-        name: z.string().min(1, "First name is required"),
-        surname: z.string().min(1, "Last name is required"),
-        phone_number: z
-          .string()
-          .min(1, "Phone number is required")
-          .regex(
-            /^[\+]?[(]?[0-9]{1,4}[)]?[-\s\.]?[(]?[0-9]{1,4}[)]?[-\s\.]?[0-9]{1,9}$/,
-            "Please enter a valid phone number."
-          )
-          .refine(
-            (val) => {
-              const digitCount = (val.match(/\d/g) || []).length;
-              return digitCount >= 7 && digitCount <= 15;
-            },
-            {
-              message: "Phone number must contain between 7 and 15 digits.",
-            }
-          ),
+        name: z.string(),
+        surname: z.string(),
+        phone_number: z.string(),
+        attendance: z.enum(["both", "day1", "day2", "none", ""]),
       })
-    )
-    .optional(),
-});
+    ),
+  })
+  .superRefine((data, ctx) => {
+    const phoneRegex =
+      /^[\+]?[(]?[0-9]{1,4}[)]?[-\s\.]?[(]?[0-9]{1,4}[)]?[-\s\.]?[0-9]{1,9}$/;
+
+    const validatePhone = (value: string, path: (string | number)[]) => {
+      if (!value.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Phone number is required",
+          path,
+        });
+        return;
+      }
+      if (!phoneRegex.test(value)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Please enter a valid phone number.",
+          path,
+        });
+        return;
+      }
+      const digitCount = (value.match(/\d/g) || []).length;
+      if (digitCount < 7 || digitCount > 15) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Phone number must contain between 7 and 15 digits.",
+          path,
+        });
+      }
+    };
+
+    if (!data.final_data.el_low_power) {
+      if (!data.final_data.el_devices.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "List devices separated by commas, or select low power",
+          path: ["final_data", "el_devices"],
+        });
+      }
+      if (!data.final_data.el_power.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Enter total power in watts, or select low power",
+          path: ["final_data", "el_power"],
+        });
+      } else if (!/^\d+$/.test(data.final_data.el_power.trim())) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Power must contain digits only",
+          path: ["final_data", "el_power"],
+        });
+      }
+    }
+
+    if (data.final_data.lunches_declined) {
+      // lunches cleared in UI
+    } else {
+      const totalLunches = data.lunches.reduce(
+        (sum, lunch) => sum + (lunch.lunch_quantity || 0),
+        0
+      );
+      if (totalLunches < 1) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Choose lunch orders or select decline lunches",
+          path: ["final_data", "lunches_declined"],
+        });
+      }
+    }
+
+    if (!data.final_data.main_rep_name.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "First name is required",
+        path: ["final_data", "main_rep_name"],
+      });
+    }
+    if (!data.final_data.main_rep_surname.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Last name is required",
+        path: ["final_data", "main_rep_surname"],
+      });
+    }
+    validatePhone(data.final_data.main_rep_phone, [
+      "final_data",
+      "main_rep_phone",
+    ]);
+    if (
+      !data.final_data.main_rep_attendance ||
+      !["both", "day1", "day2", "none"].includes(
+        data.final_data.main_rep_attendance
+      )
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Attendance selection is required",
+        path: ["final_data", "main_rep_attendance"],
+      });
+    }
+
+    if (data.final_data.no_other_delegates) {
+      // exhibitors cleared in UI
+    } else if (data.exhibitors.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Add delegates or select no other delegates",
+        path: ["final_data", "no_other_delegates"],
+      });
+    } else {
+      data.exhibitors.forEach((exhibitor, index) => {
+        if (!exhibitor.name.trim()) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "First name is required",
+            path: ["exhibitors", index, "name"],
+          });
+        }
+        if (!exhibitor.surname.trim()) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Last name is required",
+            path: ["exhibitors", index, "surname"],
+          });
+        }
+        validatePhone(exhibitor.phone_number, [
+          "exhibitors",
+          index,
+          "phone_number",
+        ]);
+        if (
+          !exhibitor.attendance ||
+          !["both", "day1", "day2", "none"].includes(exhibitor.attendance)
+        ) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Attendance selection is required",
+            path: ["exhibitors", index, "attendance"],
+          });
+        }
+      });
+    }
+
+    const mainAttendance = data.final_data.main_rep_attendance;
+    const exhibitors = data.final_data.no_other_delegates ? [] : data.exhibitors;
+
+    const coversDay = (
+      attendance: string | undefined,
+      day: "day1" | "day2"
+    ) => {
+      if (attendance === "both") return true;
+      return attendance === day;
+    };
+
+    const countCoverage = (day: "day1" | "day2") => {
+      let count = coversDay(mainAttendance, day) ? 1 : 0;
+      for (const exhibitor of exhibitors) {
+        if (coversDay(exhibitor.attendance, day)) count += 1;
+      }
+      return count;
+    };
+
+    if (
+      mainAttendance === "none" &&
+      data.final_data.no_other_delegates
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "At least one person must attend each fair day",
+        path: ["final_data", "main_rep_attendance"],
+      });
+    } else if (mainAttendance) {
+      for (const day of ["day1", "day2"] as const) {
+        if (countCoverage(day) < 1) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "At least one person must attend each fair day",
+            path: ["final_data", "main_rep_attendance"],
+          });
+          break;
+        }
+      }
+    }
+  });
 
 export type Stage1FormData = z.infer<typeof stage1Schema>;
 export type Stage2FormData = z.infer<typeof stage2Schema>;

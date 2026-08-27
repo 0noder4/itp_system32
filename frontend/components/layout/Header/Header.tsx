@@ -115,6 +115,9 @@ export function Header({ navigationItems }: HeaderProps) {
             <HeaderUserCard
               email={userInfo.email}
               username={userInfo.username}
+              firstName={userInfo.first_name}
+              lastName={userInfo.last_name}
+              userType={userInfo.type}
               onLogout={handleLogout}
               accentColor={accentColor}
             />

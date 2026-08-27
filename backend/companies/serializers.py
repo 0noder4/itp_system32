@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from django.conf import settings
 from django.utils import timezone
+from rest_framework.exceptions import ValidationError
 from .models import (
     Company,
     CompanyInvitation,
@@ -391,9 +392,24 @@ class FinalDataSerializer(serializers.ModelSerializer):
 
 
 class LunchSerializer(serializers.ModelSerializer):
+    diet_info = serializers.ChoiceField(
+        choices=['meat', 'vegetarian', 'vegan'],
+        required=False,
+        allow_blank=True,
+        default='meat',
+    )
+
     class Meta:
         model = Lunch
         exclude = ('form',)
+
+    def validate_diet_info(self, value):
+        if not value:
+            return 'meat'
+        valid = {'meat', 'vegetarian', 'vegan'}
+        if value not in valid:
+            raise serializers.ValidationError('Invalid diet selection.')
+        return value
 
 
 class PDISerializer(serializers.ModelSerializer):
@@ -410,10 +426,32 @@ class PDIAttendeeSerializer(serializers.ModelSerializer):
 
 class ExhibitorSerializer(serializers.ModelSerializer):
     phone_number = serializers.CharField(max_length=20, validators=[validate_phone_number])
-    
+    attendance = serializers.ChoiceField(
+        choices=['both', 'day1', 'day2', 'none'],
+        required=False,
+        allow_blank=True,
+    )
+
     class Meta:
         model = Exhibitor
         exclude = ('form',)
+
+
+VALID_ATTENDANCE = {'both', 'day1', 'day2', 'none'}
+
+
+def covers_fair_day(attendance, day_key):
+    if attendance == 'both':
+        return True
+    return attendance == day_key
+
+
+def count_day_coverage(main_rep_attendance, exhibitors, day_key):
+    count = 1 if covers_fair_day(main_rep_attendance, day_key) else 0
+    for exhibitor in exhibitors:
+        if covers_fair_day(exhibitor.get('attendance'), day_key):
+            count += 1
+    return count
 
 
 class FeedbackSerializer(serializers.ModelSerializer):
@@ -715,6 +753,160 @@ class Stage5Serializer(serializers.Serializer):
     pdi = PDISerializer(required=False, allow_null=True)
     pdi_attendees = PDIAttendeeSerializer(many=True, required=False)
     exhibitors = ExhibitorSerializer(many=True, required=False)
+
+    def validate(self, data):
+        instance = getattr(self, 'instance', None) or {}
+        fd_instance = instance.get('final_data')
+
+        final_data = {}
+        if fd_instance:
+            final_data = {
+                'el_devices': fd_instance.el_devices,
+                'el_power': fd_instance.el_power,
+                'el_low_power': fd_instance.el_low_power,
+                'lunches_declined': fd_instance.lunches_declined,
+                'no_other_delegates': fd_instance.no_other_delegates,
+                'main_rep_name': fd_instance.main_rep_name,
+                'main_rep_surname': fd_instance.main_rep_surname,
+                'main_rep_phone': fd_instance.main_rep_phone,
+                'main_rep_attendance': fd_instance.main_rep_attendance,
+            }
+        if 'final_data' in data:
+            final_data.update(data['final_data'])
+            data['final_data'] = final_data
+
+        lunches_declined = final_data.get('lunches_declined', False)
+        no_other_delegates = final_data.get('no_other_delegates', False)
+        el_low_power = final_data.get('el_low_power', False)
+
+        errors = {}
+
+        if el_low_power:
+            final_data['el_power'] = '≤100'
+            if not (final_data.get('el_devices') or '').strip():
+                final_data['el_devices'] = '≤100 W (np. komputer + ładowarka)'
+            data['final_data'] = final_data
+        else:
+            if not (final_data.get('el_devices') or '').strip():
+                errors.setdefault('final_data', {})['el_devices'] = (
+                    'List devices separated by commas, or select low power (≤100 W).'
+                )
+            if not (final_data.get('el_power') or '').strip():
+                errors.setdefault('final_data', {})['el_power'] = (
+                    'Enter total power in watts, or select low power (≤100 W).'
+                )
+
+        if 'lunches' in data:
+            lunches = data.get('lunches') or []
+        elif fd_instance:
+            lunches = [
+                {
+                    'day': lunch.day,
+                    'lunch_quantity': lunch.lunch_quantity,
+                    'diet_info': lunch.diet_info,
+                }
+                for lunch in instance.get('lunches', [])
+            ]
+        else:
+            lunches = []
+
+        if 'exhibitors' in data:
+            exhibitors = data.get('exhibitors') or []
+        elif instance.get('exhibitors') is not None:
+            exhibitors = [
+                {
+                    'name': exhibitor.name,
+                    'surname': exhibitor.surname,
+                    'phone_number': exhibitor.phone_number,
+                    'attendance': exhibitor.attendance,
+                }
+                for exhibitor in instance.get('exhibitors', [])
+            ]
+        else:
+            exhibitors = []
+
+        if lunches_declined:
+            data['lunches'] = []
+        else:
+            total_lunches = sum(
+                max(0, lunch.get('lunch_quantity') or 0) for lunch in lunches
+            )
+            if total_lunches < 1:
+                errors.setdefault('final_data', {})['lunches_declined'] = (
+                    'Choose lunch orders or select "Decline lunches".'
+                )
+            else:
+                data['lunches'] = lunches
+
+        main_rep_errors = {}
+        for field in ('main_rep_name', 'main_rep_surname', 'main_rep_phone', 'main_rep_attendance'):
+            value = final_data.get(field) or ''
+            if field != 'main_rep_attendance':
+                value = value.strip()
+            if field == 'main_rep_attendance':
+                if value not in VALID_ATTENDANCE:
+                    main_rep_errors[field] = 'Attendance selection is required.'
+            elif not value:
+                main_rep_errors[field] = 'This field is required.'
+
+        if final_data.get('main_rep_phone'):
+            try:
+                validate_phone_number(final_data['main_rep_phone'])
+            except serializers.ValidationError as exc:
+                main_rep_errors['main_rep_phone'] = exc.detail
+
+        if main_rep_errors:
+            errors['final_data'] = {**errors.get('final_data', {}), **main_rep_errors}
+
+        if no_other_delegates:
+            data['exhibitors'] = []
+            exhibitors = []
+        elif not exhibitors:
+            errors.setdefault('final_data', {})['no_other_delegates'] = (
+                'Add delegates or select "No other delegates".'
+            )
+        else:
+            exhibitor_errors = []
+            has_row_errors = False
+            for exhibitor in exhibitors:
+                row_errors = {}
+                for field in ('name', 'surname', 'phone_number', 'attendance'):
+                    value = (exhibitor.get(field) or '').strip()
+                    if field == 'attendance':
+                        if value not in VALID_ATTENDANCE:
+                            row_errors[field] = 'Attendance selection is required.'
+                    elif not value:
+                        row_errors[field] = 'This field is required.'
+                if exhibitor.get('phone_number'):
+                    try:
+                        validate_phone_number(exhibitor['phone_number'])
+                    except serializers.ValidationError as exc:
+                        row_errors['phone_number'] = exc.detail
+                if row_errors:
+                    has_row_errors = True
+                exhibitor_errors.append(row_errors)
+            if has_row_errors:
+                errors['exhibitors'] = exhibitor_errors
+            else:
+                data['exhibitors'] = exhibitors
+
+        main_rep_attendance = final_data.get('main_rep_attendance', '')
+        if main_rep_attendance == 'none' and no_other_delegates:
+            errors.setdefault('final_data', {})['main_rep_attendance'] = (
+                'At least one person from the company must attend each fair day.'
+            )
+        elif main_rep_attendance in VALID_ATTENDANCE:
+            for day_key in ('day1', 'day2'):
+                if count_day_coverage(main_rep_attendance, data.get('exhibitors', []), day_key) < 1:
+                    errors.setdefault('final_data', {})['main_rep_attendance'] = (
+                        'At least one person from the company must attend each fair day.'
+                    )
+                    break
+
+        if errors:
+            raise ValidationError(errors)
+
+        return data
 
     def _get_form(self):
         company = self.context.get('company')

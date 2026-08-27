@@ -280,6 +280,27 @@ class OrderSummaryPDFGenerator:
     def _t(self, key_en, key_pl):
         """Get translation based on language."""
         return key_en if self.language == 'en' else key_pl
+
+    def _format_attendance(self, attendance, system_settings):
+        """Format attendance choice with fair dates."""
+        day1 = system_settings.get_day1_display_pl() if self.language != 'en' else system_settings.get_day1_display_en()
+        day2 = system_settings.get_day2_display_pl() if self.language != 'en' else system_settings.get_day2_display_en()
+        labels = {
+            'both': self._t('Both days', 'Oba dni'),
+            'day1': self._t(f'First day ({day1})', f'Pierwszego dnia ({day1})'),
+            'day2': self._t(f'Second day ({day2})', f'Drugiego dnia ({day2})'),
+            'none': self._t('Will not attend in person', 'Nie będzie mnie osobiście'),
+        }
+        return labels.get(attendance, attendance or '—')
+
+    def _format_diet(self, diet):
+        """Format diet choice for PDF output."""
+        labels = {
+            'meat': self._t('Meat (standard)', 'Mięsna (zwykła)'),
+            'vegetarian': self._t('Vegetarian', 'Wegetariańska'),
+            'vegan': self._t('Vegan', 'Wegańska'),
+        }
+        return labels.get(diet, diet or '')
         
     def generate(self):
         """Generate the complete PDF document."""
@@ -816,90 +837,111 @@ class OrderSummaryPDFGenerator:
         
         try:
             final_data = FinalData.objects.get(company=self.company)
-            
+            system_settings = Settings.get_settings()
+
             # Lunches
-            lunches = Lunch.objects.filter(form=final_data)
-            if lunches:
+            if final_data.lunches_declined:
                 self.story.append(Paragraph(
-                    self._t("Lunches:", "Obiady:"),
+                    self._t("Lunches declined", "Rezygnacja z obiadów"),
+                    self.normal_style
+                ))
+                self.story.append(Spacer(1, 0.2*cm))
+            else:
+                lunches = Lunch.objects.filter(form=final_data)
+                if lunches:
+                    self.story.append(Paragraph(
+                        self._t("Lunches:", "Obiady:"),
+                        self.bold_heading_style
+                    ))
+                    self.story.append(Spacer(1, 0.2*cm))
+                    
+                    lunch_data = []
+                    header_style = ParagraphStyle(
+                        'TableHeader',
+                        parent=self.normal_style,
+                        fontName=self._font_bold,
+                        fontSize=FONT_SIZE_TABLE_HEADER,
+                        textColor=colors.white
+                    )
+                    lunch_data.append([
+                        Paragraph(self._t("Day", "Dzień"), header_style),
+                        Paragraph(self._t("Quantity", "Ilość"), header_style),
+                        Paragraph(self._t("Diet Info", "Informacje o dietach"), header_style)
+                    ])
+                    
+                    for lunch in lunches:
+                        if lunch.day == 'day1':
+                            day_display = self._t(
+                                f"Day 1 ({system_settings.get_day1_display_en()})",
+                                f"Dzień 1 ({system_settings.get_day1_display_pl()})"
+                            )
+                        else:
+                            day_display = self._t(
+                                f"Day 2 ({system_settings.get_day2_display_en()})",
+                                f"Dzień 2 ({system_settings.get_day2_display_pl()})"
+                            )
+                        lunch_data.append([
+                            Paragraph(day_display, self.normal_style),
+                            Paragraph(str(lunch.lunch_quantity), self.normal_style),
+                            Paragraph(
+                                self._format_diet(lunch.diet_info or ""),
+                                self.normal_style,
+                            )
+                        ])
+                    
+                    lunch_table = Table(lunch_data, colWidths=[5*cm, 3*cm, 8*cm])
+                    lunch_table.setStyle(TableStyle([
+                        ('BACKGROUND', (0, 0), (-1, 0), ACCENT_COLOR),
+                        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                        ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
+                        ('TOPPADDING', (0, 0), (-1, 0), 10),
+                        ('BOTTOMPADDING', (0, 1), (-1, -1), 8),
+                        ('TOPPADDING', (0, 1), (-1, -1), 8),
+                        ('LEFTPADDING', (0, 0), (-1, -1), 8),
+                        ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+                        ('GRID', (0, 0), (-1, -1), 0.5, BORDER_COLOR),
+                    ]))
+                    self.story.append(lunch_table)
+                    self.story.append(Spacer(1, 0.3*cm))
+                    
+                    lunches_by_day = {}
+                    for lunch in lunches:
+                        day = lunch.day
+                        quantity = lunch.lunch_quantity or 0
+                        lunches_by_day[day] = lunches_by_day.get(day, 0) + quantity
+                    
+                    free_per_day = 2
+                    extra_lunches = sum(
+                        max(0, total_for_day - free_per_day)
+                        for total_for_day in lunches_by_day.values()
+                    )
+                    
+                    lunch_price = system_settings.lunch_price or Decimal('0')
+                    if extra_lunches > 0 and lunch_price > 0:
+                        total_lunch_cost = extra_lunches * lunch_price
+                        pricing_text = self._t(
+                            f"Additional lunches: {extra_lunches} × {lunch_price:.2f} PLN = {total_lunch_cost:.2f} PLN",
+                            f"Dodatkowe obiady: {extra_lunches} × {lunch_price:.2f} PLN = {total_lunch_cost:.2f} PLN"
+                        )
+                        self.story.append(Paragraph(pricing_text, self.normal_style))
+                        self.story.append(Spacer(1, 0.2*cm))
+
+            # Main representative
+            if final_data.main_rep_name or final_data.main_rep_surname:
+                self.story.append(Paragraph(
+                    self._t("Main Representative:", "Główny przedstawiciel:"),
                     self.bold_heading_style
                 ))
                 self.story.append(Spacer(1, 0.2*cm))
-                
-                lunch_data = []
-                # Header
-                header_style = ParagraphStyle(
-                    'TableHeader',
-                    parent=self.normal_style,
-                    fontName=self._font_bold,
-                    fontSize=FONT_SIZE_TABLE_HEADER,
-                    textColor=colors.white
+                main_rep_text = (
+                    f"{final_data.main_rep_name} {final_data.main_rep_surname} — "
+                    f"{final_data.main_rep_phone} — "
+                    f"{self._format_attendance(final_data.main_rep_attendance, system_settings)}"
                 )
-                lunch_data.append([
-                    Paragraph(self._t("Day", "Dzień"), header_style),
-                    Paragraph(self._t("Quantity", "Ilość"), header_style),
-                    Paragraph(self._t("Diet Info", "Informacje o dietach"), header_style)
-                ])
-                
-                # Get job fair dates from settings
-                system_settings = Settings.get_settings()
-                
-                for lunch in lunches:
-                    if lunch.day == 'day1':
-                        day_display = self._t(
-                            f"Day 1 ({system_settings.get_day1_display_en()})",
-                            f"Dzień 1 ({system_settings.get_day1_display_pl()})"
-                        )
-                    else:
-                        day_display = self._t(
-                            f"Day 2 ({system_settings.get_day2_display_en()})",
-                            f"Dzień 2 ({system_settings.get_day2_display_pl()})"
-                        )
-                    lunch_data.append([
-                        Paragraph(day_display, self.normal_style),
-                        Paragraph(str(lunch.lunch_quantity), self.normal_style),
-                        Paragraph(lunch.diet_info or "", self.normal_style)
-                    ])
-                
-                lunch_table = Table(lunch_data, colWidths=[5*cm, 3*cm, 8*cm])
-                lunch_table.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (-1, 0), ACCENT_COLOR),  # Use accent color for header
-                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                    ('BOTTOMPADDING', (0, 0), (-1, 0), 10),  # Header padding
-                    ('TOPPADDING', (0, 0), (-1, 0), 10),
-                    ('BOTTOMPADDING', (0, 1), (-1, -1), 8),  # Body padding
-                    ('TOPPADDING', (0, 1), (-1, -1), 8),
-                    ('LEFTPADDING', (0, 0), (-1, -1), 8),
-                    ('RIGHTPADDING', (0, 0), (-1, -1), 8),
-                    ('GRID', (0, 0), (-1, -1), 0.5, BORDER_COLOR),
-                ]))
-                self.story.append(lunch_table)
+                self.story.append(Paragraph(main_rep_text, self.normal_style))
                 self.story.append(Spacer(1, 0.3*cm))
-                
-                # Calculate extra lunches and pricing
-                # Group lunches by day and sum quantities per day
-                lunches_by_day = {}
-                for lunch in lunches:
-                    day = lunch.day
-                    quantity = lunch.lunch_quantity or 0
-                    lunches_by_day[day] = lunches_by_day.get(day, 0) + quantity
-                
-                # Calculate extra lunches: 2 free lunches per day
-                free_per_day = 2
-                extra_lunches = sum(max(0, total_for_day - free_per_day) for total_for_day in lunches_by_day.values())
-                
-                # Calculate total cost if there are extra lunches and price is set
-                lunch_price = system_settings.lunch_price or Decimal('0')
-                if extra_lunches > 0 and lunch_price > 0:
-                    total_lunch_cost = extra_lunches * lunch_price
-                    pricing_text = self._t(
-                        f"Additional lunches: {extra_lunches} × {lunch_price:.2f} PLN = {total_lunch_cost:.2f} PLN",
-                        f"Dodatkowe obiady: {extra_lunches} × {lunch_price:.2f} PLN = {total_lunch_cost:.2f} PLN"
-                    )
-                    self.story.append(Paragraph(pricing_text, self.normal_style))
-                    self.story.append(Spacer(1, 0.2*cm))
             
             # PDI
             try:
@@ -955,52 +997,63 @@ class OrderSummaryPDFGenerator:
                         self.story.append(attendee_table)
                         self.story.append(Spacer(1, 0.3*cm))
                     
-                    # Exhibitors
-                    exhibitors = Exhibitor.objects.filter(form=pdi)
-                    if exhibitors:
+                    # Other delegates
+                    if final_data.no_other_delegates:
                         self.story.append(Paragraph(
-                            self._t("Exhibitors:", "Wystawcy:"),
-                            self.bold_heading_style
+                            self._t("No other delegates", "Brak innych delegatów"),
+                            self.normal_style
                         ))
                         self.story.append(Spacer(1, 0.2*cm))
-                        
-                        exhibitor_data = []
-                        # Header
-                        header_style = ParagraphStyle(
-                            'TableHeader',
-                            parent=self.normal_style,
-                            fontName=self._font_bold,
-                            fontSize=FONT_SIZE_TABLE_HEADER,
-                            textColor=colors.white
-                        )
-                        exhibitor_data.append([
-                            Paragraph(self._t("Name", "Imię"), header_style),
-                            Paragraph(self._t("Surname", "Nazwisko"), header_style),
-                            Paragraph(self._t("Phone", "Telefon"), header_style)
-                        ])
-                        
-                        for exhibitor in exhibitors:
+                    else:
+                        exhibitors = Exhibitor.objects.filter(form=pdi)
+                        if exhibitors:
+                            self.story.append(Paragraph(
+                                self._t("Other Delegates:", "Inni delegaci:"),
+                                self.bold_heading_style
+                            ))
+                            self.story.append(Spacer(1, 0.2*cm))
+                            
+                            exhibitor_data = []
+                            header_style = ParagraphStyle(
+                                'TableHeader',
+                                parent=self.normal_style,
+                                fontName=self._font_bold,
+                                fontSize=FONT_SIZE_TABLE_HEADER,
+                                textColor=colors.white
+                            )
                             exhibitor_data.append([
-                                Paragraph(exhibitor.name, self.normal_style),
-                                Paragraph(exhibitor.surname, self.normal_style),
-                                Paragraph(exhibitor.phone_number, self.normal_style)
+                                Paragraph(self._t("Name", "Imię"), header_style),
+                                Paragraph(self._t("Surname", "Nazwisko"), header_style),
+                                Paragraph(self._t("Phone", "Telefon"), header_style),
+                                Paragraph(self._t("Attendance", "Obecność"), header_style),
                             ])
-                        
-                        exhibitor_table = Table(exhibitor_data, colWidths=[5*cm, 5*cm, 6*cm])
-                        exhibitor_table.setStyle(TableStyle([
-                            ('BACKGROUND', (0, 0), (-1, 0), ACCENT_COLOR),  # Use accent color for header
-                            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-                            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                            ('BOTTOMPADDING', (0, 0), (-1, 0), 10),  # Header padding
-                            ('TOPPADDING', (0, 0), (-1, 0), 10),
-                            ('BOTTOMPADDING', (0, 1), (-1, -1), 8),  # Body padding
-                            ('TOPPADDING', (0, 1), (-1, -1), 8),
-                            ('LEFTPADDING', (0, 0), (-1, -1), 8),
-                            ('RIGHTPADDING', (0, 0), (-1, -1), 8),
-                            ('GRID', (0, 0), (-1, -1), 0.5, BORDER_COLOR),
-                        ]))
-                        self.story.append(exhibitor_table)
+                            
+                            for exhibitor in exhibitors:
+                                exhibitor_data.append([
+                                    Paragraph(exhibitor.name, self.normal_style),
+                                    Paragraph(exhibitor.surname, self.normal_style),
+                                    Paragraph(exhibitor.phone_number, self.normal_style),
+                                    Paragraph(
+                                        self._format_attendance(exhibitor.attendance, system_settings),
+                                        self.normal_style
+                                    ),
+                                ])
+                            
+                            exhibitor_table = Table(exhibitor_data, colWidths=[4*cm, 4*cm, 4*cm, 4*cm])
+                            exhibitor_table.setStyle(TableStyle([
+                                ('BACKGROUND', (0, 0), (-1, 0), ACCENT_COLOR),
+                                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                                ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
+                                ('TOPPADDING', (0, 0), (-1, 0), 10),
+                                ('BOTTOMPADDING', (0, 1), (-1, -1), 8),
+                                ('TOPPADDING', (0, 1), (-1, -1), 8),
+                                ('LEFTPADDING', (0, 0), (-1, -1), 8),
+                                ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+                                ('GRID', (0, 0), (-1, -1), 0.5, BORDER_COLOR),
+                            ]))
+                            self.story.append(exhibitor_table)
             except PDI.DoesNotExist:
                 pass
             

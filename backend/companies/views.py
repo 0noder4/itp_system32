@@ -1950,8 +1950,11 @@ class LunchPriceView(APIView):
     def get(self, request):
         try:
             settings = Settings.get_settings()
+            day_opt = dict(settings.get_day_opt())
             return Response({
                 'lunch_price': str(settings.lunch_price),
+                'day1': day_opt.get('day1', '09.03.2027'),
+                'day2': day_opt.get('day2', '10.03.2027'),
             }, status=status.HTTP_200_OK)
         except Exception as e:
             logger.error(f"Error in LunchPriceView.get: {e}", exc_info=True)

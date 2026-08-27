@@ -6,7 +6,7 @@ from companies.models import (
     Company, Form, BasicData, Address, Stand,
     StandDetails, EquipmentItem, EquipmentSelection,
     FinalData, Lunch, Workshop, Exhibitor,
-    COMPANY_STATUS_CHOICES, STAND_TYPE_CHOICES, DAY_OPT,
+    COMPANY_STATUS_CHOICES, STAND_TYPE_CHOICES, DAY_OPT, ATTENDANCE_OPT, DIET_OPT,
 )
 from companies.utils.csv_generator import CSVGenerator
 from typing import Dict, List, Any
@@ -90,6 +90,14 @@ class ExportService:
         parts = [p for p in [first_name, last_name] if p]
         return ' '.join(parts) if parts else ''
 
+    def _format_attendance(self, attendance: str) -> str:
+        """Map attendance code to human-readable label."""
+        return dict(ATTENDANCE_OPT).get(attendance, attendance or '')
+
+    def _format_diet(self, diet: str) -> str:
+        """Map diet code to human-readable label."""
+        return dict(DIET_OPT).get(diet, diet or '')
+
     def _format_lunches_for_day(self, day_lunches: List[Lunch]) -> tuple:
         """
         Compute total quantity and formatted comment string for a day's lunches.
@@ -104,7 +112,7 @@ class ExportService:
         # Build comment parts: merge identical diet_info by summing quantities
         comment_counts: Dict[str, int] = {}
         for l in day_lunches:
-            info = (l.diet_info or '').strip()
+            info = self._format_diet((l.diet_info or '').strip())
             if info:
                 comment_counts[info] = comment_counts.get(info, 0) + l.lunch_quantity
         if not comment_counts:
@@ -224,9 +232,12 @@ class ExportService:
             'Poprowadzi warsztaty', 'Uwagi do warsztatów',
             # Final Data (Stage 5)
             'Urządzenia elektryczne podczas targów', 'Łączna moc urządzeń',
+            'Niska moc (≤100 W)',
+            'Rezygnacja z obiadów',
             'Dzień 1 - obiady', 'Ilość obiadów - dzień 1',
             'Dzień 2 - obiady', 'Ilość obiadów - dzień 2',
-            # Delegates (Exhibitors)
+            'Główny przedstawiciel', 'Obecność głównego przedstawiciela',
+            'Brak innych delegatów',
             'Delegaci firmy',
         ])
         
@@ -383,6 +394,13 @@ class ExportService:
                 base_data.update({
                     'Urządzenia elektryczne podczas targów': fd.el_devices or '',
                     'Łączna moc urządzeń': fd.el_power or '',
+                    'Niska moc (≤100 W)': 'Tak' if fd.el_low_power else 'Nie',
+                    'Rezygnacja z obiadów': 'Tak' if fd.lunches_declined else 'Nie',
+                    'Główny przedstawiciel': self._format_full_name(
+                        fd.main_rep_name, fd.main_rep_surname
+                    ) + (f" ({fd.main_rep_phone})" if fd.main_rep_phone else ''),
+                    'Obecność głównego przedstawiciela': self._format_attendance(fd.main_rep_attendance),
+                    'Brak innych delegatów': 'Tak' if fd.no_other_delegates else 'Nie',
                 })
 
                 # Lunches: group by day, sum quantities, add comments (diet_info) with counts in brackets
@@ -419,7 +437,11 @@ class ExportService:
                         if exhibitors:
                             exhibitor_list = []
                             for exh in exhibitors:
-                                exhibitor_list.append(f"{self._format_full_name(exh.name, exh.surname)} ({exh.phone_number})")
+                                attendance = self._format_attendance(exh.attendance)
+                                exhibitor_list.append(
+                                    f"{self._format_full_name(exh.name, exh.surname)} "
+                                    f"({exh.phone_number}, {attendance})"
+                                )
                             base_data['Delegaci firmy'] = ' | '.join(exhibitor_list)
                         else:
                             base_data['Delegaci firmy'] = ''
@@ -436,6 +458,11 @@ class ExportService:
             # No final data, initialize delegates and lunch columns
             base_data['Delegaci firmy'] = ''
             base_data.update({
+                'Rezygnacja z obiadów': '',
+                'Niska moc (≤100 W)': '',
+                'Główny przedstawiciel': '',
+                'Obecność głównego przedstawiciela': '',
+                'Brak innych delegatów': '',
                 'Dzień 1 - obiady': '',
                 'Ilość obiadów - dzień 1': '',
                 'Dzień 2 - obiady': '',

@@ -126,8 +126,6 @@ class SettingsAdmin(admin.ModelAdmin):
                 'invitation_reminder_1_days',
                 'invitation_reminder_2_days',
                 'invitation_reminder_3_days',
-                'invitation_reminder_4_days',
-                'invitation_reminder_5_days',
             ),
             'description': (
                 'Validity applies to newly created invitations only. '

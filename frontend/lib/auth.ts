@@ -11,6 +11,8 @@ export interface TokenResponse {
   user_type?: string;
   username?: string;
   email?: string;
+  first_name?: string;
+  last_name?: string;
   language?: Locale;
 }
 
@@ -20,6 +22,8 @@ export interface DecodedToken {
   user_type: UserType;
   username: string;
   email: string;
+  first_name?: string;
+  last_name?: string;
   language: Locale;
   exp: number;
   iat: number;
@@ -68,6 +72,8 @@ export const getUserInfo = (): {
   type: UserType;
   username: string;
   email: string;
+  first_name: string;
+  last_name: string;
 } | null => {
   const token = getAccessToken();
   if (!token) return null;
@@ -79,6 +85,8 @@ export const getUserInfo = (): {
     type: decoded.user_type,
     username: decoded.username || "",
     email: decoded.email || "",
+    first_name: decoded.first_name || "",
+    last_name: decoded.last_name || "",
   };
 };
 
