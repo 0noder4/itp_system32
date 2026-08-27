@@ -293,7 +293,8 @@ export default function Index() {
             <span>{t("staff.footer.author1")},</span>
             <span>{t("staff.footer.author2")},</span>
             <span>{t("staff.footer.author3")},</span>
-            <span>{t("staff.footer.author4")}</span>
+            <span>{t("staff.footer.author4")},</span>
+            <span>{t("staff.footer.author5")}</span>
           </div>
         </div>
       </footer>

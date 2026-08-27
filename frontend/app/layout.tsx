@@ -18,6 +18,7 @@ export const metadata: Metadata = {
     { name: "Patrycja Lubowiecka" },
     { name: "Dominika Zarzycka" },
     { name: "Norbert Roszkowski" },
+    { name: "Edgar Jonak" },
   ],
   creator: "Bartosz Kuklewski",
   publisher: "Bartosz Kuklewski",
