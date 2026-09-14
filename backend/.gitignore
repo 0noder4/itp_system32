@@ -1,4 +1,3 @@
-**/migrations/*
-!**/migrations/__init__.py
-
+# Keep media out of the image/repo context; migrations MUST be tracked and
+# copied into the production Docker image (entrypoint runs migrate).
 **/mediafiles/*
