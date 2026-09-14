@@ -26,6 +26,8 @@ export const stage2Schema = z.object({
       name_sign_text: z.string().max(255, "Name sign text must be 255 characters or less").optional(),
       logo_sign_file: z.any().optional(), // File upload
       fire_cert: z.any().optional(), // File upload
+      stand_visualization: z.any().optional(), // File upload
+      brought_equipment: z.string().max(2000).optional(),
     })
     .superRefine((data, ctx) => {
       // If provided_stand is selected, name_sign_text and logo_sign_file are required
@@ -54,8 +56,19 @@ export const stage2Schema = z.object({
           });
         }
       }
-      // If self_construction is selected, fire_cert is required
+      // If self_construction is selected, dimensions, fire_cert and stand_visualization are required
       if (data.stand_type === "self_construction") {
+        const sc = typeof data.sc_details === "string" ? data.sc_details.trim() : "";
+        const dimsMatch = sc.match(
+          /^([\d]+(?:[.,]\d+)?)x([\d]+(?:[.,]\d+)?)x([\d]+(?:[.,]\d+)?)m$/i
+        );
+        if (!dimsMatch || !dimsMatch[1] || !dimsMatch[2] || !dimsMatch[3]) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Construction dimensions are required for self construction",
+            path: ["sc_details"],
+          });
+        }
         // Fire cert is required - either a new File or existing file URL
         const hasFireCert =
           data.fire_cert &&
@@ -68,6 +81,17 @@ export const stage2Schema = z.object({
             path: ["fire_cert"],
           });
         }
+        const hasVisualization =
+          data.stand_visualization &&
+          (data.stand_visualization instanceof File ||
+            typeof data.stand_visualization === "string");
+        if (!hasVisualization) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Stand visualization is required for self construction",
+            path: ["stand_visualization"],
+          });
+        }
       }
     }),
   equipment_selections: z
@@ -75,6 +99,7 @@ export const stage2Schema = z.object({
       z.object({
         equipment_item: z.number(),
         quantity: z.number().min(0, "Quantity must be 0 or greater"),
+        mount_type: z.enum(["stand", "wall"]).nullable().optional(),
       })
     )
     .optional(),

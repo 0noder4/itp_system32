@@ -12,11 +12,108 @@ import { stage2Schema, Stage2FormData } from "./schemas";
 import { Button } from "@/components/ui/button";
 import { ACCENT_COLOR } from "@/lib/colors";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Loader2, Save, FileText, ExternalLink } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+
+type ScDimensions = {
+  length: string;
+  width: string;
+  height: string;
+};
+
+function parseScDimensions(value?: string | null): ScDimensions {
+  if (!value?.trim()) {
+    return { length: "", width: "", height: "" };
+  }
+  const cleaned = value.trim().replace(/\s+/g, "");
+  const match = cleaned.match(
+    /^([\d]+(?:[.,]\d+)?)m?[x×]([\d]+(?:[.,]\d+)?)m?[x×]([\d]+(?:[.,]\d+)?)m?$/i
+  );
+  if (!match) {
+    return { length: "", width: "", height: "" };
+  }
+  return { length: match[1], width: match[2], height: match[3] };
+}
+
+function formatScDimensions({ length, width, height }: ScDimensions): string {
+  const l = length.trim();
+  const w = width.trim();
+  const h = height.trim();
+  if (!l && !w && !h) {
+    return "";
+  }
+  return `${l}x${w}x${h}m`;
+}
+
+type StandTypeValue = "provided_stand" | "self_construction";
+
+function defaultEquipmentQty(
+  item: EquipmentItem,
+  standType: StandTypeValue
+): number {
+  if (item.code === "hanger") {
+    return standType === "self_construction"
+      ? 0
+      : Math.max(1, item.included_quantity || 1);
+  }
+  if (item.code === "trashbin") {
+    return Math.max(1, item.included_quantity || 1);
+  }
+  if (standType === "self_construction") {
+    return 0;
+  }
+  if (item.is_basic || (item.included_quantity || 0) > 0) {
+    return Math.max(item.included_quantity || 0, item.is_basic ? 1 : 0);
+  }
+  return 0;
+}
+
+function getMinEquipmentQty(
+  item: EquipmentItem,
+  standType: StandTypeValue
+): number {
+  if (item.code === "hanger") {
+    return standType === "self_construction"
+      ? 0
+      : Math.max(1, item.included_quantity || 1);
+  }
+  if (item.code === "trashbin") {
+    return Math.max(1, item.included_quantity || 1);
+  }
+  if (standType === "provided_stand" && (item.included_quantity || 0) > 0) {
+    return item.included_quantity;
+  }
+  return 0;
+}
+
+function isPackageLockedItem(
+  item: EquipmentItem,
+  standType: StandTypeValue
+): boolean {
+  if (item.code === "trashbin") return true;
+  if (item.code === "hanger" && standType === "provided_stand") return true;
+  return false;
+}
+
+function isEquipmentVisible(
+  item: EquipmentItem,
+  standType: StandTypeValue
+): boolean {
+  if (item.code === "hanger" && standType === "self_construction") {
+    return false;
+  }
+  return true;
+}
 
 interface Stage2FormProps {
   companyId?: number;
@@ -44,10 +141,20 @@ export function Stage2Form({
   >(null);
   const [selectedFireCertFileName, setSelectedFireCertFileName] =
     React.useState<string | null>(null);
+  const [selectedVisualizationFileName, setSelectedVisualizationFileName] =
+    React.useState<string | null>(null);
+  const [showCostDialog, setShowCostDialog] = React.useState(false);
+  const [pendingFormData, setPendingFormData] =
+    React.useState<Stage2FormData | null>(null);
+  const [pendingAdditionalCost, setPendingAdditionalCost] = React.useState(0);
+  const [scDimensions, setScDimensions] = React.useState<ScDimensions>(() =>
+    parseScDimensions(initialData?.stand_details?.sc_details)
+  );
 
   // Track existing file URLs from initial data
   const existingLogoFile = initialData?.stand_details?.logo_sign_file;
   const existingFireCert = initialData?.stand_details?.fire_cert;
+  const existingVisualization = initialData?.stand_details?.stand_visualization;
 
   // Helper function to get full URL for file fields
   const getFileUrl = (fileUrl: string | undefined) => {
@@ -71,7 +178,7 @@ export function Stage2Form({
     // If path starts with / but not /media/, and looks like a media file path
     else if (!path.startsWith("/media/")) {
       // Check if it's a known media file pattern (logos, fire_certs, etc.)
-      if (path.startsWith("/logos/") || path.startsWith("/fire_certs/")) {
+      if (path.startsWith("/logos/") || path.startsWith("/fire_certs/") || path.startsWith("/stand_visualizations/")) {
         path = `/media${path}`;
       }
       // Otherwise assume it needs /media/ prefix
@@ -105,11 +212,16 @@ export function Stage2Form({
         // Preserve existing file URLs for validation (they'll be strings, not File objects)
         logo_sign_file: initialData?.stand_details?.logo_sign_file || undefined,
         fire_cert: initialData?.stand_details?.fire_cert || undefined,
+        stand_visualization:
+          initialData?.stand_details?.stand_visualization || undefined,
+        brought_equipment:
+          initialData?.stand_details?.brought_equipment || "",
       },
       equipment_selections:
         initialData?.equipment_selections?.map((sel) => ({
           equipment_item: sel.equipment_item.id,
           quantity: sel.quantity,
+          mount_type: sel.mount_type ?? null,
         })) || [],
     },
   });
@@ -121,10 +233,10 @@ export function Stage2Form({
   // Only reset if there's no initial data (preserve saved selections)
   React.useEffect(() => {
     if (equipmentItems.length > 0 && watchStandType) {
-      // Check if we have initial data with equipment selections
-      const hasInitialSelections = (initialData?.equipment_selections?.length ?? 0) > 0;
-      
-      // If we have initial data, preserve it and only add missing items
+      const standType = watchStandType as StandTypeValue;
+      const hasInitialSelections =
+        (initialData?.equipment_selections?.length ?? 0) > 0;
+
       if (hasInitialSelections && initialData?.equipment_selections) {
         const existingItemIds = new Set(
           initialData.equipment_selections.map((sel) => sel.equipment_item.id)
@@ -132,34 +244,53 @@ export function Stage2Form({
         const missingItems = equipmentItems.filter(
           (item: EquipmentItem) => !existingItemIds.has(item.id)
         );
-        
-        // Preserve existing selections and add missing items with default quantities
+
         const allSelections = [
-          ...initialData.equipment_selections.map((sel) => ({
-            equipment_item: sel.equipment_item.id,
-            quantity: sel.quantity,
-          })),
+          ...initialData.equipment_selections.map((sel) => {
+            const item = sel.equipment_item;
+            let quantity = sel.quantity;
+            if (item.code === "hanger" && standType === "self_construction") {
+              quantity = 0;
+            } else if (item.code === "trashbin") {
+              quantity = Math.max(
+                quantity,
+                Math.max(1, item.included_quantity || 1)
+              );
+            } else if (item.code === "hanger" && standType === "provided_stand") {
+              quantity = Math.max(
+                quantity,
+                Math.max(1, item.included_quantity || 1)
+              );
+            }
+            let mount_type = sel.mount_type ?? null;
+            if (item.code === "tv") {
+              if (quantity <= 0) mount_type = null;
+              else if (standType === "self_construction" && mount_type === "wall") {
+                mount_type = "stand";
+              } else if (!mount_type) {
+                mount_type = "stand";
+              }
+            } else {
+              mount_type = null;
+            }
+            return {
+              equipment_item: item.id,
+              quantity,
+              mount_type,
+            };
+          }),
           ...missingItems.map((item: EquipmentItem) => ({
             equipment_item: item.id,
-            quantity:
-              watchStandType === "self_construction"
-                ? 0
-                : item.is_basic
-                ? Math.max(1, item.included_quantity || 0)
-                : 0,
+            quantity: defaultEquipmentQty(item, standType),
+            mount_type: null as "stand" | "wall" | null,
           })),
         ];
         form.setValue("equipment_selections", allSelections);
       } else {
-        // No initial data, set defaults based on stand type
         const allSelections = equipmentItems.map((item: EquipmentItem) => ({
           equipment_item: item.id,
-          quantity:
-            watchStandType === "self_construction"
-              ? 0
-              : item.is_basic
-              ? Math.max(1, item.included_quantity || 0)
-              : 0,
+          quantity: defaultEquipmentQty(item, standType),
+          mount_type: null as "stand" | "wall" | null,
         }));
         form.setValue("equipment_selections", allSelections);
       }
@@ -183,18 +314,18 @@ export function Stage2Form({
           form.getValues("stand_details.stand_type");
 
         if (!initialData?.equipment_selections?.length) {
+          const standType = (currentStandType || "provided_stand") as StandTypeValue;
           const allSelections = response.data.map((item: EquipmentItem) => ({
             equipment_item: item.id,
-            quantity:
-              currentStandType === "self_construction"
-                ? 0
-                : item.is_basic
-                ? Math.max(1, item.included_quantity || 0)
-                : 0,
+            quantity: currentStandType
+              ? defaultEquipmentQty(item, standType)
+              : 0,
+            mount_type: null as "stand" | "wall" | null,
           }));
           form.setValue("equipment_selections", allSelections);
         } else {
           // Ensure all equipment items are in selections, even if not in initial data
+          const standType = (currentStandType || "provided_stand") as StandTypeValue;
           const existingItemIds = new Set(
             initialData.equipment_selections.map((sel) => sel.equipment_item.id)
           );
@@ -205,15 +336,12 @@ export function Stage2Form({
             ...initialData.equipment_selections.map((sel) => ({
               equipment_item: sel.equipment_item.id,
               quantity: sel.quantity,
+              mount_type: sel.mount_type ?? null,
             })),
             ...missingItems.map((item: EquipmentItem) => ({
               equipment_item: item.id,
-              quantity:
-                currentStandType === "self_construction"
-                  ? 0
-                  : item.is_basic
-                  ? Math.max(1, item.included_quantity || 0)
-                  : 0,
+              quantity: defaultEquipmentQty(item, standType),
+              mount_type: null as "stand" | "wall" | null,
             })),
           ];
           form.setValue("equipment_selections", allSelections);
@@ -228,34 +356,96 @@ export function Stage2Form({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [locale]);
 
+  const updateScDimension = (
+    field: keyof ScDimensions,
+    value: string
+  ) => {
+    // Allow digits, comma and dot as decimal separators
+    const sanitized = value.replace(/[^\d.,]/g, "");
+    setScDimensions((prev) => {
+      const next = { ...prev, [field]: sanitized };
+      form.setValue("stand_details.sc_details", formatScDimensions(next), {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+      return next;
+    });
+  };
+
+  // Keep dimension inputs in sync when initial data / stand type changes
+  React.useEffect(() => {
+    const parsed = parseScDimensions(initialData?.stand_details?.sc_details);
+    setScDimensions(parsed);
+    if (initialData?.stand_details?.sc_details) {
+      form.setValue(
+        "stand_details.sc_details",
+        formatScDimensions(parsed) || initialData.stand_details.sc_details
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialData?.stand_details?.sc_details]);
+
   const handleQuantityChange = (itemId: number, quantity: number) => {
+    const item = equipmentItems.find((i) => i.id === itemId);
+    const standType = (watchStandType || "provided_stand") as StandTypeValue;
+    const minQty = item ? getMinEquipmentQty(item, standType) : 0;
+    const nextQty = Math.max(minQty, quantity);
     const currentSelections = form.getValues("equipment_selections") || [];
     const existingIndex = currentSelections.findIndex(
       (sel) => sel.equipment_item === itemId
     );
 
-    if (quantity <= 0) {
-      // Remove from selections if quantity is 0 or less
-      if (existingIndex >= 0) {
-        const newSelections = currentSelections.filter(
-          (_, idx) => idx !== existingIndex
-        );
-        form.setValue("equipment_selections", newSelections);
-      }
+    const resolveMount = (
+      currentMount: "stand" | "wall" | null | undefined
+    ): "stand" | "wall" | null => {
+      if (!item || item.code !== "tv" || nextQty <= 0) return null;
+      if (standType === "self_construction") return "stand";
+      return currentMount === "wall" || currentMount === "stand"
+        ? currentMount
+        : "stand";
+    };
+
+    if (existingIndex >= 0) {
+      const updatedSelections = currentSelections.map((sel) =>
+        sel.equipment_item === itemId
+          ? {
+              ...sel,
+              quantity: nextQty,
+              mount_type: resolveMount(sel.mount_type),
+            }
+          : sel
+      );
+      form.setValue("equipment_selections", updatedSelections);
     } else {
-      // Update or add selection
-      if (existingIndex >= 0) {
-        const updatedSelections = currentSelections.map((sel) =>
-          sel.equipment_item === itemId ? { ...sel, quantity } : sel
-        );
-        form.setValue("equipment_selections", updatedSelections);
-      } else {
-        form.setValue("equipment_selections", [
-          ...currentSelections,
-          { equipment_item: itemId, quantity },
-        ]);
-      }
+      form.setValue("equipment_selections", [
+        ...currentSelections,
+        {
+          equipment_item: itemId,
+          quantity: nextQty,
+          mount_type: resolveMount(null),
+        },
+      ]);
     }
+  };
+
+  const handleMountChange = (
+    itemId: number,
+    mountType: "stand" | "wall"
+  ) => {
+    const standType = (watchStandType || "provided_stand") as StandTypeValue;
+    const nextMount =
+      standType === "self_construction" && mountType === "wall"
+        ? "stand"
+        : mountType;
+    const currentSelections = form.getValues("equipment_selections") || [];
+    form.setValue(
+      "equipment_selections",
+      currentSelections.map((sel) =>
+        sel.equipment_item === itemId
+          ? { ...sel, mount_type: nextMount }
+          : sel
+      )
+    );
   };
 
   const getSelectedQuantity = (itemId: number): number => {
@@ -263,6 +453,15 @@ export function Stage2Form({
       (sel) => sel.equipment_item === itemId
     );
     return selection?.quantity || 0;
+  };
+
+  const getSelectedMount = (
+    itemId: number
+  ): "stand" | "wall" | null => {
+    const selection = watchEquipmentSelections.find(
+      (sel) => sel.equipment_item === itemId
+    );
+    return selection?.mount_type ?? null;
   };
 
   const calculateItemCost = (item: EquipmentItem, quantity: number): number => {
@@ -285,7 +484,9 @@ export function Stage2Form({
 
   const groupedEquipment = React.useMemo(() => {
     const grouped: Record<string, EquipmentItem[]> = {};
+    const standType = (watchStandType || "provided_stand") as StandTypeValue;
     equipmentItems.forEach((item) => {
+      if (!isEquipmentVisible(item, standType)) return;
       const category = item.category || "other";
       if (!grouped[category]) {
         grouped[category] = [];
@@ -293,10 +494,10 @@ export function Stage2Form({
       grouped[category].push(item);
     });
     return grouped;
-  }, [equipmentItems]);
+  }, [equipmentItems, watchStandType]);
 
   const handleFileChange = (
-    field: "logo_sign_file" | "fire_cert",
+    field: "logo_sign_file" | "fire_cert" | "stand_visualization",
     file: File | null
   ) => {
     if (file) {
@@ -304,34 +505,34 @@ export function Stage2Form({
         shouldValidate: true,
         shouldDirty: true,
       });
-      // Track selected file name
       if (field === "logo_sign_file") {
         setSelectedLogoFileName(file.name);
-      } else {
+      } else if (field === "fire_cert") {
         setSelectedFireCertFileName(file.name);
+      } else {
+        setSelectedVisualizationFileName(file.name);
       }
-      // Trigger validation to show errors immediately
       form.trigger(`stand_details.${field}`);
     } else {
       form.setValue(`stand_details.${field}`, undefined, {
         shouldValidate: true,
         shouldDirty: true,
       });
-      // Clear selected file name
       if (field === "logo_sign_file") {
         setSelectedLogoFileName(null);
-      } else {
+      } else if (field === "fire_cert") {
         setSelectedFireCertFileName(null);
+      } else {
+        setSelectedVisualizationFileName(null);
       }
     }
   };
 
-  const handleFormSubmit = async (data: Stage2FormData) => {
+  const buildSubmitPayload = (data: Stage2FormData): Stage2FormData => {
     // Get current form values to ensure files are included (React Hook Form might strip files during validation)
     const currentFormValues = form.getValues();
 
-    // Ensure files are included in the data (files might be stripped by zod validation)
-    const dataWithFiles = {
+    return {
       ...data,
       stand_details: {
         ...data.stand_details,
@@ -348,11 +549,24 @@ export function Stage2Form({
             : currentFormValues.stand_details?.fire_cert instanceof File
             ? currentFormValues.stand_details.fire_cert
             : data.stand_details?.fire_cert,
+        stand_visualization:
+          data.stand_details?.stand_visualization instanceof File
+            ? data.stand_details.stand_visualization
+            : currentFormValues.stand_details?.stand_visualization instanceof
+              File
+            ? currentFormValues.stand_details.stand_visualization
+            : data.stand_details?.stand_visualization,
+        brought_equipment:
+          data.stand_details?.brought_equipment ??
+          currentFormValues.stand_details?.brought_equipment ??
+          "",
       },
       equipment_selections:
         data.equipment_selections?.filter((sel) => sel.quantity > 0) || [],
     };
-    
+  };
+
+  const submitFormData = async (dataWithFiles: Stage2FormData) => {
     try {
       await onSubmit(dataWithFiles);
     } catch (error: any) {
@@ -426,7 +640,22 @@ export function Stage2Form({
     }
   };
 
+  const handleFormSubmit = async (data: Stage2FormData) => {
+    const dataWithFiles = buildSubmitPayload(data);
+    setPendingFormData(dataWithFiles);
+    setPendingAdditionalCost(calculateTotalAdditionalCost());
+    setShowCostDialog(true);
+  };
+
+  const handleConfirmSubmit = async () => {
+    if (!pendingFormData) return;
+    await submitFormData(pendingFormData);
+    setShowCostDialog(false);
+    setPendingFormData(null);
+  };
+
   return (
+    <>
     <form
       onSubmit={form.handleSubmit(handleFormSubmit, (errors) => {
         toast.error(
@@ -471,6 +700,16 @@ export function Stage2Form({
             </Tabs>
           )}
         />
+        {watchStandType === "provided_stand" && (
+          <p className="text-sm text-muted-foreground">
+            {t("exhibitor.form.ourStandHint")}
+          </p>
+        )}
+        {watchStandType === "self_construction" && (
+          <p className="text-sm text-muted-foreground">
+            {t("exhibitor.form.selfConstructionHint")}
+          </p>
+        )}
         {form.formState.errors.stand_details?.stand_type && (
           <FieldError>
             {form.formState.errors.stand_details.stand_type.message ||
@@ -602,19 +841,57 @@ export function Stage2Form({
           <h3 className="font-medium">
             {t("exhibitor.form.selfConstructionDetails")}
           </h3>
-          <FieldGroup>
-            <FieldLabel>{t("exhibitor.form.scDetails")}</FieldLabel>
-            <Textarea
-              {...form.register("stand_details.sc_details")}
-              disabled={disabled}
-            />
+          <div className="space-y-3">
+            <FieldLabel>
+              {t("exhibitor.form.scDetails")}{" "}
+              <span className="text-red-500">*</span>
+            </FieldLabel>
+            <div className="grid gap-4 sm:grid-cols-3">
+              {(
+                [
+                  {
+                    key: "length" as const,
+                    labelKey: "exhibitor.form.scLength",
+                    placeholderKey: "exhibitor.form.scLengthPlaceholder",
+                  },
+                  {
+                    key: "width" as const,
+                    labelKey: "exhibitor.form.scWidth",
+                    placeholderKey: "exhibitor.form.scWidthPlaceholder",
+                  },
+                  {
+                    key: "height" as const,
+                    labelKey: "exhibitor.form.scHeight",
+                    placeholderKey: "exhibitor.form.scHeightPlaceholder",
+                  },
+                ] as const
+              ).map(({ key, labelKey, placeholderKey }) => (
+                <FieldGroup key={key}>
+                  <FieldLabel htmlFor={`sc_${key}`}>{t(labelKey)}</FieldLabel>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      id={`sc_${key}`}
+                      value={scDimensions[key]}
+                      placeholder={t(placeholderKey)}
+                      disabled={disabled}
+                      inputMode="decimal"
+                      className="w-full"
+                      onChange={(e) => updateScDimension(key, e.target.value)}
+                    />
+                    <span className="text-sm font-medium text-muted-foreground shrink-0">
+                      m
+                    </span>
+                  </div>
+                </FieldGroup>
+              ))}
+            </div>
             {form.formState.errors.stand_details?.sc_details && (
               <FieldError>
                 {form.formState.errors.stand_details.sc_details.message ||
                   t("exhibitor.form.required")}
               </FieldError>
             )}
-          </FieldGroup>
+          </div>
           <FieldGroup>
             <FieldLabel>
               {t("exhibitor.form.uploadFireCert")}{" "}
@@ -687,6 +964,96 @@ export function Stage2Form({
               </FieldError>
             )}
           </FieldGroup>
+          <FieldGroup>
+            <FieldLabel>
+              {t("exhibitor.form.uploadStandVisualization")}{" "}
+              <span className="text-red-500">*</span>
+            </FieldLabel>
+            <div className="relative">
+              <input
+                type="file"
+                accept=".pdf,.png,.jpg,.jpeg"
+                required={
+                  watchStandType === "self_construction" &&
+                  !existingVisualization
+                }
+                onChange={(e) => {
+                  const file = e.target.files?.[0] || null;
+                  handleFileChange("stand_visualization", file);
+                }}
+                disabled={disabled}
+                className="sr-only"
+                id="stand_visualization_file_input"
+              />
+              <label
+                htmlFor="stand_visualization_file_input"
+                className={cn(
+                  "flex h-9 w-full min-w-0 cursor-pointer items-center justify-between rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none md:text-sm dark:bg-input/30",
+                  "focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]",
+                  "disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50",
+                  !disabled && "hover:bg-accent"
+                )}
+              >
+                <span className="truncate text-muted-foreground">
+                  {selectedVisualizationFileName ||
+                    (existingVisualization &&
+                    typeof existingVisualization === "string"
+                      ? getFileName(existingVisualization) ||
+                        existingVisualization
+                      : "No file chosen")}
+                </span>
+                <span className="ml-2 flex-shrink-0 rounded border bg-background px-2 py-0.5 text-xs">
+                  {t("common.browse") || "Browse"}
+                </span>
+              </label>
+            </div>
+            {existingVisualization &&
+              typeof existingVisualization === "string" && (
+                <a
+                  href={getFileUrl(existingVisualization) || "#"}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-1 inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
+                >
+                  <FileText className="h-3 w-3" />
+                  <span>
+                    {t("exhibitor.form.viewCurrentFile") || "View current file"}
+                  </span>
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              )}
+            <p className="mt-1 text-xs text-muted-foreground">
+              {existingVisualization
+                ? t("exhibitor.form.replaceFile") ||
+                  "Upload a new file to replace the current one"
+                : t("exhibitor.form.selectFile") || "Select a file to upload"}
+            </p>
+            {form.formState.errors.stand_details?.stand_visualization && (
+              <FieldError>
+                {typeof form.formState.errors.stand_details
+                  .stand_visualization === "object" &&
+                "message" in
+                  form.formState.errors.stand_details.stand_visualization
+                  ? String(
+                      form.formState.errors.stand_details.stand_visualization
+                        .message
+                    )
+                  : t("exhibitor.form.required")}
+              </FieldError>
+            )}
+          </FieldGroup>
+          <FieldGroup>
+            <FieldLabel>{t("exhibitor.form.broughtEquipment")}</FieldLabel>
+            <textarea
+              {...form.register("stand_details.brought_equipment")}
+              disabled={disabled}
+              rows={3}
+              className="flex min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-base shadow-xs outline-none md:text-sm dark:bg-input/30"
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              {t("exhibitor.form.broughtEquipmentHint")}
+            </p>
+          </FieldGroup>
         </div>
       )}
 
@@ -714,66 +1081,145 @@ export function Stage2Form({
                   )}
                   <div className="grid gap-4 md:grid-cols-2">
                     {items.map((item) => {
+                      const standType = (watchStandType ||
+                        "provided_stand") as StandTypeValue;
                       const quantity = getSelectedQuantity(item.id);
                       const itemCost = calculateItemCost(item, quantity);
                       const chargeableQuantity = Math.max(
                         0,
                         quantity - item.included_quantity
                       );
+                      const packageLocked = isPackageLockedItem(
+                        item,
+                        standType
+                      );
+                      const minQty = getMinEquipmentQty(item, standType);
+                      const isMutedPackage =
+                        packageLocked ||
+                        (standType === "provided_stand" &&
+                          (item.included_quantity > 0 || item.is_basic) &&
+                          quantity <= item.included_quantity);
+                      const mountType = getSelectedMount(item.id);
+                      const wallMountBlocked =
+                        standType === "self_construction";
 
                       return (
                         <div
                           key={item.id}
                           className={cn(
-                            "flex items-center justify-between rounded-md border p-3",
-                            quantity > 0 && "border-primary bg-primary/5"
+                            "rounded-md border p-3 space-y-2",
+                            quantity > 0 &&
+                              !isMutedPackage &&
+                              "border-primary bg-primary/5",
+                            isMutedPackage &&
+                              "border-muted bg-muted/40 opacity-90"
                           )}
                         >
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="font-medium">{item.name}</span>
-                              {item.included_quantity > 0 && (
-                                <span className="text-xs text-muted-foreground">
-                                  ({item.included_quantity}{" "}
-                                  {t("exhibitor.form.included")})
-                                </span>
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-medium">{item.name}</span>
+                                {(packageLocked ||
+                                  item.included_quantity > 0) && (
+                                  <span className="text-xs text-muted-foreground">
+                                    ({t("exhibitor.form.inPackage")}
+                                    {item.included_quantity > 0
+                                      ? `: ${item.included_quantity}`
+                                      : ""}
+                                    )
+                                  </span>
+                                )}
+                              </div>
+                              {quantity > item.included_quantity && (
+                                <p className="text-xs text-amber-600 mt-1">
+                                  {chargeableQuantity}{" "}
+                                  {t("exhibitor.form.additionalAt")}{" "}
+                                  {parseFloat(item.price).toFixed(2)} PLN{" "}
+                                  {t("exhibitor.form.each")}
+                                </p>
+                              )}
+                              {item.code === "arc_counter" && quantity > 0 && (
+                                <p className="text-xs text-amber-700 mt-1">
+                                  {t("exhibitor.form.arcCounterWarning")}
+                                </p>
                               )}
                             </div>
-                            {quantity > item.included_quantity && (
-                              <p className="text-xs text-amber-600 mt-1">
-                                {chargeableQuantity}{" "}
-                                {t("exhibitor.form.additionalAt")}{" "}
-                                {parseFloat(item.price).toFixed(2)} PLN{" "}
-                                {t("exhibitor.form.each")}
-                              </p>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {itemCost > 0 && (
-                              <span className="text-sm font-medium text-primary">
-                                {itemCost.toFixed(2)} PLN
-                              </span>
-                            )}
                             <div className="flex items-center gap-2">
-                              <span className="text-sm text-muted-foreground">
-                                {t("exhibitor.form.quantity")}:
-                              </span>
-                              <Input
-                                id={`equipment_qty_${item.id}`}
-                                type="number"
-                                min="0"
-                                value={quantity}
-                                onChange={(e) =>
-                                  handleQuantityChange(
-                                    item.id,
-                                    parseInt(e.target.value) || 0
-                                  )
-                                }
-                                className="w-20 h-8"
-                                disabled={disabled}
-                              />
+                              {itemCost > 0 && (
+                                <span className="text-sm font-medium text-primary">
+                                  {itemCost.toFixed(2)} PLN
+                                </span>
+                              )}
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm text-muted-foreground">
+                                  {t("exhibitor.form.quantity")}:
+                                </span>
+                                <Input
+                                  id={`equipment_qty_${item.id}`}
+                                  type="number"
+                                  min={minQty}
+                                  value={quantity}
+                                  onChange={(e) =>
+                                    handleQuantityChange(
+                                      item.id,
+                                      parseInt(e.target.value) || 0
+                                    )
+                                  }
+                                  className="w-20 h-8"
+                                  disabled={disabled || packageLocked}
+                                />
+                              </div>
                             </div>
                           </div>
+                          {item.code === "tv" && quantity >= 1 && (
+                            <div className="space-y-1">
+                              <p className="text-sm text-muted-foreground">
+                                {t("exhibitor.form.tvMount")}
+                              </p>
+                              <div className="flex flex-wrap gap-2">
+                                <Button
+                                  type="button"
+                                  variant={
+                                    mountType === "stand"
+                                      ? "default"
+                                      : "outline"
+                                  }
+                                  size="sm"
+                                  disabled={disabled}
+                                  onClick={() =>
+                                    handleMountChange(item.id, "stand")
+                                  }
+                                >
+                                  {t("exhibitor.form.tvMountStand")}
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant={
+                                    mountType === "wall"
+                                      ? "default"
+                                      : "outline"
+                                  }
+                                  size="sm"
+                                  disabled={disabled || wallMountBlocked}
+                                  title={
+                                    wallMountBlocked
+                                      ? t("exhibitor.form.tvMountWallBlocked")
+                                      : undefined
+                                  }
+                                  onClick={() =>
+                                    handleMountChange(item.id, "wall")
+                                  }
+                                >
+                                  {t("exhibitor.form.tvMountWall")}
+                                </Button>
+                              </div>
+                              {wallMountBlocked && (
+                                <p className="text-xs text-muted-foreground">
+                                  {t("exhibitor.form.tvMountWallBlocked")}
+                                </p>
+                              )}
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -824,5 +1270,57 @@ export function Stage2Form({
         )}
       </Button>
     </form>
+
+      <Dialog
+        open={showCostDialog}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowCostDialog(false);
+            setPendingFormData(null);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {t("exhibitor.form.equipmentPaymentDialogTitle")}
+            </DialogTitle>
+            <DialogDescription>
+              {t("exhibitor.form.equipmentPaymentDialogText", {
+                amount: pendingAdditionalCost.toFixed(2),
+              })}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setShowCostDialog(false);
+                setPendingFormData(null);
+              }}
+            >
+              {t("common.cancel")}
+            </Button>
+            <Button
+              type="button"
+              onClick={handleConfirmSubmit}
+              disabled={isSubmitting}
+              className="text-white"
+              style={{ backgroundColor: ACCENT_COLOR }}
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  {t("common.loading")}
+                </>
+              ) : (
+                t("exhibitor.form.confirmSubmit")
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

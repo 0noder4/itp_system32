@@ -57,12 +57,14 @@ export default function Index() {
       searchQuery,
       statusFilter,
       invitationStatusFilter,
+      completedStagesFilter,
       frRespFilter,
       showInvitations,
     },
     setSearchQuery,
     setStatusFilter,
     setInvitationStatusFilter,
+    setCompletedStagesFilter,
     setFrRespFilter,
     setShowInvitations,
   } = useStaffDashboardFilters();
@@ -74,6 +76,7 @@ export default function Index() {
     statusFilter,
     frRespFilter,
     invitationStatusFilter,
+    completedStagesFilter,
     showInvitations,
   });
 
@@ -100,6 +103,16 @@ export default function Index() {
     [filteredRows, selectedKeys]
   );
 
+  const selectedCompanyIds = React.useMemo(
+    () =>
+      selectedRows
+        .filter((row): row is Extract<TableRowType, { type: "company" }> =>
+          row.type === "company"
+        )
+        .map((row) => row.data.id),
+    [selectedRows]
+  );
+
   const handleInvitationSuccess = () => {
     mutate();
     mutateInvitations();
@@ -109,9 +122,15 @@ export default function Index() {
   const [isDownloadingMedia, setIsDownloadingMedia] = React.useState(false);
 
   const handleDownloadCSV = async () => {
+    if (selectedCompanyIds.length === 0) {
+      toast.error(t("companies.export.selectCompanies"), {
+        description: t("companies.export.selectCompaniesDescription"),
+      });
+      return;
+    }
     setIsDownloadingCSV(true);
     try {
-      await downloadCompaniesCSV();
+      await downloadCompaniesCSV(selectedCompanyIds);
       toast.success(t("companies.export.success"), {
         description: t("companies.export.successDescription"),
       });
@@ -174,13 +193,13 @@ export default function Index() {
               <div className="flex items-center gap-2">
                 <Button
                   onClick={handleDownloadCSV}
-                  disabled={isDownloadingCSV}
+                  disabled={isDownloadingCSV || selectedCompanyIds.length === 0}
                   className="text-xs sm:text-sm whitespace-nowrap"
                   size="sm"
                   variant="outline"
                   style={{ borderColor: STAFF_ACCENT_COLOR }}
                   onMouseEnter={(e) => {
-                    if (!isDownloadingCSV) {
+                    if (!isDownloadingCSV && selectedCompanyIds.length > 0) {
                       e.currentTarget.style.backgroundColor =
                         STAFF_ACCENT_COLOR;
                       e.currentTarget.style.color = "white";
@@ -237,6 +256,8 @@ export default function Index() {
                 onStatusFilterChange={setStatusFilter}
                 invitationStatusFilter={invitationStatusFilter}
                 onInvitationStatusFilterChange={setInvitationStatusFilter}
+                completedStagesFilter={completedStagesFilter}
+                onCompletedStagesFilterChange={setCompletedStagesFilter}
                 frRespFilter={frRespFilter}
                 onFrRespFilterChange={setFrRespFilter}
                 showInvitations={showInvitations}

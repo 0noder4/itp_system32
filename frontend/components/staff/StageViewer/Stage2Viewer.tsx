@@ -142,6 +142,36 @@ export function Stage2Viewer({ data }: Stage2ViewerProps) {
                 </a>
               </div>
             )}
+
+            {data.stand_details?.stand_visualization && (
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">
+                  {t("exhibitor.form.uploadStandVisualization")}
+                </p>
+                <a
+                  href={
+                    getFileUrl(data.stand_details.stand_visualization) || "#"
+                  }
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-1 inline-flex items-center gap-2 text-primary hover:underline"
+                >
+                  <span>View file</span>
+                  <ExternalLink className="h-4 w-4" />
+                </a>
+              </div>
+            )}
+
+            {data.stand_details?.brought_equipment && (
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">
+                  {t("exhibitor.form.broughtEquipment")}
+                </p>
+                <p className="mt-1 whitespace-pre-wrap">
+                  {data.stand_details.brought_equipment}
+                </p>
+              </div>
+            )}
           </div>
         )}
 
@@ -203,6 +233,21 @@ export function Stage2Viewer({ data }: Stage2ViewerProps) {
                                     </span>
                                   )}
                                 </p>
+                                {item.code === "tv" && sel.mount_type && (
+                                  <p>
+                                    <span className="text-muted-foreground">
+                                      {t("exhibitor.form.tvMount")}:
+                                    </span>{" "}
+                                    {sel.mount_type === "wall"
+                                      ? t("exhibitor.form.tvMountWall")
+                                      : t("exhibitor.form.tvMountStand")}
+                                  </p>
+                                )}
+                                {item.code === "arc_counter" && (
+                                  <p className="text-amber-700 text-xs">
+                                    {t("exhibitor.form.arcCounterWarning")}
+                                  </p>
+                                )}
                                 {chargeableQty > 0 && (
                                   <p className="text-amber-600">
                                     {chargeableQty}{" "}

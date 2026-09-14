@@ -18,6 +18,11 @@ export interface Company {
   day1_stand: { stand_number: string; stand_size: string } | null;
   day2_stand: { stand_number: string; stand_size: string } | null;
   completed_stages_count: number;
+  stage_1_completed: boolean;
+  stage_2_completed: boolean;
+  stage_3_completed: boolean;
+  stage_4_completed: boolean;
+  stage_5_completed: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -165,6 +170,8 @@ export interface StandDetails {
   name_sign_text?: string;
   logo_sign_file?: string;
   fire_cert?: string;
+  stand_visualization?: string;
+  brought_equipment?: string;
   dl?: number | null;
 }
 
@@ -176,13 +183,17 @@ export interface EquipmentItem {
   included_quantity: number; // How many are included for free
   category?: string;
   is_active: boolean;
+  code?: string | null;
 }
+
+export type TvMountType = "stand" | "wall";
 
 export interface EquipmentSelection {
   id?: number;
   equipment_item: EquipmentItem;
   equipment_item_id?: number;
   quantity: number;
+  mount_type?: TvMountType | null;
 }
 
 export interface Stage2Data {

@@ -777,3 +777,64 @@ class SendInvitationRemindersApiTests(TestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
+
+class ExportCSVApiTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.staff = User.objects.create_user(
+            username="export-staff",
+            email="export-staff@example.com",
+            password="TestPass123!",
+            type="staff",
+        )
+        self.company_a = Company.objects.create(
+            name="Alpha Export Co",
+            email="alpha-export@example.com",
+        )
+        self.company_b = Company.objects.create(
+            name="Beta Export Co",
+            email="beta-export@example.com",
+        )
+
+    def test_get_requires_post_with_ids(self):
+        self.client.force_authenticate(self.staff)
+        response = self.client.get("/api/export/csv/")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_post_empty_ids_rejected(self):
+        self.client.force_authenticate(self.staff)
+        response = self.client.post(
+            "/api/export/csv/",
+            {"company_ids": []},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_post_exports_selected_companies_in_order(self):
+        self.client.force_authenticate(self.staff)
+        response = self.client.post(
+            "/api/export/csv/",
+            {"company_ids": [self.company_b.id, self.company_a.id]},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        # utf-8-sig charset may prefix BOM on each streamed chunk
+        content = b"".join(response.streaming_content).decode("utf-8").replace("\ufeff", "")
+        lines = [line for line in content.strip().splitlines() if line.strip()]
+        self.assertGreaterEqual(len(lines), 3, content)
+        # CSV uses semicolon delimiter (Excel-friendly default in generator)
+        data_ids = [line.split(";", 1)[0] for line in lines[1:]]
+        self.assertEqual(
+            data_ids[:2],
+            [str(self.company_b.id), str(self.company_a.id)],
+            content,
+        )
+
+    def test_companies_list_includes_stage_flags(self):
+        Form.objects.create(company=self.company_a, stage_1_completed=True)
+        self.client.force_authenticate(self.staff)
+        response = self.client.get("/api/companies/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        company = next(c for c in response.data if c["id"] == self.company_a.id)
+        self.assertTrue(company["stage_1_completed"])
+        self.assertFalse(company["stage_2_completed"])

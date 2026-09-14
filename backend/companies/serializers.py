@@ -67,10 +67,15 @@ class CompanySerializer(serializers.ModelSerializer):
     day1_stand = serializers.SerializerMethodField()
     day2_stand = serializers.SerializerMethodField()
     completed_stages_count = serializers.SerializerMethodField()
+    stage_1_completed = serializers.SerializerMethodField()
+    stage_2_completed = serializers.SerializerMethodField()
+    stage_3_completed = serializers.SerializerMethodField()
+    stage_4_completed = serializers.SerializerMethodField()
+    stage_5_completed = serializers.SerializerMethodField()
     
     class Meta:
         model = Company
-        fields = ("id", "name", "status", "email", "representative", "representative_name", "representative_surname", "representative_phone_number", "representative_username", "fr_resp", "fr_resp_name", "fr_resp_surname", "fr_resp_email", "fr_resp_phone_number", "fr_resp_username", "day1_stand", "day2_stand", "completed_stages_count", "created_at", "updated_at")
+        fields = ("id", "name", "status", "email", "representative", "representative_name", "representative_surname", "representative_phone_number", "representative_username", "fr_resp", "fr_resp_name", "fr_resp_surname", "fr_resp_email", "fr_resp_phone_number", "fr_resp_username", "day1_stand", "day2_stand", "completed_stages_count", "stage_1_completed", "stage_2_completed", "stage_3_completed", "stage_4_completed", "stage_5_completed", "created_at", "updated_at")
     
     def get_representative_name(self, obj):
         if obj.representative:
@@ -155,6 +160,27 @@ class CompanySerializer(serializers.ModelSerializer):
         except AttributeError:
             # Form doesn't exist for this company
             return 0
+
+    def _get_stage_completed(self, obj, stage_attr):
+        try:
+            return bool(getattr(obj.form, stage_attr))
+        except AttributeError:
+            return False
+
+    def get_stage_1_completed(self, obj):
+        return self._get_stage_completed(obj, 'stage_1_completed')
+
+    def get_stage_2_completed(self, obj):
+        return self._get_stage_completed(obj, 'stage_2_completed')
+
+    def get_stage_3_completed(self, obj):
+        return self._get_stage_completed(obj, 'stage_3_completed')
+
+    def get_stage_4_completed(self, obj):
+        return self._get_stage_completed(obj, 'stage_4_completed')
+
+    def get_stage_5_completed(self, obj):
+        return self._get_stage_completed(obj, 'stage_5_completed')
 
 class CompanyInvitationSerializer(serializers.ModelSerializer):
     invitation_status = serializers.SerializerMethodField()
@@ -290,6 +316,8 @@ class StandDetailsSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             'logo_sign_file': {'required': False, 'allow_null': True},
             'fire_cert': {'required': False, 'allow_null': True},
+            'stand_visualization': {'required': False, 'allow_null': True},
+            'brought_equipment': {'required': False, 'allow_blank': True},
         }
 
 
@@ -298,7 +326,7 @@ class EquipmentItemSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = EquipmentItem
-        fields = ('id', 'name', 'name_en', 'name_pl', 
+        fields = ('id', 'name', 'name_en', 'name_pl', 'code',
                  'price', 'is_basic', 'included_quantity', 'category', 'is_active', 'created_at', 'updated_at')
         read_only_fields = ('name',)
     
@@ -321,7 +349,7 @@ class EquipmentSelectionSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = EquipmentSelection
-        fields = ('id', 'equipment_item', 'equipment_item_id', 'quantity')
+        fields = ('id', 'equipment_item', 'equipment_item_id', 'quantity', 'mount_type')
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -518,6 +546,7 @@ class Stage2Serializer(serializers.Serializer):
         # Extract file fields separately to ensure they're file objects
         logo_file = stand_details_data.pop('logo_sign_file', None)
         fire_cert_file = stand_details_data.pop('fire_cert', None)
+        visualization_file = stand_details_data.pop('stand_visualization', None)
 
         stand_details_obj = StandDetails.objects.create(**stand_details_data)
 
@@ -526,13 +555,16 @@ class Stage2Serializer(serializers.Serializer):
             stand_details_obj.logo_sign_file = logo_file
         if fire_cert_file:
             stand_details_obj.fire_cert = fire_cert_file
-        if logo_file or fire_cert_file:
+        if visualization_file:
+            stand_details_obj.stand_visualization = visualization_file
+        if logo_file or fire_cert_file or visualization_file:
             stand_details_obj.save()
 
         equipment_selection_objs = []
         for selection_data in equipment_selections_data:
             equipment_item_id = selection_data.get('equipment_item')
             quantity = selection_data.get('quantity', 1)
+            mount_type = selection_data.get('mount_type') or None
             
             # Ensure equipment_item_id and quantity are integers
             try:
@@ -549,13 +581,30 @@ class Stage2Serializer(serializers.Serializer):
             if equipment_item_id:
                 try:
                     equipment_item = EquipmentItem.objects.get(id=equipment_item_id)
+                    # Self-construction cannot order hanger
+                    if (
+                        stand_details_obj.stand_type == 'self_construction'
+                        and equipment_item.code == 'hanger'
+                        and quantity > 0
+                    ):
+                        continue
+                    if equipment_item.code != 'tv':
+                        mount_type = None
+                    elif mount_type not in ('stand', 'wall'):
+                        mount_type = 'stand' if quantity > 0 else None
+                    if (
+                        stand_details_obj.stand_type == 'self_construction'
+                        and mount_type == 'wall'
+                    ):
+                        mount_type = 'stand'
                     selection_obj, created = EquipmentSelection.objects.get_or_create(
                         stand_details=stand_details_obj,
                         equipment_item=equipment_item,
-                        defaults={'quantity': quantity}
+                        defaults={'quantity': quantity, 'mount_type': mount_type}
                     )
                     if not created:
                         selection_obj.quantity = quantity
+                        selection_obj.mount_type = mount_type
                         selection_obj.save()
                     equipment_selection_objs.append(selection_obj)
                 except EquipmentItem.DoesNotExist:
@@ -580,7 +629,7 @@ class Stage2Serializer(serializers.Serializer):
             stand_details_obj = instance.get('stand_details')
             if stand_details_obj:
                 # Handle file fields separately - only update if new file provided
-                file_fields = ['fire_cert', 'logo_sign_file']
+                file_fields = ['fire_cert', 'logo_sign_file', 'stand_visualization']
                 for field in file_fields:
                     if field in stand_details_data:
                         file_value = stand_details_data.pop(field)
@@ -605,14 +654,31 @@ class Stage2Serializer(serializers.Serializer):
                 for selection_data in equipment_selections_data:
                     equipment_item_id = selection_data.get('equipment_item')
                     quantity = selection_data.get('quantity', 1)
+                    mount_type = selection_data.get('mount_type') or None
 
                     if equipment_item_id:
                         try:
                             equipment_item = EquipmentItem.objects.get(id=equipment_item_id)
+                            if (
+                                stand_details_obj.stand_type == 'self_construction'
+                                and equipment_item.code == 'hanger'
+                                and int(quantity) > 0
+                            ):
+                                continue
+                            if equipment_item.code != 'tv':
+                                mount_type = None
+                            elif mount_type not in ('stand', 'wall'):
+                                mount_type = 'stand' if int(quantity) > 0 else None
+                            if (
+                                stand_details_obj.stand_type == 'self_construction'
+                                and mount_type == 'wall'
+                            ):
+                                mount_type = 'stand'
                             selection_obj = EquipmentSelection.objects.create(
                                 stand_details=stand_details_obj,
                                 equipment_item=equipment_item,
-                                quantity=quantity
+                                quantity=quantity,
+                                mount_type=mount_type,
                             )
                             equipment_selection_objs.append(selection_obj)
                         except EquipmentItem.DoesNotExist:
@@ -884,6 +950,8 @@ class Stage5Serializer(serializers.Serializer):
                         row_errors['phone_number'] = exc.detail
                 if row_errors:
                     has_row_errors = True
+                # Always append (empty {} when OK) so list indices match exhibitors[];
+                # Stage5Form maps server errors by index and ignores empty objects.
                 exhibitor_errors.append(row_errors)
             if has_row_errors:
                 errors['exhibitors'] = exhibitor_errors

@@ -328,12 +328,18 @@ export const downloadOrderSummaryPDF = async (
   }
 };
 
-// Download companies CSV export
-export const downloadCompaniesCSV = async (): Promise<void> => {
+// Download companies CSV export for selected company IDs (order preserved)
+export const downloadCompaniesCSV = async (
+  companyIds: number[]
+): Promise<void> => {
   try {
-    const response = await apiClient.get("/api/export/csv/", {
-      responseType: "blob",
-    });
+    const response = await apiClient.post(
+      "/api/export/csv/",
+      { company_ids: companyIds },
+      {
+        responseType: "blob",
+      }
+    );
 
     // Create blob from response with UTF-8 encoding
     const blob = new Blob([response.data], {

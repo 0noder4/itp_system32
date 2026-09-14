@@ -37,9 +37,10 @@ class ExportService:
 
         Args:
             user: User performing the export (for logging/auth)
-            filters: Not used (kept for compatibility)
+            filters: Dict that may contain ordered company_ids list
         """
         self.user = user
+        self.company_ids = filters.get('company_ids') or []
         # Fetch active equipment items for dynamic column generation
         self.equipment_items = list(EquipmentItem.objects.filter(is_active=True).order_by('category', 'name_pl'))
         # Create a mapping of equipment_item.id to column header name
@@ -49,12 +50,24 @@ class ExportService:
 
     def build_queryset(self):
         """
-        Build optimized QuerySet - fetches all companies with all related data.
+        Build optimized QuerySet for the selected companies, preserving request order.
 
         Returns:
-            Optimized Company QuerySet with all related data prefetched
+            List of Company instances with related data prefetched (ordered)
         """
-        queryset = Company.objects.select_related(
+        from django.db.models import Case, When, IntegerField
+
+        if not self.company_ids:
+            return Company.objects.none()
+
+        order = Case(
+            *[When(id=pk, then=pos) for pos, pk in enumerate(self.company_ids)],
+            output_field=IntegerField(),
+        )
+
+        queryset = Company.objects.filter(
+            id__in=self.company_ids
+        ).select_related(
             'representative',
             'fr_resp',
             'form',
@@ -70,9 +83,11 @@ class ExportService:
             'finaldata__lunches',
             'finaldata__pdis',
             'finaldata__pdis__exhibitors',
-        ).order_by('id')
+        ).order_by(order)
 
-        logger.info(f"Built queryset for export")
+        logger.info(
+            f"Built queryset for export with {len(self.company_ids)} requested company ids"
+        )
 
         return queryset
 
@@ -166,7 +181,9 @@ class ExportService:
         error_count = 0
 
         try:
-            for company in queryset.iterator(chunk_size=100):
+            # Avoid queryset.iterator() so Case/When ordering by company_ids is preserved
+            companies = list(queryset)
+            for company in companies:
                 try:
                     rows = self._flatten_company_data(company)
                     for row in rows:
@@ -220,11 +237,13 @@ class ExportService:
             'Dzień 2 - Numer stoiska', 'Dzień 2 - Rozmiar stoiska',
             # Stand Details (Stage 2)
             'Typ stanowiska', 'Szczegóły zabudowy', 'Tekst na fryzie',
+            'Wizualizacja zabudowy', 'Przywóz własnego sprzętu',
         ]
         
         # Add dynamically generated equipment headers
         equipment_headers = [self.equipment_headers[item.id] for item in self.equipment_items]
         headers.extend(equipment_headers)
+        headers.append('Montaż TV')
         
         # Add remaining headers
         headers.extend([
@@ -232,13 +251,12 @@ class ExportService:
             'Poprowadzi warsztaty', 'Uwagi do warsztatów',
             # Final Data (Stage 5)
             'Urządzenia elektryczne podczas targów', 'Łączna moc urządzeń',
-            'Niska moc (≤100 W)',
             'Rezygnacja z obiadów',
             'Dzień 1 - obiady', 'Ilość obiadów - dzień 1',
             'Dzień 2 - obiady', 'Ilość obiadów - dzień 2',
             'Główny przedstawiciel', 'Obecność głównego przedstawiciela',
             'Brak innych delegatów',
-            'Delegaci firmy',
+            'Delegaci firmy', 'Obecność delegatów',
         ])
         
         return headers
@@ -334,6 +352,8 @@ class ExportService:
                 base_data.update({
                     'Typ stanowiska': stand_type_display,
                     'Tekst na fryzie': sd.name_sign_text or '',
+                    'Wizualizacja zabudowy': 'Tak' if sd.stand_visualization else 'Nie',
+                    'Przywóz własnego sprzętu': sd.brought_equipment or '',
                 })
 
                 # Self-construction specific fields (only for 'self_construction' type)
@@ -346,6 +366,7 @@ class ExportService:
                         'Szczegóły zabudowy': '',
                     })
 
+                tv_mount_display = ''
                 # Equipment selections - selection.quantity is already the total quantity
                 equipment_selections = list(sd.equipment_selections.all())
                 if equipment_selections:
@@ -358,8 +379,18 @@ class ExportService:
                             header_name = self.equipment_headers[item.id]
                             # Sum up quantities if there are multiple selections for the same item
                             equipment_totals[header_name] += selection.quantity
+                        if getattr(item, 'code', None) == 'tv' and selection.quantity > 0:
+                            mount = selection.mount_type
+                            if mount == 'wall':
+                                tv_mount_display = 'Ściana'
+                            elif mount == 'stand':
+                                tv_mount_display = 'Stojak'
+                            else:
+                                tv_mount_display = mount or ''
                         # Note: If equipment item is not active, it won't be in headers, so we skip it
                         # This ensures consistency with the header generation
+
+                base_data['Montaż TV'] = tv_mount_display
 
             except (AttributeError, ValueError, TypeError) as e:
                 logger.warning(f"Error extracting stand details for company {company.id}: {str(e)}")
@@ -369,10 +400,15 @@ class ExportService:
                 'Typ stanowiska': '',
                 'Szczegóły zabudowy': '',
                 'Tekst na fryzie': '',
+                'Wizualizacja zabudowy': '',
+                'Przywóz własnego sprzętu': '',
+                'Montaż TV': '',
             })
         
         # Update base_data with equipment totals (all equipment items, even if 0)
         base_data.update(equipment_totals)
+        if 'Montaż TV' not in base_data:
+            base_data['Montaż TV'] = ''
 
         # Workshops (Stage 3)
         if hasattr(company, 'workshops') and company.workshops:
@@ -394,7 +430,6 @@ class ExportService:
                 base_data.update({
                     'Urządzenia elektryczne podczas targów': fd.el_devices or '',
                     'Łączna moc urządzeń': fd.el_power or '',
-                    'Niska moc (≤100 W)': 'Tak' if fd.el_low_power else 'Nie',
                     'Rezygnacja z obiadów': 'Tak' if fd.lunches_declined else 'Nie',
                     'Główny przedstawiciel': self._format_full_name(
                         fd.main_rep_name, fd.main_rep_surname
@@ -429,37 +464,45 @@ class ExportService:
                         'Ilość obiadów - dzień 2': '',
                     })
 
-                # Exhibitors (Delegates) - Keep these
+                # Exhibitors (Delegates) — name/phone and attendance in separate columns
                 if hasattr(fd, 'pdis') and fd.pdis:
                     try:
                         pdi = fd.pdis
                         exhibitors = list(pdi.exhibitors.all())
                         if exhibitors:
-                            exhibitor_list = []
+                            name_list = []
+                            attendance_list = []
                             for exh in exhibitors:
-                                attendance = self._format_attendance(exh.attendance)
-                                exhibitor_list.append(
+                                name_list.append(
                                     f"{self._format_full_name(exh.name, exh.surname)} "
-                                    f"({exh.phone_number}, {attendance})"
+                                    f"({exh.phone_number})"
                                 )
-                            base_data['Delegaci firmy'] = ' | '.join(exhibitor_list)
+                                attendance_list.append(
+                                    self._format_attendance(exh.attendance)
+                                )
+                            base_data['Delegaci firmy'] = ' | '.join(name_list)
+                            base_data['Obecność delegatów'] = ' | '.join(attendance_list)
                         else:
                             base_data['Delegaci firmy'] = ''
+                            base_data['Obecność delegatów'] = ''
                     except (AttributeError, ValueError) as e:
                         logger.warning(f"Error extracting exhibitors/delegates for company {company.id}: {str(e)}")
                         base_data['Delegaci firmy'] = ''
+                        base_data['Obecność delegatów'] = ''
                 else:
                     base_data['Delegaci firmy'] = ''
+                    base_data['Obecność delegatów'] = ''
 
             except AttributeError as e:
                 logger.warning(f"Error extracting final data for company {company.id}: {str(e)}")
                 base_data['Delegaci firmy'] = ''
+                base_data['Obecność delegatów'] = ''
         else:
             # No final data, initialize delegates and lunch columns
             base_data['Delegaci firmy'] = ''
+            base_data['Obecność delegatów'] = ''
             base_data.update({
                 'Rezygnacja z obiadów': '',
-                'Niska moc (≤100 W)': '',
                 'Główny przedstawiciel': '',
                 'Obecność głównego przedstawiciela': '',
                 'Brak innych delegatów': '',

@@ -218,7 +218,10 @@ export function Stage1Form({
           <h3 className="font-medium">{t("exhibitor.form.basicData")}</h3>
           <div className="grid gap-4 md:grid-cols-2">
             <FieldGroup>
-              <FieldLabel>{t("exhibitor.form.fullName")}</FieldLabel>
+              <FieldLabel>
+                {t("exhibitor.form.fullName")}
+                <span className="text-red-500">*</span>
+              </FieldLabel>
               <Input
                 {...form.register("basic_data.full_name")}
                 disabled={disabled}
@@ -231,7 +234,10 @@ export function Stage1Form({
               )}
             </FieldGroup>
             <FieldGroup>
-              <FieldLabel>{t("exhibitor.form.nip")}</FieldLabel>
+              <FieldLabel>
+                {t("exhibitor.form.nip")}
+                <span className="text-red-500">*</span>
+              </FieldLabel>
               <Input {...form.register("basic_data.nip")} disabled={disabled} />
               {form.formState.errors.basic_data?.nip && (
                 <FieldError>
@@ -247,7 +253,10 @@ export function Stage1Form({
           <h3 className="font-medium">{t("exhibitor.form.address")}</h3>
           <div className="grid gap-4 md:grid-cols-2">
             <FieldGroup>
-              <FieldLabel>{t("exhibitor.form.street")}</FieldLabel>
+              <FieldLabel>
+                {t("exhibitor.form.street")}
+                <span className="text-red-500">*</span>
+              </FieldLabel>
               <Input {...form.register("address.street")} disabled={disabled} />
               {form.formState.errors.address?.street && (
                 <FieldError>
@@ -257,7 +266,10 @@ export function Stage1Form({
               )}
             </FieldGroup>
             <FieldGroup>
-              <FieldLabel>{t("exhibitor.form.homeNumber")}</FieldLabel>
+              <FieldLabel>
+                {t("exhibitor.form.homeNumber")}
+                <span className="text-red-500">*</span>
+              </FieldLabel>
               <Input
                 {...form.register("address.home_number")}
                 disabled={disabled}
@@ -270,14 +282,20 @@ export function Stage1Form({
               )}
             </FieldGroup>
             <FieldGroup>
-              <FieldLabel>{t("exhibitor.form.aptNumber")}</FieldLabel>
+              <FieldLabel>
+                {t("exhibitor.form.aptNumber")}
+                <span className="text-red-500">*</span>
+              </FieldLabel>
               <Input
                 {...form.register("address.apt_number")}
                 disabled={disabled}
               />
             </FieldGroup>
             <FieldGroup>
-              <FieldLabel>{t("exhibitor.form.city")}</FieldLabel>
+              <FieldLabel>
+                {t("exhibitor.form.city")}
+                <span className="text-red-500">*</span>
+              </FieldLabel>
               <Input {...form.register("address.city")} disabled={disabled} />
               {form.formState.errors.address?.city && (
                 <FieldError>
@@ -287,7 +305,10 @@ export function Stage1Form({
               )}
             </FieldGroup>
             <FieldGroup>
-              <FieldLabel>{t("exhibitor.form.country")}</FieldLabel>
+              <FieldLabel>
+                {t("exhibitor.form.country")}
+                <span className="text-red-500">*</span>
+              </FieldLabel>
               <Input
                 {...form.register("address.country")}
                 disabled={disabled}
@@ -300,7 +321,10 @@ export function Stage1Form({
               )}
             </FieldGroup>
             <FieldGroup>
-              <FieldLabel>{t("exhibitor.form.postalCode")}</FieldLabel>
+              <FieldLabel>
+                {t("exhibitor.form.postalCode")}
+                <span className="text-red-500">*</span>
+              </FieldLabel>
               <Input
                 {...form.register("address.postal_code")}
                 disabled={disabled}

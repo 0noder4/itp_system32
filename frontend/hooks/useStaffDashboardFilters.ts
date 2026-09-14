@@ -2,10 +2,13 @@ import * as React from "react";
 
 const STORAGE_KEY = "staff_dashboard_filters";
 
+export type CompletedStageNumber = 1 | 2 | 3 | 4 | 5;
+
 export interface StaffDashboardFilters {
   searchQuery: string;
   statusFilter: "all" | "main" | "partner" | "basic";
   invitationStatusFilter: "all" | "accepted" | "expired" | "not accepted";
+  completedStagesFilter: CompletedStageNumber[];
   frRespFilter: number | "all";
   showInvitations: boolean;
 }
@@ -14,9 +17,25 @@ const defaultFilters: StaffDashboardFilters = {
   searchQuery: "",
   statusFilter: "all",
   invitationStatusFilter: "all",
+  completedStagesFilter: [],
   frRespFilter: "all",
   showInvitations: true,
 };
+
+function normalizeCompletedStagesFilter(value: unknown): CompletedStageNumber[] {
+  if (!Array.isArray(value)) {
+    return defaultFilters.completedStagesFilter;
+  }
+  const allowed = new Set([1, 2, 3, 4, 5]);
+  const unique: CompletedStageNumber[] = [];
+  for (const item of value) {
+    const n = typeof item === "number" ? item : Number(item);
+    if (allowed.has(n) && !unique.includes(n as CompletedStageNumber)) {
+      unique.push(n as CompletedStageNumber);
+    }
+  }
+  return unique.sort((a, b) => a - b);
+}
 
 function loadFiltersFromStorage(): StaffDashboardFilters {
   if (typeof window === "undefined") {
@@ -41,6 +60,9 @@ function loadFiltersFromStorage(): StaffDashboardFilters {
           ["all", "accepted", "expired", "not accepted"].includes(parsed.invitationStatusFilter)
             ? parsed.invitationStatusFilter
             : defaultFilters.invitationStatusFilter,
+        completedStagesFilter: normalizeCompletedStagesFilter(
+          parsed.completedStagesFilter
+        ),
         frRespFilter:
           parsed.frRespFilter === "all" || typeof parsed.frRespFilter === "number"
             ? parsed.frRespFilter
@@ -120,6 +142,13 @@ export function useStaffDashboardFilters() {
         updateFilters({ invitationStatusFilter: status }),
       [updateFilters]
     ),
+    setCompletedStagesFilter: React.useCallback(
+      (stages: CompletedStageNumber[]) =>
+        updateFilters({
+          completedStagesFilter: normalizeCompletedStagesFilter(stages),
+        }),
+      [updateFilters]
+    ),
     setFrRespFilter: React.useCallback(
       (frResp: number | "all") => updateFilters({ frRespFilter: frResp }),
       [updateFilters]
@@ -130,27 +159,3 @@ export function useStaffDashboardFilters() {
     ),
   };
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

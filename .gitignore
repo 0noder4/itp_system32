@@ -48,3 +48,6 @@ frontend/package-lock.json
 
 # Local private notes (not committed)
 private_notes/
+
+# Local deploy image tarballs (not committed)
+deploy-tars/

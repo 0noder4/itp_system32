@@ -9,6 +9,10 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { STAFF_ACCENT_COLOR } from "@/lib/colors";
 
+import type { CompletedStageNumber } from "@/hooks/useStaffDashboardFilters";
+
+const COMPLETED_STAGE_OPTIONS: CompletedStageNumber[] = [1, 2, 3, 4, 5];
+
 interface CompanyFiltersProps {
   searchQuery: string;
   onSearchChange: (query: string) => void;
@@ -18,6 +22,8 @@ interface CompanyFiltersProps {
   onInvitationStatusFilterChange: (
     status: "all" | "accepted" | "expired" | "not accepted"
   ) => void;
+  completedStagesFilter: CompletedStageNumber[];
+  onCompletedStagesFilterChange: (stages: CompletedStageNumber[]) => void;
   frRespFilter: number | "all";
   onFrRespFilterChange: (frResp: number | "all") => void;
   showInvitations: boolean;
@@ -36,6 +42,8 @@ export function CompanyFilters({
   onStatusFilterChange,
   invitationStatusFilter,
   onInvitationStatusFilterChange,
+  completedStagesFilter,
+  onCompletedStagesFilterChange,
   frRespFilter,
   onFrRespFilterChange,
   showInvitations,
@@ -62,17 +70,29 @@ export function CompanyFilters({
     return t(`companies.invitations.status.${statusKey}`);
   };
 
+  const toggleCompletedStage = (stage: CompletedStageNumber) => {
+    if (completedStagesFilter.includes(stage)) {
+      onCompletedStagesFilterChange(
+        completedStagesFilter.filter((s) => s !== stage)
+      );
+    } else {
+      onCompletedStagesFilterChange([...completedStagesFilter, stage]);
+    }
+  };
+
   const hasActiveFilters =
     searchQuery ||
     statusFilter !== "all" ||
     frRespFilter !== "all" ||
-    invitationStatusFilter !== "all";
+    invitationStatusFilter !== "all" ||
+    completedStagesFilter.length > 0;
 
   const handleClearFilters = () => {
     onSearchChange("");
     onStatusFilterChange("all");
     onFrRespFilterChange("all");
     onInvitationStatusFilterChange("all");
+    onCompletedStagesFilterChange([]);
   };
 
   return (
@@ -242,6 +262,51 @@ export function CompanyFilters({
           </div>
         </div>
       )}
+
+      {/* Completed stages filter (multi-select AND) */}
+      <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2">
+        <span className="text-xs sm:text-sm text-muted-foreground shrink-0">
+          {t("companies.filterByCompletedStages")}:
+        </span>
+        <div className="flex flex-wrap gap-2">
+          {COMPLETED_STAGE_OPTIONS.map((stage) => {
+            const isActive = completedStagesFilter.includes(stage);
+            return (
+              <Button
+                key={stage}
+                variant={isActive ? "default" : "outline"}
+                size="sm"
+                onClick={() => toggleCompletedStage(stage)}
+                style={
+                  isActive
+                    ? { backgroundColor: STAFF_ACCENT_COLOR, color: "#ffffff" }
+                    : undefined
+                }
+                onMouseEnter={(e) => {
+                  if (isActive) {
+                    e.currentTarget.style.backgroundColor = "#C84FA8";
+                    e.currentTarget.style.color = "#ffffff";
+                  } else {
+                    e.currentTarget.style.borderColor = STAFF_ACCENT_COLOR;
+                    e.currentTarget.style.color = STAFF_ACCENT_COLOR;
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (isActive) {
+                    e.currentTarget.style.backgroundColor = STAFF_ACCENT_COLOR;
+                    e.currentTarget.style.color = "#ffffff";
+                  } else {
+                    e.currentTarget.style.borderColor = "";
+                    e.currentTarget.style.color = "";
+                  }
+                }}
+              >
+                {t("companies.stageFilterLabel", { stage })}
+              </Button>
+            );
+          })}
+        </div>
+      </div>
 
       {/* FR Resp Filter */}
       <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2">

@@ -20,9 +20,23 @@ Panel admina (`/admin`) służy do operacyjnego zarządzania danymi systemu bez 
 - `CompanyInvitation` - zarządzanie zaproszeniami dla firm.
 - `Form` - podgląd obiektu śledzącego postęp etapów.
 - `Feedback` - podgląd/edycja statusów akceptacji etapów.
-- `EquipmentItem` - konfiguracja pozycji wyposażenia (PL/EN, cena, ilości w pakiecie, aktywność).
-- `EquipmentSelection` - podgląd wybranych pozycji wyposażenia przez firmy.
+- `EquipmentItem` - konfiguracja pozycji wyposażenia (PL/EN, cena, ilości w pakiecie, aktywność, **kod specjalnych właściwości**).
+- `EquipmentSelection` - podgląd wybranych pozycji wyposażenia przez firmy (w tym `mount_type` dla TV).
 - `Settings` - centralna konfiguracja cen, terminów etapów i dat targowych.
+
+### Checklista katalogu wyposażenia (etap 2 — reguły UI)
+
+Reguły formularza opierają się na polu **kod specjalnych właściwości** (`code`), nie na nazwie PL. Ustaw lokalnie i na produkcji w Django Admin → Equipment items (lista rozwijana):
+
+| kod | Co zrobić |
+|---|---|
+| `hanger` | Utwórz/aktywuj **Wieszak** (PL/EN), `is_basic=True`, `included_quantity=1`, `is_active=True`, kod=`hanger`. |
+| `trashbin` | Utwórz/aktywuj **Kosz** (PL/EN), `is_basic=True`, `included_quantity=1`, `is_active=True`, kod=`trashbin`. |
+| `square_table` | Utwórz/aktywuj **Stolik kwadrat** (PL/EN), cena, `is_active=True`, kod=`square_table`. |
+| `tv` | Na pozycji Monitor / TV ustaw kod=`tv` (wybór montażu stojak/ściana). |
+| `arc_counter` | Na pozycji Lada łukowa ustaw kod=`arc_counter` (ostrzeżenie w UI / viewer FR). |
+
+Nie kopiuj automatycznie katalogu z produkcji migracją danych — uzupełnij ręcznie w adminie.
 
 ### `users`
 

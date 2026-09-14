@@ -68,6 +68,9 @@ export function StageFeedbackForm({
       toast.error(t("staff.companyDetail.stageNotSubmitted"));
       return;
     }
+    if (currentFeedback?.status === "accepted") {
+      return;
+    }
 
     setIsSubmitting(true);
     try {
@@ -126,6 +129,8 @@ export function StageFeedbackForm({
   };
 
   const canProvideFeedback = dataExists;
+  const isAlreadyAccepted = currentFeedback?.status === "accepted";
+  const acceptDisabled = isSubmitting || isAlreadyAccepted;
 
   return (
     <>
@@ -135,19 +140,19 @@ export function StageFeedbackForm({
             <Button
               type="button"
               onClick={handleAccept}
-              disabled={isSubmitting}
+              disabled={acceptDisabled}
               variant="default"
               className="flex-1"
               style={{
-                backgroundColor: isSubmitting ? undefined : STAFF_ACCENT_COLOR,
+                backgroundColor: acceptDisabled ? undefined : STAFF_ACCENT_COLOR,
               }}
               onMouseEnter={(e) => {
-                if (!isSubmitting) {
+                if (!acceptDisabled) {
                   e.currentTarget.style.backgroundColor = "#C84FA8";
                 }
               }}
               onMouseLeave={(e) => {
-                if (!isSubmitting) {
+                if (!acceptDisabled) {
                   e.currentTarget.style.backgroundColor = STAFF_ACCENT_COLOR;
                 }
               }}

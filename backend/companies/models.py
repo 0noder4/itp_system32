@@ -85,6 +85,19 @@ STAND_TYPE_CHOICES = [
     ('self_construction', 'Self Construction'),
 ]
 
+TV_MOUNT_CHOICES = [
+    ('stand', 'Na stojaku'),
+    ('wall', 'Na ścianie'),
+]
+
+EQUIPMENT_SPECIAL_CODE_CHOICES = [
+    ('hanger', 'hanger — wieszak (1 w pakiecie; ukryty przy własnej zabudowie)'),
+    ('trashbin', 'trashbin — kosz (zawsze 1 w pakiecie)'),
+    ('tv', 'tv — wybór montażu stojak/ściana'),
+    ('square_table', 'square_table — stolik kwadrat'),
+    ('arc_counter', 'arc_counter — ostrzeżenie: głównie stoiska narożne'),
+]
+
 class Company(models.Model):
     name = models.CharField(max_length=100, unique=True)
     email = models.EmailField()
@@ -250,14 +263,32 @@ class StandDetails(models.Model):
     company = models.OneToOneField(Company, on_delete=models.CASCADE, related_name='stand_details')
     stand_type = models.CharField(max_length=20, choices=STAND_TYPE_CHOICES, default='provided_stand', verbose_name="typ stanowiska")
     sc_details = models.CharField(max_length=255, verbose_name="z czego się składa własna zabudowa", blank=True)
+    brought_equipment = models.TextField(blank=True, verbose_name="sprzęt przywożony przez firmę")
     name_sign_text = models.CharField(max_length=255, verbose_name="napis na fryz", blank=True)
     logo_sign_file = models.FileField(upload_to='logos', verbose_name="Logotyp na fryz", blank=True)
     fire_cert = models.FileField(upload_to="fire_certs", verbose_name="certyfikat o niepalności", blank=True)
+    stand_visualization = models.FileField(
+        upload_to="stand_visualizations",
+        blank=True,
+        verbose_name="wizualizacja stoiska",
+    )
     dl = models.ForeignKey(Deadline, on_delete=models.SET_NULL, null=True)
 
 class EquipmentItem(models.Model):
     name_en = models.CharField(max_length=255, verbose_name="nazwa (angielski)")
     name_pl = models.CharField(max_length=255, verbose_name="nazwa (polski)")
+    code = models.CharField(
+        max_length=50,
+        choices=EQUIPMENT_SPECIAL_CODE_CHOICES,
+        blank=True,
+        null=True,
+        unique=True,
+        verbose_name="kod specjalnych właściwości",
+        help_text=(
+            "Puste = zwykła pozycja bez ekstra reguł. "
+            "Wybierz co najwyżej jeden kod specjalnych właściwości."
+        ),
+    )
     price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="cena")
     is_basic = models.BooleanField(default=False, verbose_name="wyposażenie podstawowe")
     included_quantity = models.IntegerField(default=0, verbose_name="ilość wliczona (darmowa)")
@@ -277,6 +308,13 @@ class EquipmentSelection(models.Model):
     stand_details = models.ForeignKey(StandDetails, on_delete=models.CASCADE, related_name='equipment_selections')
     equipment_item = models.ForeignKey(EquipmentItem, on_delete=models.CASCADE)
     quantity = models.IntegerField(default=1, verbose_name="ilość")
+    mount_type = models.CharField(
+        max_length=20,
+        choices=TV_MOUNT_CHOICES,
+        blank=True,
+        null=True,
+        verbose_name="typ montażu (TV)",
+    )
 
     def __str__(self):
         return f"{self.stand_details.company.name} - {self.equipment_item.name_pl} x{self.quantity}"

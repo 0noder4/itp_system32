@@ -100,7 +100,7 @@ class CompanyListView(APIView):
     permission_classes = [IsAuthenticated]
     
     def get(self, request):
-        companies = Company.objects.all()
+        companies = Company.objects.select_related('form').all()
         serializer = CompanySerializer(companies, many=True)
         return Response(serializer.data)
     
@@ -799,7 +799,7 @@ class FormStage2View(APIView):
         for key in bracket_keys:
             field_name = key.replace('stand_details[', '').replace(']', '')
             # Skip file fields - they should come from request.FILES, not request.data
-            if field_name in ['logo_sign_file', 'fire_cert']:
+            if field_name in ['logo_sign_file', 'fire_cert', 'stand_visualization']:
                 continue
             value = request.data.get(key)
             # Handle QueryDict - get first value if it's a list
@@ -819,12 +819,12 @@ class FormStage2View(APIView):
             
             if isinstance(stand_details_raw, dict):
                 # Extract dict but skip file fields (they come from request.FILES)
-                stand_details_dict = {k: v for k, v in stand_details_raw.items() if k not in ['logo_sign_file', 'fire_cert']}
+                stand_details_dict = {k: v for k, v in stand_details_raw.items() if k not in ['logo_sign_file', 'fire_cert', 'stand_visualization']}
                 logger.info(f"Extracted as dict: {stand_details_dict}")
             elif hasattr(stand_details_raw, 'dict'):
                 # Extract dict but skip file fields
                 raw_dict = stand_details_raw.dict()
-                stand_details_dict = {k: v for k, v in raw_dict.items() if k not in ['logo_sign_file', 'fire_cert']}
+                stand_details_dict = {k: v for k, v in raw_dict.items() if k not in ['logo_sign_file', 'fire_cert', 'stand_visualization']}
                 logger.info(f"Extracted via .dict(): {stand_details_dict}")
             elif hasattr(stand_details_raw, 'keys'):
                 for k in stand_details_raw.keys():
@@ -847,7 +847,7 @@ class FormStage2View(APIView):
                 logger.info(f"Parsed file stand_details[{field_name}] = {file.name if hasattr(file, 'name') else file}")
             else:
                 # Also check if it's a direct file field name
-                if key in ['logo_sign_file', 'fire_cert']:
+                if key in ['logo_sign_file', 'fire_cert', 'stand_visualization']:
                     stand_details_dict[key] = file
                     logger.info(f"Parsed direct file field {key} = {file.name if hasattr(file, 'name') else file}")
         
@@ -856,10 +856,10 @@ class FormStage2View(APIView):
         for key, file_obj in request.FILES.items():
             if key.startswith('stand_details['):
                 field_name = key.replace('stand_details[', '').replace(']', '')
-                if field_name in ['logo_sign_file', 'fire_cert']:
+                if field_name in ['logo_sign_file', 'fire_cert', 'stand_visualization']:
                     stand_details_dict[field_name] = file_obj
                     logger.info(f"Ensured file {field_name} is in stand_details_dict: {file_obj.name if hasattr(file_obj, 'name') else 'file object'}")
-            elif key in ['logo_sign_file', 'fire_cert']:
+            elif key in ['logo_sign_file', 'fire_cert', 'stand_visualization']:
                 stand_details_dict[key] = file_obj
                 logger.info(f"Ensured file {key} is in stand_details_dict: {file_obj.name if hasattr(file_obj, 'name') else 'file object'}")
         
@@ -962,6 +962,21 @@ class FormStage2View(APIView):
                 logger.error(f"Fire cert validation failed. stand_details_dict keys: {list(stand_details_dict.keys())}, request.FILES keys: {list(request.FILES.keys())}")
                 return Response({
                     "detail": "Fire certificate is required for self construction"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            has_visualization = False
+            viz_in_dict = stand_details_dict.get('stand_visualization')
+            if viz_in_dict and (hasattr(viz_in_dict, 'read') or hasattr(viz_in_dict, 'name')):
+                has_visualization = True
+            if not has_visualization:
+                for key in request.FILES.keys():
+                    if 'stand_visualization' in key:
+                        has_visualization = True
+                        stand_details_dict['stand_visualization'] = request.FILES[key]
+                        break
+            if not is_update and not has_visualization:
+                return Response({
+                    "detail": "Stand visualization file is required for self construction"
                 }, status=status.HTTP_400_BAD_REQUEST)
         elif stand_type == 'provided_stand':
             if not stand_details_data.get('name_sign_text'):
@@ -1074,7 +1089,7 @@ class FormStage2View(APIView):
             if key.startswith('stand_details['):
                 field_name = key.replace('stand_details[', '').replace(']', '')
                 stand_details_dict[field_name] = file
-            elif key in ['logo_sign_file', 'fire_cert']:
+            elif key in ['logo_sign_file', 'fire_cert', 'stand_visualization']:
                 stand_details_dict[key] = file
         
         # Parse equipment_selections - parse bracket notation from FormData
@@ -1123,6 +1138,18 @@ class FormStage2View(APIView):
             if not has_fire_cert:
                 return Response({
                     "detail": "Fire certificate is required for self construction"
+                }, status=status.HTTP_400_BAD_REQUEST)
+            has_visualization = (
+                stand_details_data.get('stand_visualization') is not None
+                or bool(stand.stand_visualization)
+            )
+            if not has_visualization:
+                has_visualization = any(
+                    'stand_visualization' in key for key in list(request.FILES.keys())
+                )
+            if not has_visualization:
+                return Response({
+                    "detail": "Stand visualization file is required for self construction"
                 }, status=status.HTTP_400_BAD_REQUEST)
         elif stand_type == 'provided_stand':
             if not stand_details_data.get('name_sign_text') and not stand.name_sign_text:
@@ -1693,6 +1720,19 @@ class FormReviewView(APIView):
         # Validate feedback status
         if feedback_status not in ['pending', 'accepted', 'rejected']:
             return Response({"detail": "Invalid feedback status"}, status=status.HTTP_400_BAD_REQUEST)
+
+        previous_feedback = Feedback.objects.filter(
+            company=company, form=f'stage_{stage_num}'
+        ).first()
+        already_accepted = (
+            previous_feedback is not None and previous_feedback.status == 'accepted'
+        )
+        # Re-accepting an already accepted stage must not re-notify the company
+        should_notify = (
+            feedback_status in ['accepted', 'rejected']
+            and company.representative
+            and not (feedback_status == 'accepted' and already_accepted)
+        )
         
         # Create or update feedback
         feedback = create_or_update_feedback(company, stage_num, feedback_status, feedback_comment)
@@ -1702,7 +1742,7 @@ class FormReviewView(APIView):
         form.save()
         
         # Send email notification if status is accepted or rejected
-        if feedback_status in ['accepted', 'rejected'] and company.representative:
+        if should_notify:
             try:
                 self._send_stage_feedback_email(company, stage_num, feedback_status, feedback_comment)
             except Exception as e:
@@ -2413,30 +2453,76 @@ class SendInvitationRemindersView(APIView):
 
 class ExportCSVView(APIView):
     """
-    Export company data to CSV format.
-    
+    Export selected companies to CSV format.
+
     Accessible only to admin/staff users via JWT authentication.
-    Generates a streaming CSV response with all company form data.
+    Requires POST with ordered company_ids; GET is rejected to avoid full dumps.
     """
     permission_classes = [IsAuthenticated, IsAdminOrStaff]
 
     def get(self, request):
+        return Response(
+            {
+                'error': 'company_ids required',
+                'detail': 'Use POST with a non-empty company_ids list to export CSV.',
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    def post(self, request):
         from django.http import StreamingHttpResponse, HttpResponseServerError, JsonResponse
         from companies.services.export_service import ExportService
         from datetime import datetime
-        import traceback
+
+        company_ids = request.data.get('company_ids')
+        if not isinstance(company_ids, list) or len(company_ids) == 0:
+            return Response(
+                {
+                    'error': 'company_ids required',
+                    'detail': 'Provide a non-empty list of company_ids.',
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        parsed_ids = []
+        seen = set()
+        for raw_id in company_ids:
+            try:
+                pk = int(raw_id)
+            except (TypeError, ValueError):
+                return Response(
+                    {
+                        'error': 'invalid company_ids',
+                        'detail': 'All company_ids must be integers.',
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if pk in seen:
+                continue
+            seen.add(pk)
+            parsed_ids.append(pk)
+
+        if not parsed_ids:
+            return Response(
+                {
+                    'error': 'company_ids required',
+                    'detail': 'Provide a non-empty list of company_ids.',
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         try:
-            export_service = ExportService(user=request.user, filters={})
-            
+            export_service = ExportService(
+                user=request.user,
+                filters={'company_ids': parsed_ids},
+            )
+
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             filename = f'companies_export_{timestamp}.csv'
 
-            # Wrapper generator with error handling for streaming
             def csv_generator():
                 try:
                     for chunk in export_service.generate_csv():
-                        # Ensure chunk is a string (CSVGenerator returns strings)
                         if chunk:
                             yield chunk
                 except Exception as e:
@@ -2444,35 +2530,35 @@ class ExportCSVView(APIView):
                         f"Error during CSV streaming for user {request.user.username}: {str(e)}",
                         exc_info=True
                     )
-                    # Cannot raise exception here as it's a generator, but error is logged
-                    # The outer try-except will catch initialization errors
                     raise
 
             response = StreamingHttpResponse(
                 csv_generator(),
                 content_type='text/csv; charset=utf-8-sig'
             )
-            # Use RFC 5987 format for UTF-8 filename encoding
-            response['Content-Disposition'] = f'attachment; filename="{filename}"; filename*=UTF-8\'\'{filename}'
-            
-            logger.info(f"CSV export initiated by user {request.user.username}")
+            response['Content-Disposition'] = (
+                f'attachment; filename="{filename}"; filename*=UTF-8\'\'{filename}'
+            )
+
+            logger.info(
+                f"CSV export initiated by user {request.user.username} "
+                f"for {len(parsed_ids)} companies"
+            )
             return response
-            
+
         except Exception as e:
             error_message = f"Error generating CSV export: {str(e)}"
             logger.error(
                 f"CSV export failed for user {request.user.username}: {error_message}",
                 exc_info=True
             )
-            
-            # Return JSON error response for API clients
+
             if request.headers.get('Accept', '').startswith('application/json'):
                 return JsonResponse(
                     {'error': 'CSV export failed', 'detail': str(e)},
                     status=500
                 )
-            
-            # Return plain text error for browser
+
             return HttpResponseServerError(
                 error_message,
                 content_type='text/plain; charset=utf-8'
@@ -2531,10 +2617,11 @@ class ExportMediaFilesView(APIView):
     Creates a ZIP archive containing files referenced in:
     - StandDetails.logo_sign_file (logos/)
     - StandDetails.fire_cert (fire_certs/)
+    - StandDetails.stand_visualization (stand_visualizations/)
     - Description.logo_file (catalogue_logos/)
     
     Files are named: "folder/[stand_code_day1][stand_code_day2] full company name.extension"
-    Folder structure is preserved: logos/, fire_certs/, catalogue_logos/
+    Folder structure is preserved: logos/, fire_certs/, stand_visualizations/, catalogue_logos/
     """
     permission_classes = [IsAuthenticated, IsAdminOrStaff]
 
@@ -2667,6 +2754,37 @@ class ExportMediaFilesView(APIView):
                             logger.warning(f"File does not exist: {file_path} for company {stand_detail.company.name}")
                     except Exception as e:
                         logger.warning(f"Could not add fire_cert for company {stand_detail.company.name}: {e}", exc_info=True)
+                        continue
+
+            # Export stand_visualization from StandDetails (goes to stand_visualizations/ folder)
+            stand_details_with_viz = StandDetails.objects.filter(
+                stand_visualization__isnull=False
+            ).exclude(stand_visualization='').select_related('company').prefetch_related('company__stand_all', 'company__basic_data')
+
+            for stand_detail in stand_details_with_viz:
+                if stand_detail.stand_visualization:
+                    try:
+                        file_path = stand_detail.stand_visualization.path
+                        if os.path.exists(file_path):
+                            formatted_name = self._format_filename(
+                                stand_detail.company,
+                                stand_detail.stand_visualization.name,
+                                'stand_visualizations/'
+                            )
+                            if formatted_name not in arcnames_added:
+                                zip_file.write(file_path, arcname=formatted_name)
+                                arcnames_added.add(formatted_name)
+                                files_count += 1
+                            else:
+                                name_part, ext = os.path.splitext(formatted_name)
+                                unique_name = f"{name_part}_{stand_detail.company.id}{ext}"
+                                zip_file.write(file_path, arcname=unique_name)
+                                arcnames_added.add(unique_name)
+                                files_count += 1
+                        else:
+                            logger.warning(f"File does not exist: {file_path} for company {stand_detail.company.name}")
+                    except Exception as e:
+                        logger.warning(f"Could not add stand_visualization for company {stand_detail.company.name}: {e}", exc_info=True)
                         continue
 
             # Export logo_file from Description (goes to catalogue_logos/ folder)

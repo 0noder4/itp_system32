@@ -1,6 +1,6 @@
 # Weryfikacja zgłoszeń użytkowników
 
-Data weryfikacji: `2026-06-02`. Ostatnia aktualizacja: `2026-08-27`.
+Data weryfikacji: `2026-06-02`. Ostatnia aktualizacja: `2026-08-29`.
 
 Dokument zawiera przegląd zgłoszeń od użytkowników wraz ze statusem w aktualnej wersji systemu.
 
@@ -33,6 +33,8 @@ Dokument zawiera przegląd zgłoszeń od użytkowników wraz ze statusem w aktua
 - Brak opcji trwałego usuwania zaproszeń (jest anulowanie, ale bez usuwania rekordu).
 - Jobwall: brak logiki i komunikatu "2 pierwsze ogłoszenia darmowe, kolejne płatne" (obecnie koszt liczony od każdej oferty).
 - Warsztaty: brak komunikatu kosztowego po zaznaczeniu zainteresowania (ikona/tooltip + cena).
+- Etap 2 / wyposażenie: brak podglądu wizualnego mebli (np. zdjęcia po najechaniu kursorem dla lady łukowej, krzesła barowego itd.).
+- Etap 2 / wyposażenie: brak wyboru koloru wykładziny z paletą (opcja skierowana głównie do firm ze statusem partnera).
 
 ## Rekomendowany priorytet
 

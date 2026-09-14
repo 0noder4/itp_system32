@@ -1,6 +1,25 @@
 import React from "react";
 import { Company, CompanyInvitation } from "@/lib/types";
+import { CompletedStageNumber } from "@/hooks/useStaffDashboardFilters";
 import { TableRow } from "./StatusBadges";
+
+const STAGE_COMPLETED_KEY: Record<
+  CompletedStageNumber,
+  keyof Pick<
+    Company,
+    | "stage_1_completed"
+    | "stage_2_completed"
+    | "stage_3_completed"
+    | "stage_4_completed"
+    | "stage_5_completed"
+  >
+> = {
+  1: "stage_1_completed",
+  2: "stage_2_completed",
+  3: "stage_3_completed",
+  4: "stage_4_completed",
+  5: "stage_5_completed",
+};
 
 interface UseFilteredRowsParams {
   companies?: Company[];
@@ -9,7 +28,20 @@ interface UseFilteredRowsParams {
   statusFilter: "all" | "main" | "partner" | "basic";
   frRespFilter: number | "all";
   invitationStatusFilter: "all" | "accepted" | "expired" | "not accepted";
+  completedStagesFilter: CompletedStageNumber[];
   showInvitations: boolean;
+}
+
+function companyMatchesCompletedStages(
+  company: Company,
+  completedStagesFilter: CompletedStageNumber[]
+): boolean {
+  if (completedStagesFilter.length === 0) {
+    return true;
+  }
+  return completedStagesFilter.every(
+    (stage) => company[STAGE_COMPLETED_KEY[stage]] === true
+  );
 }
 
 export function useFilteredRows({
@@ -19,6 +51,7 @@ export function useFilteredRows({
   statusFilter,
   frRespFilter,
   invitationStatusFilter,
+  completedStagesFilter,
   showInvitations,
 }: UseFilteredRowsParams) {
   const filteredRows = React.useMemo(() => {
@@ -55,6 +88,11 @@ export function useFilteredRows({
           }
         }
 
+        // Completed stages filter (AND)
+        if (!companyMatchesCompletedStages(company, completedStagesFilter)) {
+          return;
+        }
+
         // Search filter
         if (searchQuery.trim() !== "") {
           const query = searchQuery.toLowerCase();
@@ -72,7 +110,8 @@ export function useFilteredRows({
     }
 
     // Add invitations (only if showInvitations is true)
-    if (showInvitations && invitations) {
+    // Invitations have no stages — hide them when stage filter is active
+    if (showInvitations && invitations && completedStagesFilter.length === 0) {
       invitations.forEach((invitation) => {
         // Skip accepted invitations if company exists (avoid duplicates)
         if (
@@ -134,6 +173,7 @@ export function useFilteredRows({
     statusFilter,
     frRespFilter,
     invitationStatusFilter,
+    completedStagesFilter,
     showInvitations,
   ]);
 
@@ -167,4 +207,3 @@ export function useFilteredRows({
 
   return { filteredRows, totalCount };
 }
-

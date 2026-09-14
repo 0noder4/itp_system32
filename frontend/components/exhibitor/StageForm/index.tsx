@@ -219,9 +219,16 @@ export function StageForm({
               data.stand_details.name_sign_text
             );
           }
+          if (data.stand_details.brought_equipment) {
+            formData.append(
+              "stand_details[brought_equipment]",
+              data.stand_details.brought_equipment
+            );
+          }
           // Handle file uploads - only send new File instances, not existing URLs
           const logoFile = data.stand_details.logo_sign_file;
           const fireCertFile = data.stand_details.fire_cert;
+          const visualizationFile = data.stand_details.stand_visualization;
 
           // Check if files are File instances
           const isProvidedStand = standType === "provided_stand";
@@ -256,6 +263,21 @@ export function StageForm({
             );
           }
           // If fireCertFile is a string (existing file URL), don't send it - backend will keep existing file
+
+          if (visualizationFile instanceof File) {
+            formData.append(
+              "stand_details[stand_visualization]",
+              visualizationFile,
+              visualizationFile.name
+            );
+          } else if (
+            isSelfConstruction &&
+            !(typeof visualizationFile === "string")
+          ) {
+            throw new Error(
+              "Stand visualization is required for self construction"
+            );
+          }
         }
 
         // Add equipment selections (only items with quantity > 0)
@@ -275,6 +297,12 @@ export function StageForm({
               `equipment_selections[${index}][quantity]`,
               sel.quantity.toString()
             );
+            if (sel.mount_type) {
+              formData.append(
+                `equipment_selections[${index}][mount_type]`,
+                sel.mount_type
+              );
+            }
           });
         }
 

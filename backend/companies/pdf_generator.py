@@ -498,7 +498,56 @@ class OrderSummaryPDFGenerator:
             ))
             self.story.append(Spacer(1, 0.5*cm))
             return
-        
+
+        # Build assignments before try/except so DoesNotExist path can still render them
+        stand_assignments_data = []
+        header_style = ParagraphStyle(
+            'TableHeader',
+            parent=self.normal_style,
+            fontName=self._font_bold,
+            fontSize=FONT_SIZE_TABLE_HEADER,
+            textColor=colors.white
+        )
+        stand_assignments_data.append([
+            Paragraph(self._t("Day", "Dzień"), header_style),
+            Paragraph(self._t("Stand Number", "Numer stoiska"), header_style),
+            Paragraph(self._t("Stand Size", "Rozmiar stoiska"), header_style)
+        ])
+
+        size_mapping = {
+            'podstawowy': self._t("4m²", "4m²"),
+            'standardowy': self._t("6m²", "6m²"),
+            'rozszerzony': self._t("8m²", "8m²"),
+            '12m2': self._t("12m²", "12m²"),
+        }
+
+        if day1_stand:
+            stand_assignments_data.append([
+                Paragraph(self._t("Day 1 (March 10, 2025)", "Dzień 1 (10.03.2025)"), self.normal_style),
+                Paragraph(day1_stand.stand_number, self.normal_style),
+                Paragraph(size_mapping.get(day1_stand.stand_size, day1_stand.stand_size), self.normal_style)
+            ])
+        if day2_stand:
+            stand_assignments_data.append([
+                Paragraph(self._t("Day 2 (March 11, 2025)", "Dzień 2 (11.03.2025)"), self.normal_style),
+                Paragraph(day2_stand.stand_number, self.normal_style),
+                Paragraph(size_mapping.get(day2_stand.stand_size, day2_stand.stand_size), self.normal_style)
+            ])
+
+        assignments_table_style = TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), ACCENT_COLOR),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
+            ('TOPPADDING', (0, 0), (-1, 0), 10),
+            ('BOTTOMPADDING', (0, 1), (-1, -1), 8),
+            ('TOPPADDING', (0, 1), (-1, -1), 8),
+            ('LEFTPADDING', (0, 0), (-1, -1), 8),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+            ('GRID', (0, 0), (-1, -1), 0.5, BORDER_COLOR),
+        ])
+
         # Stand details
         try:
             stand_details = StandDetails.objects.get(company=self.company)
@@ -531,41 +580,20 @@ class OrderSummaryPDFGenerator:
                     Paragraph(details_label, self.bold_label_style),
                     Paragraph(stand_details.sc_details, self.normal_style)
                 ])
-            
-            # Stand assignments table
-            stand_assignments_data = []
-            header_style = ParagraphStyle(
-                'TableHeader',
-                parent=self.normal_style,
-                fontName=self._font_bold,
-                fontSize=FONT_SIZE_TABLE_HEADER,
-                textColor=colors.white
-            )
-            stand_assignments_data.append([
-                Paragraph(self._t("Day", "Dzień"), header_style),
-                Paragraph(self._t("Stand Number", "Numer stoiska"), header_style),
-                Paragraph(self._t("Stand Size", "Rozmiar stoiska"), header_style)
-            ])
-            
-            size_mapping = {
-                'podstawowy': self._t("4m²", "4m²"),
-                'standardowy': self._t("6m²", "6m²"),
-                'rozszerzony': self._t("8m²", "8m²"),
-                '12m2': self._t("12m²", "12m²"),
-            }
-            
-            if day1_stand:
-                stand_assignments_data.append([
-                    Paragraph(self._t("Day 1 (March 10, 2025)", "Dzień 1 (10.03.2025)"), self.normal_style),
-                    Paragraph(day1_stand.stand_number, self.normal_style),
-                    Paragraph(size_mapping.get(day1_stand.stand_size, day1_stand.stand_size), self.normal_style)
+
+            if stand_details.stand_type == 'self_construction':
+                viz_label = self._t("Stand visualization:", "Wizualizacja zabudowy:")
+                viz_value = self._t("Yes", "Tak") if stand_details.stand_visualization else self._t("No", "Nie")
+                stand_info_data.append([
+                    Paragraph(viz_label, self.bold_label_style),
+                    Paragraph(viz_value, self.normal_style)
                 ])
-            if day2_stand:
-                stand_assignments_data.append([
-                    Paragraph(self._t("Day 2 (March 11, 2025)", "Dzień 2 (11.03.2025)"), self.normal_style),
-                    Paragraph(day2_stand.stand_number, self.normal_style),
-                    Paragraph(size_mapping.get(day2_stand.stand_size, day2_stand.stand_size), self.normal_style)
-                ])
+                if stand_details.brought_equipment:
+                    brought_label = self._t("Brought equipment:", "Przywóz własnego sprzętu:")
+                    stand_info_data.append([
+                        Paragraph(brought_label, self.bold_label_style),
+                        Paragraph(stand_details.brought_equipment, self.normal_style)
+                    ])
             
             if stand_info_data:
                 stand_info_table = Table(stand_info_data, colWidths=[5.5*cm, 10.5*cm])
@@ -587,19 +615,7 @@ class OrderSummaryPDFGenerator:
             
             if len(stand_assignments_data) > 1:
                 stand_assignments_table = Table(stand_assignments_data, colWidths=[6*cm, 5*cm, 5*cm])
-                stand_assignments_table.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (-1, 0), ACCENT_COLOR),  # Use accent color for header
-                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                    ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
-                    ('TOPPADDING', (0, 0), (-1, 0), 10),
-                    ('BOTTOMPADDING', (0, 1), (-1, -1), 8),
-                    ('TOPPADDING', (0, 1), (-1, -1), 8),
-                    ('LEFTPADDING', (0, 0), (-1, -1), 8),
-                    ('RIGHTPADDING', (0, 0), (-1, -1), 8),
-                    ('GRID', (0, 0), (-1, -1), 0.5, BORDER_COLOR),
-                ]))
+                stand_assignments_table.setStyle(assignments_table_style)
                 self.story.append(stand_assignments_table)
                 self.story.append(Spacer(1, 0.3*cm))
             
@@ -631,6 +647,12 @@ class OrderSummaryPDFGenerator:
                     
                     # Get item name based on language
                     item_name = item.name_pl if self.language == 'pl' else item.name_en
+                    if getattr(item, 'code', None) == 'tv' and selection.mount_type:
+                        mount_label = (
+                            self._t("wall", "ściana") if selection.mount_type == 'wall'
+                            else self._t("stand", "stojak")
+                        )
+                        item_name = f"{item_name} ({mount_label})"
                     
                     table_data.append([
                         Paragraph(item_name, self.normal_style),
@@ -670,19 +692,7 @@ class OrderSummaryPDFGenerator:
             # Still show stand assignments even if no stand details
             if len(stand_assignments_data) > 1:
                 stand_assignments_table = Table(stand_assignments_data, colWidths=[6*cm, 5*cm, 5*cm])
-                stand_assignments_table.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (-1, 0), ACCENT_COLOR),  # Use accent color for header
-                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                    ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
-                    ('TOPPADDING', (0, 0), (-1, 0), 10),
-                    ('BOTTOMPADDING', (0, 1), (-1, -1), 8),
-                    ('TOPPADDING', (0, 1), (-1, -1), 8),
-                    ('LEFTPADDING', (0, 0), (-1, -1), 8),
-                    ('RIGHTPADDING', (0, 0), (-1, -1), 8),
-                    ('GRID', (0, 0), (-1, -1), 0.5, BORDER_COLOR),
-                ]))
+                stand_assignments_table.setStyle(assignments_table_style)
                 self.story.append(stand_assignments_table)
         
         self.story.append(Spacer(1, 0.5*cm))

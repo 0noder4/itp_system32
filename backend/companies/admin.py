@@ -77,9 +77,9 @@ admin.site.register(Feedback)
 
 @admin.register(EquipmentItem)
 class EquipmentItemAdmin(admin.ModelAdmin):
-    list_display = ('name_en', 'name_pl', 'price', 'is_basic', 'included_quantity', 'category', 'is_active', 'created_at')
+    list_display = ('name_en', 'name_pl', 'code', 'price', 'is_basic', 'included_quantity', 'category', 'is_active', 'created_at')
     list_filter = ('is_basic', 'category', 'is_active', 'created_at')
-    search_fields = ('name_en', 'name_pl')
+    search_fields = ('name_en', 'name_pl', 'code')
     ordering = ('category', 'name_en')
     fieldsets = (
         ('English Information', {
@@ -89,7 +89,7 @@ class EquipmentItemAdmin(admin.ModelAdmin):
             'fields': ('name_pl',)
         }),
         ('Pricing & Configuration', {
-            'fields': ('price', 'is_basic', 'included_quantity', 'category')
+            'fields': ('code', 'price', 'is_basic', 'included_quantity', 'category')
         }),
         ('Status', {
             'fields': ('is_active',)
@@ -99,8 +99,8 @@ class EquipmentItemAdmin(admin.ModelAdmin):
 
 @admin.register(EquipmentSelection)
 class EquipmentSelectionAdmin(admin.ModelAdmin):
-    list_display = ('stand_details', 'equipment_item', 'quantity')
-    list_filter = ('equipment_item__is_basic', 'equipment_item__category')
+    list_display = ('stand_details', 'equipment_item', 'quantity', 'mount_type')
+    list_filter = ('equipment_item__is_basic', 'equipment_item__category', 'mount_type')
     search_fields = ('stand_details__company__name', 'equipment_item__name_en', 'equipment_item__name_pl')
 
 
