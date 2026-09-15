@@ -26,6 +26,11 @@ import {
 import { useFilteredRows } from "@/components/staff/Companies/useFilteredRows";
 import { useStaffDashboardFilters } from "@/hooks/useStaffDashboardFilters";
 import { ReminderDialog } from "@/components/staff/Reminders/ReminderDialog";
+import {
+  UpdateOverviewDialog,
+  markUpdateOverviewShown,
+  shouldOpenUpdateOverview,
+} from "@/components/staff/UpdateOverview/UpdateOverviewDialog";
 import { STAFF_ACCENT_COLOR } from "@/lib/colors";
 import type { TableRow as TableRowType } from "@/components/staff/Companies/StatusBadges";
 
@@ -84,6 +89,14 @@ export default function Index() {
     () => new Set()
   );
   const [reminderDialogOpen, setReminderDialogOpen] = React.useState(false);
+  const [updateOverviewOpen, setUpdateOverviewOpen] = React.useState(false);
+
+  React.useEffect(() => {
+    if (shouldOpenUpdateOverview()) {
+      markUpdateOverviewShown();
+      setUpdateOverviewOpen(true);
+    }
+  }, []);
 
   React.useEffect(() => {
     const visibleKeys = new Set(filteredRows.map(rowSelectionKey));
@@ -306,6 +319,10 @@ export default function Index() {
         onOpenChange={setReminderDialogOpen}
         selectedRows={selectedRows}
         onSuccess={() => setSelectedKeys(new Set())}
+      />
+      <UpdateOverviewDialog
+        open={updateOverviewOpen}
+        onOpenChange={setUpdateOverviewOpen}
       />
       <footer className="shrink-0 border-t border-border bg-muted/30 py-2 md:py-3 px-3 md:px-6">
         <div className="flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 text-xs sm:text-sm text-muted-foreground">
