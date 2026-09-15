@@ -5,12 +5,12 @@
 export const updateOverview = {
   releaseDate: "2026-09-15", // ISO YYYY-MM-DD
   highlights: [
+    "Zaktualizowano silnik panelu (Next.js) — łatka bezpieczeństwa zamykająca lukę wykorzystywaną przez ataki na serwer.",
     "Po zalogowaniu do panelu staff pojawia się przegląd najnowszej aktualizacji systemu.",
     "Możesz zaznaczyć „Nie pokazuj ponownie”, żeby ten przegląd się więcej nie wyświetlał.",
-    "Po miesiącu od daty wydania przegląd znika automatycznie dla wszystkich.",
   ],
   worthChecking: [
-    "Zaloguj się jako staff → sprawdź, czy dialog otwiera się na głównym panelu firm.",
-    "Odśwież stronę (F5) — dialog nie powinien wyskoczyć drugi raz w tej samej sesji.",
+    "Zaloguj się jako staff → sprawdź, że panel firm ładuje się normalnie.",
+    "Otwórz przegląd aktualizacji (jeśli się pokazuje) i zamknij go przyciskiem lub „Nie pokazuj ponownie”.",
   ],
 } as const;
