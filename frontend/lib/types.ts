@@ -205,7 +205,8 @@ export interface Stage2Data {
 export interface Workshop {
   id?: number;
   company: number;
-  workshop: boolean;
+  /** null/undefined = no conscious choice yet */
+  workshop: boolean | null;
   notes?: string;
   dl?: number | null;
 }

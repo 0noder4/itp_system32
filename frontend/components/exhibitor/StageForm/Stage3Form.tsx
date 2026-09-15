@@ -9,7 +9,7 @@ import { stage3Schema, Stage3FormData } from "./schemas";
 import { Button } from "@/components/ui/button";
 import { ACCENT_COLOR } from "@/lib/colors";
 import { Textarea } from "@/components/ui/textarea";
-import { FieldGroup, FieldLabel } from "@/components/ui/field";
+import { FieldGroup, FieldLabel, FieldError } from "@/components/ui/field";
 import { Loader2, Save } from "lucide-react";
 
 interface Stage3FormProps {
@@ -20,6 +20,9 @@ interface Stage3FormProps {
   disabled?: boolean;
   isAccepted?: boolean;
 }
+
+const choiceInputClassName =
+  "h-4 w-4 border border-gray-300 bg-white cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 focus:ring-2 focus:ring-ring focus:ring-offset-2 checked:bg-primary checked:border-primary";
 
 export function Stage3Form({
   initialData,
@@ -32,66 +35,67 @@ export function Stage3Form({
   const form = useForm<Stage3FormData>({
     resolver: zodResolver(stage3Schema),
     defaultValues: {
-      workshop: initialData?.workshop || false,
+      workshop:
+        typeof initialData?.workshop === "boolean"
+          ? initialData.workshop
+          : (undefined as unknown as boolean),
       notes: initialData?.notes || "",
     },
   });
 
   const watchWorkshop = form.watch("workshop");
 
+  const setWorkshopChoice = (value: boolean) => {
+    form.setValue("workshop", value, { shouldValidate: true });
+    if (!value) form.setValue("notes", "");
+  };
+
   const handleFormSubmit = async (data: Stage3FormData) => {
     try {
-      await onSubmit(data);
+      await onSubmit({
+        workshop: data.workshop,
+        notes: data.workshop ? data.notes || "" : "",
+      });
     } catch (error: any) {
-      // Handle backend validation errors and set them on form fields
       if (error.response?.status === 400 && error.response?.data) {
         const errorData = error.response.data;
         let hasFieldErrors = false;
-        
-        // Handle workshop errors
+
         if (errorData.workshop !== undefined) {
           const fieldErrors = errorData.workshop;
-          const errorMessage = Array.isArray(fieldErrors) 
-            ? fieldErrors[0] 
-            : typeof fieldErrors === 'string' 
-            ? fieldErrors 
-            : String(fieldErrors);
-          
-          form.setError('workshop', {
-            type: 'server',
-            message: errorMessage,
+          form.setError("workshop", {
+            type: "server",
+            message: Array.isArray(fieldErrors)
+              ? fieldErrors[0]
+              : typeof fieldErrors === "string"
+                ? fieldErrors
+                : String(fieldErrors),
           });
           hasFieldErrors = true;
         }
-        
-        // Handle notes errors
+
         if (errorData.notes !== undefined) {
           const fieldErrors = errorData.notes;
-          const errorMessage = Array.isArray(fieldErrors) 
-            ? fieldErrors[0] 
-            : typeof fieldErrors === 'string' 
-            ? fieldErrors 
-            : String(fieldErrors);
-          
-          form.setError('notes', {
-            type: 'server',
-            message: errorMessage,
+          form.setError("notes", {
+            type: "server",
+            message: Array.isArray(fieldErrors)
+              ? fieldErrors[0]
+              : typeof fieldErrors === "string"
+                ? fieldErrors
+                : String(fieldErrors),
           });
           hasFieldErrors = true;
         }
-        
-        // Handle general errors
-        if (errorData.detail && typeof errorData.detail === 'string') {
-          form.setError('root', {
-            type: 'server',
+
+        if (errorData.detail && typeof errorData.detail === "string") {
+          form.setError("root", {
+            type: "server",
             message: errorData.detail,
           });
           hasFieldErrors = true;
         }
-        
-        if (hasFieldErrors) {
-          return;
-        }
+
+        if (hasFieldErrors) return;
       }
       throw error;
     }
@@ -107,24 +111,50 @@ export function Stage3Form({
         <FieldGroup>
           <div className="flex items-center gap-2">
             <input
-              type="checkbox"
-              id="workshop"
-              {...form.register("workshop")}
-              className="h-4 w-4 rounded border border-gray-300 bg-white cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 focus:ring-2 focus:ring-ring focus:ring-offset-2 checked:bg-primary checked:border-primary"
+              type="radio"
+              id="workshop-yes"
+              name="workshop"
+              checked={watchWorkshop === true}
+              onChange={() => setWorkshopChoice(true)}
+              className={choiceInputClassName}
               style={{
                 appearance: "none",
                 WebkitAppearance: "none",
                 MozAppearance: "none",
+                borderRadius: "50%",
               }}
               disabled={disabled}
             />
-            <FieldLabel htmlFor="workshop" className="cursor-pointer">
+            <FieldLabel htmlFor="workshop-yes" className="cursor-pointer">
               {t("exhibitor.form.willConductWorkshop")}
             </FieldLabel>
           </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="radio"
+              id="workshop-no"
+              name="workshop"
+              checked={watchWorkshop === false}
+              onChange={() => setWorkshopChoice(false)}
+              className={choiceInputClassName}
+              style={{
+                appearance: "none",
+                WebkitAppearance: "none",
+                MozAppearance: "none",
+                borderRadius: "50%",
+              }}
+              disabled={disabled}
+            />
+            <FieldLabel htmlFor="workshop-no" className="cursor-pointer">
+              {t("exhibitor.form.willNotConductWorkshop")}
+            </FieldLabel>
+          </div>
+          {form.formState.errors.workshop && (
+            <FieldError>{form.formState.errors.workshop.message}</FieldError>
+          )}
         </FieldGroup>
 
-        {watchWorkshop && (
+        {watchWorkshop === true && (
           <FieldGroup>
             <FieldLabel>{t("exhibitor.form.workshopNotes")}</FieldLabel>
             <Textarea

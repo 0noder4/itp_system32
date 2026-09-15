@@ -414,8 +414,14 @@ class ExportService:
         if hasattr(company, 'workshops') and company.workshops:
             try:
                 workshop = company.workshops
+                if workshop.workshop is True:
+                    workshop_label = 'Tak'
+                elif workshop.workshop is False:
+                    workshop_label = 'Nie'
+                else:
+                    workshop_label = ''
                 base_data.update({
-                    'Poprowadzi warsztaty': 'Tak' if workshop.workshop else 'Nie',
+                    'Poprowadzi warsztaty': workshop_label,
                     'Uwagi do warsztatów': workshop.notes or '',
                 })
             except AttributeError as e:

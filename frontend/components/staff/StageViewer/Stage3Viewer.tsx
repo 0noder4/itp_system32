@@ -20,13 +20,15 @@ export function Stage3Viewer({ data }: Stage3ViewerProps) {
       <CardContent className="space-y-4">
         <div className="flex items-center gap-2">
           <p className="text-sm font-medium">
-            {t("exhibitor.form.willConductWorkshop")}
+            {data.workshop
+              ? t("exhibitor.form.willConductWorkshop")
+              : t("exhibitor.form.willNotConductWorkshop")}
           </p>
           <span className={data.workshop ? "text-green-600" : "text-gray-400"}>
-            {data.workshop ? "✓" : "✗"}
+            {typeof data.workshop === "boolean" ? (data.workshop ? "✓" : "✗") : "—"}
           </span>
         </div>
-        {data.workshop && data.notes && (
+        {data.workshop === true && data.notes && (
           <div>
             <p className="text-sm font-medium text-muted-foreground">
               {t("exhibitor.form.workshopNotes")}
@@ -38,4 +40,3 @@ export function Stage3Viewer({ data }: Stage3ViewerProps) {
     </Card>
   );
 }
-

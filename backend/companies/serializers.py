@@ -372,6 +372,21 @@ class WorkshopSerializer(serializers.ModelSerializer):
         model = Workshop
         fields = '__all__'
 
+    def validate_workshop(self, value):
+        if value is None:
+            raise serializers.ValidationError(
+                'Choose whether you will conduct a workshop (yes or no).'
+            )
+        return value
+
+    def validate(self, attrs):
+        workshop = attrs.get('workshop')
+        if workshop is None and self.instance is not None:
+            workshop = self.instance.workshop
+        if workshop is False:
+            attrs['notes'] = ''
+        return attrs
+
 
 # ETAP 4: Jobwall
 

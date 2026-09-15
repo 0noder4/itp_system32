@@ -336,7 +336,13 @@ class Jobwall(models.Model):
 
 class Workshop(models.Model):
     company = models.OneToOneField(Company, on_delete=models.CASCADE, related_name='workshops')
-    workshop = models.BooleanField(verbose_name="Poprowadzenie warsztatów", default=False)
+    workshop = models.BooleanField(
+        verbose_name="Poprowadzenie warsztatów",
+        null=True,
+        blank=True,
+        default=None,
+        help_text="Jawny wybór: True = prowadzą warsztat, False = nie potrzebują. Null = brak decyzji.",
+    )
     notes = models.TextField(verbose_name="dodatkowe uwagi", blank=True)
     dl = models.ForeignKey(Deadline, on_delete=models.SET_NULL, null=True)
 
