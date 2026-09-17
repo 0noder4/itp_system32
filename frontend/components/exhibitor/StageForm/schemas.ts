@@ -108,8 +108,7 @@ export const stage2Schema = z.object({
 export const stage3Schema = z
   .object({
     workshop: z.boolean({
-      required_error: "Choose whether you will conduct a workshop",
-      invalid_type_error: "Choose whether you will conduct a workshop",
+      message: "Choose whether you will conduct a workshop",
     }),
     title: z.string().optional(),
     description: z.string().optional(),
