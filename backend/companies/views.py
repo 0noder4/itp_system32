@@ -21,6 +21,7 @@ from .models import (
     StandDetails, Stand, EquipmentItem, EquipmentSelection, Workshop, Jobwall,
     Description, FinalData, Lunch, PDI, PDIAttendee, Exhibitor, Settings,
     InvitationExpiryReminderSent, compute_invitation_expires_at,
+    company_can_access_stage3, ensure_basic_workshop_skipped,
 )
 from .notifications import (
     invitation_calendar_date,
@@ -1198,7 +1199,10 @@ class FormStage3View(APIView):
             # Allow access for company representative or staff/admin
             if company.representative != request.user and request.user.type not in ['admin', 'staff']:
                 return Response({"detail": "Company not found or you don't have permission"}, status=status.HTTP_403_FORBIDDEN)
-            workshop = Workshop.objects.filter(company=company).first()
+            if not company_can_access_stage3(company):
+                ensure_basic_workshop_skipped(company)
+                return Response({"skipped": True, "workshop": False})
+            workshop = Workshop.objects.filter(company=company).prefetch_related('facilitators').first()
             if not workshop:
                 return Response({})
             return Response(WorkshopSerializer(workshop).data)
@@ -1214,6 +1218,11 @@ class FormStage3View(APIView):
         try:
             validate_company_id(company_id)
             company = Company.objects.get(id=company_id, representative=request.user)
+            if not company_can_access_stage3(company):
+                return Response(
+                    {"detail": "Stage 3 (workshops) is not available for regular exhibitors."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
             form = Form.objects.get(company=company)
             # Check if previous stages have data (not if they're approved)
             if not BasicData.objects.filter(company=company).exists():
@@ -1247,6 +1256,11 @@ class FormStage3View(APIView):
         try:
             validate_company_id(company_id)
             company = Company.objects.get(id=company_id, representative=request.user)
+            if not company_can_access_stage3(company):
+                return Response(
+                    {"detail": "Stage 3 (workshops) is not available for regular exhibitors."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
             form = Form.objects.get(company=company)
             workshop = Workshop.objects.get(company=company)
             
@@ -1311,7 +1325,9 @@ class FormStage4View(APIView):
                 return Response({"detail": "Stage 1 must be completed before accessing stage 4"}, status=status.HTTP_400_BAD_REQUEST)
             if not StandDetails.objects.filter(company=company).exists():
                 return Response({"detail": "Stage 2 must be completed before accessing stage 4"}, status=status.HTTP_400_BAD_REQUEST)
-            if not Workshop.objects.filter(company=company).exists():
+            if not company_can_access_stage3(company):
+                ensure_basic_workshop_skipped(company)
+            elif not Workshop.objects.filter(company=company).exists():
                 return Response({"detail": "Stage 3 must be completed before accessing stage 4"}, status=status.HTTP_400_BAD_REQUEST)
         except ValidationError as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -1607,7 +1623,9 @@ class FormStage5View(APIView):
                 return Response({"detail": "Stage 1 must be completed before accessing stage 5"}, status=status.HTTP_400_BAD_REQUEST)
             if not StandDetails.objects.filter(company=company).exists():
                 return Response({"detail": "Stage 2 must be completed before accessing stage 5"}, status=status.HTTP_400_BAD_REQUEST)
-            if not Workshop.objects.filter(company=company).exists():
+            if not company_can_access_stage3(company):
+                ensure_basic_workshop_skipped(company)
+            elif not Workshop.objects.filter(company=company).exists():
                 return Response({"detail": "Stage 3 must be completed before accessing stage 5"}, status=status.HTTP_400_BAD_REQUEST)
             # Stage 4 can have either Jobwalls or Description (or both)
             if not Jobwall.objects.filter(company=company).exists() and not Description.objects.filter(company=company).exists():
@@ -1904,6 +1922,10 @@ class FormStatusView(APIView):
             
             # Get or create the Form object
             form, _ = Form.objects.get_or_create(company=company)
+
+            stage3_available = company_can_access_stage3(company)
+            if not stage3_available:
+                ensure_basic_workshop_skipped(company)
             
             # Get all feedbacks for this company, grouped by stage
             feedbacks = Feedback.objects.filter(company=company).order_by('-id')
@@ -1923,7 +1945,12 @@ class FormStatusView(APIView):
             stage_data_exists = {
                 'stage_1': BasicData.objects.filter(company=company).exists(),
                 'stage_2': StandDetails.objects.filter(company=company).exists(),
-                'stage_3': Workshop.objects.filter(company=company).exists(),
+                # For basic exhibitors Stage 3 is skipped; treat as "resolved" so Stage 4 unlocks
+                'stage_3': (
+                    True
+                    if not stage3_available
+                    else Workshop.objects.filter(company=company).exists()
+                ),
                 'stage_4': Jobwall.objects.filter(company=company).exists() or Description.objects.filter(company=company).exists(),
                 'stage_5': FinalData.objects.filter(company=company).exists(),
             }
@@ -1954,6 +1981,8 @@ class FormStatusView(APIView):
                 'feedbacks': stage_feedbacks,
                 'data_exists': stage_data_exists,
                 'completion_timestamps': completion_timestamps,
+                'stage_3_available': stage3_available,
+                'company_status': company.status,
             })
         except ValidationError as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -2243,6 +2272,8 @@ class SendStageReminderView(APIView):
         elif stage_num == 2:
             stage_data_exists = StandDetails.objects.filter(company=company).exists()
         elif stage_num == 3:
+            if not company_can_access_stage3(company):
+                return False
             stage_data_exists = Workshop.objects.filter(company=company).exists()
         elif stage_num == 4:
             stage_data_exists = (

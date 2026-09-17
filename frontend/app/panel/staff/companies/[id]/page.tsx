@@ -52,6 +52,10 @@ function computeStageStatus(
 ): StageStatus {
   if (!formStatus) return "not_started";
 
+  if (stageNum === 3 && formStatus.stage_3_available === false) {
+    return "unavailable";
+  }
+
   const stageKey = `stage_${stageNum}`;
   const isCompleted = formStatus.form[
     `stage_${stageNum}_completed` as keyof typeof formStatus.form
@@ -96,6 +100,7 @@ function statusToTranslationKey(status: StageStatus): string {
     pending_approval: "pendingApproval",
     accepted: "accepted",
     rejected: "rejected",
+    unavailable: "unavailable",
   };
   return statusMap[status] || status;
 }
@@ -110,6 +115,7 @@ function convertFormStatusToStages(
   for (let i = 1; i <= 5; i++) {
     const stageKey = `stage_${i}`;
     const status = computeStageStatus(i, formStatus, previousStageCompleted);
+    const unavailable = status === "unavailable";
     const isCompleted =
       (formStatus?.form[
         `stage_${i}_completed` as keyof typeof formStatus.form
@@ -122,12 +128,13 @@ function convertFormStatusToStages(
       title: STAGE_TITLES[i],
       description: STAGE_DESCRIPTIONS[i],
       status,
-      isCompleted,
+      isCompleted: unavailable ? true : isCompleted,
       feedback: feedback,
-      dataExists,
+      dataExists: unavailable ? true : dataExists,
+      unavailable,
     });
 
-    previousStageCompleted = isCompleted;
+    previousStageCompleted = unavailable || isCompleted || dataExists;
   }
 
   return stages;
@@ -431,13 +438,11 @@ export default function CompanyDetailPage() {
                   {isExpanded && (
                     <div className="border-t p-4 space-y-4">
                       {stage.feedback?.comment && (
-                        <div className="rounded-md bg-muted p-3">
-                          <p className="text-sm font-medium">
+                        <div className="rounded-md bg-rose-50 p-3 text-sm text-rose-700">
+                          <p className="font-medium">
                             {t("staff.companyDetail.feedbackComment")}:
                           </p>
-                          <p className="text-sm mt-1">
-                            {stage.feedback.comment}
-                          </p>
+                          <p className="mt-1">{stage.feedback.comment}</p>
                         </div>
                       )}
 

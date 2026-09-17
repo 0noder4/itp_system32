@@ -112,6 +112,9 @@ export interface FormStatusResponse {
   feedbacks: Record<string, StageFeedback>;
   data_exists: Record<string, boolean>;
   completion_timestamps?: Record<string, string | null>; // ISO date strings or null - timestamps when stages were completed
+  /** false for basic exhibitors — Stage 3 is visible but not editable */
+  stage_3_available?: boolean;
+  company_status?: "main" | "partner" | "basic";
 }
 
 // Stage status for UI display
@@ -120,7 +123,8 @@ export type StageStatus =
   | "in_progress"
   | "pending_approval"
   | "accepted"
-  | "rejected";
+  | "rejected"
+  | "unavailable";
 
 // Stage info for overview display
 export interface StageInfo {
@@ -134,6 +138,8 @@ export interface StageInfo {
   deadline?: string | null; // ISO date string or null
   daysRemaining?: number | null; // Days remaining until deadline, or null if no deadline
   completedAt?: string | null; // ISO date string or null - timestamp when stage was completed
+  /** Stage 3 for basic exhibitors */
+  unavailable?: boolean;
 }
 
 // === Stage 1: Basic Data ===
@@ -202,12 +208,34 @@ export interface Stage2Data {
 }
 
 // === Stage 3: Workshop ===
+export interface WorkshopFacilitator {
+  id?: number;
+  name: string;
+  surname: string;
+  phone_number: string;
+  description?: string;
+}
+
 export interface Workshop {
   id?: number;
   company: number;
   /** null/undefined = no conscious choice yet */
   workshop: boolean | null;
+  title?: string;
+  description?: string;
+  preferred_day?: "day1" | "day2" | "";
+  /** HH:MM or HH:MM:SS from API */
+  preferred_time?: string | null;
+  skills?: string;
+  study_majors?: string;
+  room_projector?: boolean;
+  room_hdmi?: boolean;
+  room_other?: string;
+  contact_phone?: string;
+  contact_phone_same_as_facilitator?: boolean;
   notes?: string;
+  facilitators?: WorkshopFacilitator[];
+  skipped?: boolean;
   dl?: number | null;
 }
 

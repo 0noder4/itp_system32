@@ -105,13 +105,188 @@ export const stage2Schema = z.object({
     .optional(),
 });
 
-export const stage3Schema = z.object({
-  workshop: z.boolean({
-    required_error: "Choose whether you will conduct a workshop",
-    invalid_type_error: "Choose whether you will conduct a workshop",
-  }),
-  notes: z.string().optional(),
-});
+export const stage3Schema = z
+  .object({
+    workshop: z.boolean({
+      required_error: "Choose whether you will conduct a workshop",
+      invalid_type_error: "Choose whether you will conduct a workshop",
+    }),
+    title: z.string().optional(),
+    description: z.string().optional(),
+    preferred_day: z.enum(["day1", "day2", ""]).optional(),
+    preferred_time: z.string().optional(),
+    skills: z.string().optional(),
+    study_majors: z.string().optional(),
+    room_projector: z.boolean().optional(),
+    room_hdmi: z.boolean().optional(),
+    room_other: z.string().optional(),
+    contact_phone: z.string().optional(),
+    contact_phone_same_as_facilitator: z.boolean().optional(),
+    notes: z.string().optional(),
+    facilitators: z
+      .array(
+        z.object({
+          name: z.string(),
+          surname: z.string(),
+          phone_number: z.string(),
+          description: z.string().optional(),
+        })
+      )
+      .optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.workshop !== true) return;
+
+    const phoneRegex =
+      /^[\+]?[(]?[0-9]{1,4}[)]?[-\s\.]?[(]?[0-9]{1,4}[)]?[-\s\.]?[0-9]{1,9}$/;
+
+    const requireText = (value: string | undefined, path: string) => {
+      if (!(value || "").trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "This field is required",
+          path: [path],
+        });
+      }
+    };
+
+    requireText(data.title, "title");
+    requireText(data.description, "description");
+    requireText(data.skills, "skills");
+    requireText(data.study_majors, "study_majors");
+
+    if (data.preferred_day !== "day1" && data.preferred_day !== "day2") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Select a preferred fair day",
+        path: ["preferred_day"],
+      });
+    }
+
+    if (!(data.preferred_time || "").trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "This field is required",
+        path: ["preferred_time"],
+      });
+    }
+
+    const facilitators = data.facilitators || [];
+    if (facilitators.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Add at least one workshop facilitator",
+        path: ["facilitators"],
+      });
+    } else {
+      facilitators.forEach((fac, index) => {
+        if (!fac.name.trim()) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "This field is required",
+            path: ["facilitators", index, "name"],
+          });
+        }
+        if (!fac.surname.trim()) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "This field is required",
+            path: ["facilitators", index, "surname"],
+          });
+        }
+        const phone = (fac.phone_number || "").trim();
+        if (!phone) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Phone number is required",
+            path: ["facilitators", index, "phone_number"],
+          });
+        } else if (!phoneRegex.test(phone)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Please enter a valid phone number.",
+            path: ["facilitators", index, "phone_number"],
+          });
+        } else {
+          const digitCount = (phone.match(/\d/g) || []).length;
+          if (digitCount < 7 || digitCount > 15) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: "Phone number must contain between 7 and 15 digits.",
+              path: ["facilitators", index, "phone_number"],
+            });
+          }
+        }
+      });
+    }
+
+    if (data.contact_phone_same_as_facilitator) {
+      const contact = (data.contact_phone || "").trim();
+      if (!contact) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Select at least one facilitator phone number.",
+          path: ["contact_phone_same_as_facilitator"],
+        });
+      } else {
+        const parts = contact
+          .split(",")
+          .map((p) => p.trim())
+          .filter(Boolean);
+        if (parts.length === 0) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Select at least one facilitator phone number.",
+            path: ["contact_phone_same_as_facilitator"],
+          });
+        } else {
+          for (const part of parts) {
+            if (!phoneRegex.test(part)) {
+              ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: "Please enter a valid phone number.",
+                path: ["contact_phone"],
+              });
+              break;
+            }
+            const digitCount = (part.match(/\d/g) || []).length;
+            if (digitCount < 7 || digitCount > 15) {
+              ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: "Phone number must contain between 7 and 15 digits.",
+                path: ["contact_phone"],
+              });
+              break;
+            }
+          }
+        }
+      }
+    } else {
+      const contact = (data.contact_phone || "").trim();
+      if (!contact) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "This field is required",
+          path: ["contact_phone"],
+        });
+      } else if (!phoneRegex.test(contact)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Please enter a valid phone number.",
+          path: ["contact_phone"],
+        });
+      } else {
+        const digitCount = (contact.match(/\d/g) || []).length;
+        if (digitCount < 7 || digitCount > 15) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Phone number must contain between 7 and 15 digits.",
+            path: ["contact_phone"],
+          });
+        }
+      }
+    }
+  });
 
 export const stage4Schema = z.object({
   jobwalls: z

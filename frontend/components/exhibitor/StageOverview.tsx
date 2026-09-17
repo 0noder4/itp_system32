@@ -17,6 +17,7 @@ import {
   Circle,
   XCircle,
   FileText,
+  Ban,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -70,6 +71,13 @@ const STATUS_CONFIG: Record<
     bgColor: "bg-danger/10 dark:bg-danger/20",
     borderColor: "border-danger/20 dark:border-danger/30",
     labelKey: "exhibitor.status.rejected",
+  },
+  unavailable: {
+    icon: Ban,
+    color: "text-slate-400",
+    bgColor: "bg-slate-50",
+    borderColor: "border-slate-200",
+    labelKey: "exhibitor.status.unavailable",
   },
 };
 
@@ -133,11 +141,14 @@ function StageCard({
   return (
     <Card
       className={cn(
-        "cursor-pointer transition-all duration-200 hover:shadow-md",
+        "transition-all duration-200",
+        stage.unavailable
+          ? "cursor-not-allowed opacity-70"
+          : "cursor-pointer hover:shadow-md",
         config.borderColor,
-        isCurrent && "ring-2 ring-primary ring-offset-2"
+        isCurrent && !stage.unavailable && "ring-2 ring-primary ring-offset-2"
       )}
-      onClick={onClick}
+      onClick={stage.unavailable ? undefined : onClick}
     >
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
@@ -208,7 +219,11 @@ export function StageOverview({
             key={stage.stageNumber}
             stage={stage}
             isCurrent={stage.stageNumber === currentStageNumber}
-            onClick={() => onStageClick?.(stage.stageNumber)}
+            onClick={
+              stage.unavailable
+                ? undefined
+                : () => onStageClick?.(stage.stageNumber)
+            }
           />
         ))}
       </div>

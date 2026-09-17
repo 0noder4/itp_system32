@@ -15,6 +15,7 @@ from .models import (
     EquipmentSelection,
     Jobwall,
     Workshop,
+    WorkshopFacilitator,
     Description,
     FinalData,
     Lunch,
@@ -367,7 +368,24 @@ class EquipmentSelectionSerializer(serializers.ModelSerializer):
 
 # ETAP 3: Warsztaty
 
+class WorkshopFacilitatorSerializer(serializers.ModelSerializer):
+    phone_number = serializers.CharField(max_length=20, validators=[validate_phone_number])
+    description = serializers.CharField(required=False, allow_blank=True, default='')
+
+    class Meta:
+        model = WorkshopFacilitator
+        exclude = ('workshop',)
+
+
 class WorkshopSerializer(serializers.ModelSerializer):
+    facilitators = WorkshopFacilitatorSerializer(many=True, required=False)
+    contact_phone = serializers.CharField(
+        max_length=255,
+        required=False,
+        allow_blank=True,
+        default='',
+    )
+
     class Meta:
         model = Workshop
         fields = '__all__'
@@ -383,9 +401,164 @@ class WorkshopSerializer(serializers.ModelSerializer):
         workshop = attrs.get('workshop')
         if workshop is None and self.instance is not None:
             workshop = self.instance.workshop
+
+        # Resolve facilitators from request or existing instance
+        if 'facilitators' in attrs:
+            facilitators = attrs.get('facilitators') or []
+        elif self.instance is not None:
+            facilitators = [
+                {
+                    'name': f.name,
+                    'surname': f.surname,
+                    'phone_number': f.phone_number,
+                    'description': f.description,
+                }
+                for f in self.instance.facilitators.all()
+            ]
+        else:
+            facilitators = []
+
         if workshop is False:
             attrs['notes'] = ''
+            attrs['title'] = ''
+            attrs['description'] = ''
+            attrs['preferred_day'] = ''
+            attrs['preferred_time'] = None
+            attrs['skills'] = ''
+            attrs['study_majors'] = ''
+            attrs['room_projector'] = False
+            attrs['room_hdmi'] = False
+            attrs['room_other'] = ''
+            attrs['contact_phone'] = ''
+            attrs['contact_phone_same_as_facilitator'] = False
+            attrs['facilitators'] = []
+            return attrs
+
+        if workshop is not True:
+            return attrs
+
+        errors = {}
+        for field in ('title', 'description', 'skills', 'study_majors'):
+            value = attrs.get(field)
+            if value is None and self.instance is not None:
+                value = getattr(self.instance, field, '')
+            if not (value or '').strip():
+                errors[field] = 'This field is required.'
+
+        preferred_day = attrs.get('preferred_day')
+        if preferred_day is None and self.instance is not None:
+            preferred_day = self.instance.preferred_day
+        preferred_day = (preferred_day or '').strip()
+        if preferred_day not in ('day1', 'day2'):
+            errors['preferred_day'] = 'Select a preferred fair day.'
+        else:
+            attrs['preferred_day'] = preferred_day
+
+        if 'preferred_time' in attrs:
+            preferred_time = attrs.get('preferred_time')
+        elif self.instance is not None:
+            preferred_time = self.instance.preferred_time
+        else:
+            preferred_time = None
+        if preferred_time in (None, ''):
+            errors['preferred_time'] = 'This field is required.'
+        else:
+            attrs['preferred_time'] = preferred_time
+
+        same_as = attrs.get('contact_phone_same_as_facilitator')
+        if same_as is None and self.instance is not None:
+            same_as = self.instance.contact_phone_same_as_facilitator
+        same_as = bool(same_as)
+
+        if not facilitators:
+            errors['facilitators'] = ['Add at least one workshop facilitator.']
+        else:
+            facilitator_errors = []
+            has_row_errors = False
+            for fac in facilitators:
+                row_errors = {}
+                for field in ('name', 'surname', 'phone_number'):
+                    value = (fac.get(field) or '').strip()
+                    if not value:
+                        row_errors[field] = 'This field is required.'
+                if fac.get('phone_number'):
+                    try:
+                        validate_phone_number(fac['phone_number'])
+                    except serializers.ValidationError as exc:
+                        row_errors['phone_number'] = exc.detail
+                if row_errors:
+                    has_row_errors = True
+                facilitator_errors.append(row_errors)
+            if has_row_errors:
+                errors['facilitators'] = facilitator_errors
+
+        if same_as:
+            contact = attrs.get('contact_phone')
+            if contact is None and self.instance is not None:
+                contact = self.instance.contact_phone
+            parts = [p.strip() for p in (contact or '').split(',') if p.strip()]
+            if not parts:
+                errors['contact_phone_same_as_facilitator'] = (
+                    'Select at least one facilitator phone number.'
+                )
+            else:
+                part_errors = []
+                for part in parts:
+                    try:
+                        validate_phone_number(part)
+                    except serializers.ValidationError as exc:
+                        part_errors.append(exc.detail)
+                if part_errors:
+                    errors['contact_phone'] = part_errors[0]
+                else:
+                    attrs['contact_phone'] = ', '.join(parts)
+                    attrs['contact_phone_same_as_facilitator'] = True
+        else:
+            contact = attrs.get('contact_phone')
+            if contact is None and self.instance is not None:
+                contact = self.instance.contact_phone
+            contact = (contact or '').strip()
+            if not contact:
+                errors['contact_phone'] = 'This field is required.'
+            else:
+                try:
+                    validate_phone_number(contact)
+                    attrs['contact_phone'] = contact
+                except serializers.ValidationError as exc:
+                    errors['contact_phone'] = exc.detail
+            attrs['contact_phone_same_as_facilitator'] = False
+
+        attrs['facilitators'] = facilitators
+
+        if errors:
+            raise ValidationError(errors)
         return attrs
+
+    def _replace_facilitators(self, workshop, facilitators_data):
+        workshop.facilitators.all().delete()
+        for fac in facilitators_data or []:
+            WorkshopFacilitator.objects.create(
+                workshop=workshop,
+                name=(fac.get('name') or '').strip(),
+                surname=(fac.get('surname') or '').strip(),
+                phone_number=(fac.get('phone_number') or '').strip(),
+                description=(fac.get('description') or '').strip(),
+            )
+
+    def create(self, validated_data):
+        facilitators_data = validated_data.pop('facilitators', [])
+        workshop = Workshop.objects.create(**validated_data)
+        self._replace_facilitators(workshop, facilitators_data)
+        return workshop
+
+    def update(self, instance, validated_data):
+        facilitators_data = validated_data.pop('facilitators', None)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        if facilitators_data is not None:
+            self._replace_facilitators(instance, facilitators_data)
+        return instance
 
 
 # ETAP 4: Jobwall

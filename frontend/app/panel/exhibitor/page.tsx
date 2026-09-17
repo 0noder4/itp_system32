@@ -22,6 +22,7 @@ import {
   Loader2,
   LayoutDashboard,
   HelpCircle,
+  Ban,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { StageStatus } from "@/lib/types";
@@ -34,6 +35,11 @@ import { downloadOrderSummaryPDF } from "@/lib/api";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ACCENT_COLOR } from "@/lib/colors";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 const STATUS_CONFIG: Record<
   StageStatus,
@@ -67,6 +73,11 @@ const STATUS_CONFIG: Record<
     icon: XCircle,
     color: "text-rose-500",
     labelKey: "exhibitor.status.rejected",
+  },
+  unavailable: {
+    icon: Ban,
+    color: "text-slate-400",
+    labelKey: "exhibitor.status.unavailable",
   },
 };
 
@@ -571,70 +582,97 @@ export default function ExhibitorDashboardPage() {
                   "pending_approval",
                   "accepted",
                   "rejected",
+                  "unavailable",
                 ].includes(stage.status);
                 const deadlineDisplay = isCompleted
                   ? null
                   : formatDeadlineDisplay(stage.deadline);
 
-                return (
+                const row = (
+                  <div
+                    className={cn(
+                      "rounded-md p-3 border border-transparent",
+                      stage.unavailable
+                        ? "opacity-60 cursor-help"
+                        : "hover:bg-muted/50 transition-colors cursor-pointer"
+                    )}
+                    onMouseEnter={(e) => {
+                      if (!stage.unavailable) {
+                        e.currentTarget.style.borderColor = `${ACCENT_COLOR}40`;
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = "transparent";
+                    }}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <Icon
+                          className={cn(
+                            "h-4 w-4 flex-shrink-0",
+                            config.color
+                          )}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-semibold text-sm">
+                              {t(`exhibitor.${stage.title}`)}
+                            </h3>
+                            <span
+                              className={cn(
+                                "rounded-full px-2 py-0.5 text-xs font-medium",
+                                config.color,
+                                "bg-current/10"
+                              )}
+                            >
+                              {t(config.labelKey)}
+                            </span>
+                            {deadlineDisplay && (
+                              <span
+                                className={cn(
+                                  "text-xs font-medium",
+                                  deadlineDisplay.className
+                                )}
+                                style={deadlineDisplay.style}
+                              >
+                                {deadlineDisplay.text}
+                              </span>
+                            )}
+                          </div>
+                          {stage.feedback?.comment && (
+                            <p className="text-xs text-muted-foreground mt-1 truncate">
+                              {stage.feedback.comment}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      {!stage.unavailable && (
+                        <ArrowRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                      )}
+                    </div>
+                  </div>
+                );
+
+                return stage.unavailable ? (
+                  <Tooltip key={stage.stageNumber}>
+                    <TooltipTrigger asChild>
+                      <div className="cursor-help">{row}</div>
+                    </TooltipTrigger>
+                    <TooltipContent
+                      side="top"
+                      className="max-w-xs text-center bg-slate-100 text-slate-700 border border-slate-200 shadow-sm"
+                      arrowClassName="bg-slate-100 fill-slate-100"
+                    >
+                      {t("exhibitor.form.stage3UnavailableTooltip")}
+                    </TooltipContent>
+                  </Tooltip>
+                ) : (
                   <Link
                     key={stage.stageNumber}
                     href={`/panel/exhibitor/forms?stage=${stage.stageNumber}`}
                     className="block"
                   >
-                    <div
-                      className="hover:bg-muted/50 transition-colors cursor-pointer rounded-md p-3 border border-transparent"
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.borderColor = `${ACCENT_COLOR}40`;
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.borderColor = "transparent";
-                      }}
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-3 flex-1 min-w-0">
-                          <Icon
-                            className={cn(
-                              "h-4 w-4 flex-shrink-0",
-                              config.color
-                            )}
-                          />
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <h3 className="font-semibold text-sm">
-                                {t(`exhibitor.${stage.title}`)}
-                              </h3>
-                              <span
-                                className={cn(
-                                  "rounded-full px-2 py-0.5 text-xs font-medium",
-                                  config.color,
-                                  "bg-current/10"
-                                )}
-                              >
-                                {t(config.labelKey)}
-                              </span>
-                              {deadlineDisplay && (
-                                <span
-                                  className={cn(
-                                    "text-xs font-medium",
-                                    deadlineDisplay.className
-                                  )}
-                                  style={deadlineDisplay.style}
-                                >
-                                  {deadlineDisplay.text}
-                                </span>
-                              )}
-                            </div>
-                            {stage.feedback?.comment && (
-                              <p className="text-xs text-muted-foreground mt-1 truncate">
-                                {stage.feedback.comment}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                        <ArrowRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                      </div>
-                    </div>
+                    {row}
                   </Link>
                 );
               })}

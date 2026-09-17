@@ -5,7 +5,7 @@ Business logic for exporting company data to CSV format
 from companies.models import (
     Company, Form, BasicData, Address, Stand,
     StandDetails, EquipmentItem, EquipmentSelection,
-    FinalData, Lunch, Workshop, Exhibitor,
+    FinalData, Lunch, Workshop, Exhibitor, Settings,
     COMPANY_STATUS_CHOICES, STAND_TYPE_CHOICES, DAY_OPT, ATTENDANCE_OPT, DIET_OPT,
 )
 from companies.utils.csv_generator import CSVGenerator
@@ -79,6 +79,7 @@ class ExportService:
             'stand_details__equipment_selections__equipment_item',
             'stand_all',
             'workshops',
+            'workshops__facilitators',
             'finaldata',
             'finaldata__lunches',
             'finaldata__pdis',
@@ -248,7 +249,17 @@ class ExportService:
         # Add remaining headers
         headers.extend([
             # Workshops (Stage 3)
-            'Poprowadzi warsztaty', 'Uwagi do warsztatów',
+            'Poprowadzi warsztaty',
+            'Nazwa warsztatu',
+            'Opis warsztatu',
+            'Preferowany dzień',
+            'Preferowana godzina',
+            'Umiejętności praktyczne',
+            'Kierunki studiów',
+            'Prowadzący',
+            'Telefon ds. warsztatów',
+            'Udogodnienia sali',
+            'Uwagi do warsztatów',
             # Final Data (Stage 5)
             'Urządzenia elektryczne podczas targów', 'Łączna moc urządzeń',
             'Rezygnacja z obiadów',
@@ -420,12 +431,76 @@ class ExportService:
                     workshop_label = 'Nie'
                 else:
                     workshop_label = ''
-                base_data.update({
-                    'Poprowadzi warsztaty': workshop_label,
-                    'Uwagi do warsztatów': workshop.notes or '',
-                })
+
+                facilitators = list(workshop.facilitators.all()) if hasattr(workshop, 'facilitators') else []
+                facilitators_label = ' | '.join(
+                    f"{(f.name or '').strip()} {(f.surname or '').strip()}".strip()
+                    + (f" ({f.phone_number})" if f.phone_number else "")
+                    for f in facilitators
+                )
+
+                amenities = []
+                if workshop.room_projector:
+                    amenities.append('Rzutnik')
+                if workshop.room_hdmi:
+                    amenities.append('Kabel HDMI')
+                if workshop.room_other:
+                    amenities.append(workshop.room_other)
+
+                day_labels = dict(Settings.get_settings().get_day_opt())
+                preferred_day_label = ''
+                if workshop.preferred_day:
+                    preferred_day_label = day_labels.get(
+                        workshop.preferred_day, workshop.preferred_day
+                    )
+                preferred_time_label = ''
+                if workshop.preferred_time:
+                    preferred_time_label = workshop.preferred_time.strftime('%H:%M')
+
+                if workshop.workshop is True:
+                    base_data.update({
+                        'Poprowadzi warsztaty': workshop_label,
+                        'Nazwa warsztatu': workshop.title or '',
+                        'Opis warsztatu': workshop.description or '',
+                        'Preferowany dzień': preferred_day_label,
+                        'Preferowana godzina': preferred_time_label,
+                        'Umiejętności praktyczne': workshop.skills or '',
+                        'Kierunki studiów': workshop.study_majors or '',
+                        'Prowadzący': facilitators_label,
+                        'Telefon ds. warsztatów': workshop.contact_phone or '',
+                        'Udogodnienia sali': ', '.join(amenities),
+                        'Uwagi do warsztatów': workshop.notes or '',
+                    })
+                else:
+                    base_data.update({
+                        'Poprowadzi warsztaty': workshop_label,
+                        'Nazwa warsztatu': '',
+                        'Opis warsztatu': '',
+                        'Preferowany dzień': '',
+                        'Preferowana godzina': '',
+                        'Umiejętności praktyczne': '',
+                        'Kierunki studiów': '',
+                        'Prowadzący': '',
+                        'Telefon ds. warsztatów': '',
+                        'Udogodnienia sali': '',
+                        'Uwagi do warsztatów': workshop.notes or '',
+                    })
             except AttributeError as e:
                 logger.warning(f"Error extracting workshop data for company {company.id}: {str(e)}")
+        else:
+            base_data.update({
+                'Poprowadzi warsztaty': '',
+                'Nazwa warsztatu': '',
+                'Opis warsztatu': '',
+                'Preferowany dzień': '',
+                'Preferowana godzina': '',
+                'Umiejętności praktyczne': '',
+                'Kierunki studiów': '',
+                'Prowadzący': '',
+                'Telefon ds. warsztatów': '',
+                'Udogodnienia sali': '',
+                'Uwagi do warsztatów': '',
+            })
 
         # Jobwall removed from export
 

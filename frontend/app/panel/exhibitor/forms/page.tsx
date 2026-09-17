@@ -8,6 +8,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   AlertCircle,
   CheckCircle2,
   Building2,
@@ -17,6 +22,7 @@ import {
   Circle,
   FileText,
   ClipboardList,
+  Ban,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { StageStatus } from "@/lib/types";
@@ -57,6 +63,11 @@ const STATUS_CONFIG: Record<
     icon: XCircle,
     color: "text-rose-500",
     labelKey: "exhibitor.status.rejected",
+  },
+  unavailable: {
+    icon: Ban,
+    color: "text-slate-400",
+    labelKey: "exhibitor.status.unavailable",
   },
 };
 
@@ -109,14 +120,28 @@ function ExhibitorFormsPageContent() {
   const autoNavigateRef = React.useRef(false);
   const initializedRef = React.useRef(false);
 
-  // Find first unsubmitted stage (stage without data)
+  // Find first unsubmitted stage (stage without data), skip unavailable
   const getFirstUnsubmittedStage = (): number | null => {
     for (const stage of stages) {
+      if (stage.unavailable) continue;
       if (!stage.dataExists) {
         return stage.stageNumber;
       }
     }
     return null;
+  };
+
+  const resolveAccessibleStage = (stageNum: number): number => {
+    const stage = stages.find((s) => s.stageNumber === stageNum);
+    if (stage?.unavailable) {
+      return (
+        getFirstUnsubmittedStage() ||
+        currentStageNumber ||
+        stages.find((s) => !s.unavailable)?.stageNumber ||
+        1
+      );
+    }
+    return stageNum;
   };
 
   // Initialize active tab - check URL param first, then first unsubmitted stage
@@ -128,7 +153,7 @@ function ExhibitorFormsPageContent() {
       if (stageParam) {
         const stageNum = parseInt(stageParam, 10);
         if (stageNum >= 1 && stageNum <= 5) {
-          initialStage = stageNum;
+          initialStage = resolveAccessibleStage(stageNum);
         } else {
           const firstUnsubmitted = getFirstUnsubmittedStage();
           initialStage =
@@ -136,9 +161,9 @@ function ExhibitorFormsPageContent() {
         }
       } else {
         const firstUnsubmitted = getFirstUnsubmittedStage();
-        // Prioritize first unsubmitted stage, then current stage, then first stage
-        initialStage =
-          firstUnsubmitted || currentStageNumber || stages[0].stageNumber;
+        initialStage = resolveAccessibleStage(
+          firstUnsubmitted || currentStageNumber || stages[0].stageNumber
+        );
       }
 
       setActiveTab(`stage-${initialStage}`);
@@ -165,6 +190,18 @@ function ExhibitorFormsPageContent() {
     }
   }, [stages, isLoading]);
 
+  const handleTabChange = (value: string) => {
+    const match = value.match(/^stage-(\d+)$/);
+    if (match) {
+      const stageNum = parseInt(match[1], 10);
+      const stage = stages.find((s) => s.stageNumber === stageNum);
+      if (stage?.unavailable) {
+        return;
+      }
+    }
+    setActiveTab(value);
+  };
+
   const handleFormSuccess = async () => {
     // Set flag to auto-navigate after data updates
     autoNavigateRef.current = true;
@@ -173,13 +210,17 @@ function ExhibitorFormsPageContent() {
   };
 
   // Check if a stage can be submitted (all previous stages must be saved)
+  // Unavailable previous stages (e.g. Stage 3 for basic) count as cleared.
   const canSubmitStage = (stageNumber: number): boolean => {
-    if (stageNumber === 1) return true; // First stage can always be submitted
+    if (stageNumber === 1) return true;
+    const target = stages.find((s) => s.stageNumber === stageNumber);
+    if (target?.unavailable) return false;
 
-    // Check if all previous stages have been saved (have data)
     for (let i = 1; i < stageNumber; i++) {
       const prevStage = stages.find((s) => s.stageNumber === i);
-      if (!prevStage || !prevStage.dataExists) {
+      if (!prevStage) return false;
+      if (prevStage.unavailable) continue;
+      if (!prevStage.dataExists) {
         return false;
       }
     }
@@ -193,7 +234,12 @@ function ExhibitorFormsPageContent() {
     const incomplete: number[] = [];
     for (let i = 1; i < stageNumber; i++) {
       const prevStage = stages.find((s) => s.stageNumber === i);
-      if (!prevStage || !prevStage.dataExists) {
+      if (!prevStage) {
+        incomplete.push(i);
+        continue;
+      }
+      if (prevStage.unavailable) continue;
+      if (!prevStage.dataExists) {
         incomplete.push(i);
       }
     }
@@ -295,7 +341,7 @@ function ExhibitorFormsPageContent() {
         )}
 
         {/* Tabs Navigation */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
           <div className="w-full overflow-x-auto scrollbar-hide">
             <TabsList className="inline-flex h-auto p-1 gap-1 justify-start w-max sm:w-full sm:grid sm:grid-cols-5 sm:justify-center">
               {stages.map((stage) => {
@@ -364,13 +410,14 @@ function ExhibitorFormsPageContent() {
                   }
                 }
 
-                return (
+                const tabTrigger = (
                   <TabsTrigger
-                    key={stage.stageNumber}
                     value={`stage-${stage.stageNumber}`}
+                    disabled={!!stage.unavailable}
                     className={cn(
-                      "flex flex-col items-center justify-center gap-1.5 sm:gap-2 py-2 sm:py-3 px-3 sm:px-4 min-w-[100px] sm:min-w-0 data-[state=active]:bg-background flex-shrink-0",
-                      !canSubmit && "opacity-60"
+                      "flex flex-col items-center justify-center gap-1.5 sm:gap-2 py-2 sm:py-3 px-3 sm:px-4 min-w-[100px] sm:min-w-0 data-[state=active]:bg-background flex-shrink-0 w-full",
+                      (!canSubmit || stage.unavailable) && "opacity-60",
+                      stage.unavailable && "cursor-not-allowed"
                     )}
                   >
                     <div className="flex items-center gap-1.5 sm:gap-2">
@@ -417,6 +464,31 @@ function ExhibitorFormsPageContent() {
                     </div>
                   </TabsTrigger>
                 );
+
+                if (stage.unavailable) {
+                  return (
+                    <Tooltip key={stage.stageNumber}>
+                      <TooltipTrigger asChild>
+                        <span className="inline-flex flex-shrink-0 sm:min-w-0 sm:w-full cursor-help">
+                          {tabTrigger}
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent
+                        side="bottom"
+                        className="max-w-xs text-center bg-slate-100 text-slate-700 border border-slate-200 shadow-sm"
+                        arrowClassName="bg-slate-100 fill-slate-100"
+                      >
+                        {t("exhibitor.form.stage3UnavailableTooltip")}
+                      </TooltipContent>
+                    </Tooltip>
+                  );
+                }
+
+                return (
+                  <React.Fragment key={stage.stageNumber}>
+                    {tabTrigger}
+                  </React.Fragment>
+                );
               })}
             </TabsList>
           </div>
@@ -431,14 +503,30 @@ function ExhibitorFormsPageContent() {
                 value={`stage-${stage.stageNumber}`}
                 className="mt-4"
               >
-                <StageForm
-                  stageNumber={stage.stageNumber}
-                  stageInfo={stage}
-                  companyId={companyId}
-                  onSuccess={handleFormSuccess}
-                  canSubmit={canSubmit}
-                  incompleteStages={incompleteStages}
-                />
+                {stage.unavailable ? (
+                  <Card className="border-slate-200 bg-slate-50">
+                    <CardContent className="flex items-center gap-4 pt-6">
+                      <Ban className="h-8 w-8 text-slate-400" />
+                      <div>
+                        <h2 className="font-semibold text-slate-800">
+                          {t("exhibitor.form.stage3Unavailable")}
+                        </h2>
+                        <p className="text-slate-600">
+                          {t("exhibitor.form.stage3UnavailableDescription")}
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <StageForm
+                    stageNumber={stage.stageNumber}
+                    stageInfo={stage}
+                    companyId={companyId}
+                    onSuccess={handleFormSuccess}
+                    canSubmit={canSubmit}
+                    incompleteStages={incompleteStages}
+                  />
+                )}
               </TabsContent>
             );
           })}

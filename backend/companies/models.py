@@ -343,8 +343,62 @@ class Workshop(models.Model):
         default=None,
         help_text="Jawny wybór: True = prowadzą warsztat, False = nie potrzebują. Null = brak decyzji.",
     )
+    title = models.CharField(max_length=255, verbose_name="nazwa warsztatu", blank=True, default="")
+    description = models.TextField(verbose_name="opis warsztatu", blank=True, default="")
+    preferred_day = models.CharField(
+        max_length=15,
+        choices=DAY_OPT,
+        blank=True,
+        default="",
+        verbose_name="preferowany dzień warsztatu",
+    )
+    preferred_time = models.TimeField(
+        null=True,
+        blank=True,
+        verbose_name="preferowana godzina warsztatu",
+    )
+    skills = models.TextField(verbose_name="praktyczne umiejętności", blank=True, default="")
+    study_majors = models.TextField(verbose_name="mile widziane kierunki studiów", blank=True, default="")
+    room_projector = models.BooleanField(default=False, verbose_name="rzutnik")
+    room_hdmi = models.BooleanField(default=False, verbose_name="kabel HDMI")
+    room_other = models.CharField(max_length=255, verbose_name="inne udogodnienia sali", blank=True, default="")
+    contact_phone = models.CharField(max_length=255, verbose_name="telefon ds. warsztatów", blank=True, default="")
+    contact_phone_same_as_facilitator = models.BooleanField(
+        default=False,
+        verbose_name="telefon kontaktowy z numerów prowadzących",
+    )
     notes = models.TextField(verbose_name="dodatkowe uwagi", blank=True)
     dl = models.ForeignKey(Deadline, on_delete=models.SET_NULL, null=True)
+
+
+class WorkshopFacilitator(Person):
+    workshop = models.ForeignKey(Workshop, on_delete=models.CASCADE, related_name="facilitators")
+    description = models.TextField(verbose_name="opis prowadzącego", blank=True, default="")
+
+    class Meta:
+        ordering = ['id']
+
+
+def company_can_access_stage3(company) -> bool:
+    """Stage 3 (workshops) is only for main/partner exhibitors; basic skips it."""
+    return company.status in (STATUS_MAIN, STATUS_PARTENER)
+
+
+def ensure_basic_workshop_skipped(company) -> Workshop:
+    """
+    For basic companies, ensure a Workshop row exists with workshop=False
+    so Stage 4/5 gating (Workshop.exists) does not block progress.
+    """
+    workshop, _created = Workshop.objects.get_or_create(
+        company=company,
+        defaults={'workshop': False},
+    )
+    # Force skip even if the company was previously main/partner with workshop=True
+    if company.status == STATUS_BASIC and workshop.workshop is not False:
+        workshop.workshop = False
+        workshop.save(update_fields=['workshop'])
+    return workshop
+
 
 class Description(models.Model):
     company = models.OneToOneField(Company, on_delete=models.CASCADE, related_name='description')

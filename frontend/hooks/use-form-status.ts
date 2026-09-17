@@ -30,8 +30,10 @@ const STAGE_DESCRIPTIONS: Record<number, string> = {
 function computeStageStatus(
   stageNum: number,
   formStatus: FormStatusResponse | undefined,
-  previousStageCompleted: boolean
+  previousStageCompleted: boolean,
+  unavailable: boolean
 ): StageStatus {
+  if (unavailable) return "unavailable";
   if (!formStatus) return "not_started";
 
   const stageKey = `stage_${stageNum}`;
@@ -73,6 +75,8 @@ function computeStageStatus(
 export interface UseFormStatusReturn {
   companyId: number | null;
   companyName: string | null;
+  companyStatus: "main" | "partner" | "basic" | null;
+  stage3Available: boolean;
   stages: StageInfo[];
   currentStageNumber: number | null;
   isAllCompleted: boolean;
@@ -91,6 +95,7 @@ export function useFormStatus(): UseFormStatusReturn {
 
   const companyId = userData?.company?.id ?? null;
   const companyName = userData?.company?.name ?? null;
+  const companyStatus = userData?.company?.status ?? null;
 
   // Fetch form status (only if we have a company ID)
   const {
@@ -106,15 +111,26 @@ export function useFormStatus(): UseFormStatusReturn {
   const isLoading = userLoading || formLoading;
   const isError = !!userError || !!formError;
 
+  const stage3Available =
+    formStatus?.stage_3_available ??
+    (companyStatus ? companyStatus !== "basic" : true);
+
   // Compute stage info
   const stages: StageInfo[] = [];
   let currentStageNumber: number | null = null;
   let isAllCompleted = true;
-  let previousStageCompleted = true;
+  // Tracks whether previous stages are "cleared" for unlocking the next one
+  let previousStageCleared = true;
 
   for (let i = 1; i <= 5; i++) {
     const stageKey = `stage_${i}`;
-    const status = computeStageStatus(i, formStatus, previousStageCompleted);
+    const unavailable = i === 3 && !stage3Available;
+    const status = computeStageStatus(
+      i,
+      formStatus,
+      previousStageCleared,
+      unavailable
+    );
     const isCompleted =
       (formStatus?.form[
         `stage_${i}_completed` as keyof typeof formStatus.form
@@ -128,27 +144,39 @@ export function useFormStatus(): UseFormStatusReturn {
       title: STAGE_TITLES[i],
       description: STAGE_DESCRIPTIONS[i],
       status,
-      isCompleted,
+      isCompleted: unavailable ? true : isCompleted,
       feedback: feedback as StageFeedback | undefined,
-      dataExists,
+      dataExists: unavailable ? true : dataExists,
       completedAt: completedAt || undefined,
+      unavailable,
     });
 
-    // Determine current stage (first non-accepted stage)
-    if (currentStageNumber === null && status !== "accepted") {
+    // Determine current stage (first unfinished, editable stage)
+    if (
+      currentStageNumber === null &&
+      status !== "accepted" &&
+      status !== "unavailable"
+    ) {
       currentStageNumber = i;
     }
 
-    if (status !== "accepted") {
+    if (status !== "accepted" && status !== "unavailable") {
       isAllCompleted = false;
     }
 
-    previousStageCompleted = isCompleted;
+    // Unlock next stage when this one has data, is completed, or is skipped
+    previousStageCleared =
+      unavailable ||
+      isCompleted ||
+      dataExists ||
+      (formStatus?.data_exists[stageKey] ?? false);
   }
 
   return {
     companyId,
     companyName,
+    companyStatus,
+    stage3Available,
     stages,
     currentStageNumber,
     isAllCompleted,
