@@ -664,36 +664,38 @@ export function Stage4Form({
         )}
       </div>
 
-      <Button
-        type="submit"
-        disabled={isSubmitting || disabled}
-        className="w-full md:w-auto text-white"
-        style={{
-          backgroundColor: isSubmitting || disabled ? undefined : ACCENT_COLOR,
-        }}
-        onMouseEnter={(e) => {
-          if (!isSubmitting && !disabled) {
-            e.currentTarget.style.backgroundColor = "#E04E15";
-          }
-        }}
-        onMouseLeave={(e) => {
-          if (!isSubmitting && !disabled) {
-            e.currentTarget.style.backgroundColor = ACCENT_COLOR;
-          }
-        }}
-      >
-        {isSubmitting ? (
-          <>
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            {t("common.loading")}
-          </>
-        ) : (
-          <>
-            <Save className="mr-2 h-4 w-4" />
-            {isAccepted ? t("common.sendAgain") : t("common.save")}
-          </>
-        )}
-      </Button>
+      {!disabled && (
+        <Button
+          type="submit"
+          disabled={isSubmitting}
+          className="w-full md:w-auto text-white"
+          style={{
+            backgroundColor: isSubmitting ? undefined : ACCENT_COLOR,
+          }}
+          onMouseEnter={(e) => {
+            if (!isSubmitting) {
+              e.currentTarget.style.backgroundColor = "#E04E15";
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!isSubmitting) {
+              e.currentTarget.style.backgroundColor = ACCENT_COLOR;
+            }
+          }}
+        >
+          {isSubmitting ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              {t("common.loading")}
+            </>
+          ) : (
+            <>
+              <Save className="mr-2 h-4 w-4" />
+              {isAccepted ? t("common.sendAgain") : t("common.save")}
+            </>
+          )}
+        </Button>
+      )}
     </form>
   );
 }
