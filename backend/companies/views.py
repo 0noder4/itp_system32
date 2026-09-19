@@ -2008,6 +2008,29 @@ class JobwallPriceView(APIView):
             return Response({"detail": "An error occurred while retrieving jobwall price"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+class TermsPdfView(APIView):
+    """
+    Get the current terms PDF URL from system settings (Stage 1 dialog).
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            system_settings = Settings.get_settings()
+            terms_pdf_url = None
+            if system_settings.terms_pdf:
+                terms_pdf_url = request.build_absolute_uri(system_settings.terms_pdf.url)
+            return Response({
+                'terms_pdf_url': terms_pdf_url,
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Error in TermsPdfView.get: {e}", exc_info=True)
+            return Response(
+                {"detail": "An error occurred while retrieving terms PDF"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
 class LunchPriceView(APIView):
     """
     Get the current lunch price from system settings.

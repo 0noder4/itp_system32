@@ -28,6 +28,9 @@ import { Loader2 } from "lucide-react";
 import { StageFeedback } from "@/lib/types";
 import { STAFF_ACCENT_COLOR } from "@/lib/colors";
 
+const REJECT_COLOR = "#DC2626";
+const REJECT_HOVER_COLOR = "#B91C1C";
+
 interface StageFeedbackFormProps {
   companyId: number;
   stageNumber: number;
@@ -173,20 +176,20 @@ export function StageFeedbackForm({
               variant="outline"
               className="flex-1"
               style={{
-                backgroundColor: isSubmitting ? undefined : "#1a1a1a",
+                backgroundColor: isSubmitting ? undefined : REJECT_COLOR,
                 color: "#ffffff",
-                borderColor: "#1a1a1a",
+                borderColor: REJECT_COLOR,
               }}
               onMouseEnter={(e) => {
                 if (!isSubmitting) {
-                  e.currentTarget.style.backgroundColor = "#2a2a2a";
-                  e.currentTarget.style.borderColor = "#2a2a2a";
+                  e.currentTarget.style.backgroundColor = REJECT_HOVER_COLOR;
+                  e.currentTarget.style.borderColor = REJECT_HOVER_COLOR;
                 }
               }}
               onMouseLeave={(e) => {
                 if (!isSubmitting) {
-                  e.currentTarget.style.backgroundColor = "#1a1a1a";
-                  e.currentTarget.style.borderColor = "#1a1a1a";
+                  e.currentTarget.style.backgroundColor = REJECT_COLOR;
+                  e.currentTarget.style.borderColor = REJECT_COLOR;
                 }
               }}
             >
@@ -247,20 +250,20 @@ export function StageFeedbackForm({
               disabled={isSubmitting}
               variant="outline"
               style={{
-                backgroundColor: isSubmitting ? undefined : "#1a1a1a",
+                backgroundColor: isSubmitting ? undefined : REJECT_COLOR,
                 color: "#ffffff",
-                borderColor: "#1a1a1a",
+                borderColor: REJECT_COLOR,
               }}
               onMouseEnter={(e) => {
                 if (!isSubmitting) {
-                  e.currentTarget.style.backgroundColor = "#2a2a2a";
-                  e.currentTarget.style.borderColor = "#2a2a2a";
+                  e.currentTarget.style.backgroundColor = REJECT_HOVER_COLOR;
+                  e.currentTarget.style.borderColor = REJECT_HOVER_COLOR;
                 }
               }}
               onMouseLeave={(e) => {
                 if (!isSubmitting) {
-                  e.currentTarget.style.backgroundColor = "#1a1a1a";
-                  e.currentTarget.style.borderColor = "#1a1a1a";
+                  e.currentTarget.style.backgroundColor = REJECT_COLOR;
+                  e.currentTarget.style.borderColor = REJECT_COLOR;
                 }
               }}
             >

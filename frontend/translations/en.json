@@ -559,6 +559,7 @@
       "addYourself": "Add Yourself",
       "acceptTerms": "I accept the terms and conditions",
       "viewTerms": "View terms and conditions",
+      "termsUnavailable": "Terms and conditions are not available yet. Please contact the organizer.",
       "termsDialogTitle": "Terms and Conditions Acceptance",
       "termsDialogText": "By proceeding to save this form, you acknowledge that you have read, understood, and agree to be bound by the Terms and Conditions of the Engineering Job Fair. Your submission of this form constitutes your acceptance of all terms, conditions, and regulations set forth in the official Terms and Conditions document.",
       "termsDialogLegalNotice": "By clicking 'Accept and Save', you confirm that you have reviewed the Terms and Conditions and agree to comply with all provisions contained therein. This acceptance is legally binding and will be recorded as part of your application.",

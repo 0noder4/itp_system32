@@ -1,7 +1,10 @@
 "use client";
 
 import React from "react";
-import { updateOverview } from "@/content/updateOverview";
+import {
+  latestUpdateOverview,
+  updateOverviews,
+} from "@/content/updateOverview";
 import { STAFF_ACCENT_COLOR } from "@/lib/colors";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,7 +31,7 @@ function parseReleaseDate(iso: string): Date {
 }
 
 export function isUpdateOverviewActive(
-  releaseDate: string = updateOverview.releaseDate,
+  releaseDate: string = latestUpdateOverview.releaseDate,
   now: Date = new Date()
 ): boolean {
   const released = parseReleaseDate(releaseDate);
@@ -42,7 +45,7 @@ export function shouldOpenUpdateOverview(): boolean {
   if (typeof window === "undefined") return false;
   if (!isUpdateOverviewActive()) return false;
 
-  const keys = storageKeys(updateOverview.releaseDate);
+  const keys = storageKeys(latestUpdateOverview.releaseDate);
   if (localStorage.getItem(keys.dismissed) === "true") return false;
   if (sessionStorage.getItem(keys.shown) === "true") return false;
   return true;
@@ -50,13 +53,13 @@ export function shouldOpenUpdateOverview(): boolean {
 
 export function markUpdateOverviewShown(): void {
   if (typeof window === "undefined") return;
-  const keys = storageKeys(updateOverview.releaseDate);
+  const keys = storageKeys(latestUpdateOverview.releaseDate);
   sessionStorage.setItem(keys.shown, "true");
 }
 
 function dismissUpdateOverviewPermanently(): void {
   if (typeof window === "undefined") return;
-  const keys = storageKeys(updateOverview.releaseDate);
+  const keys = storageKeys(latestUpdateOverview.releaseDate);
   localStorage.setItem(keys.dismissed, "true");
 }
 
@@ -78,12 +81,18 @@ export function UpdateOverviewDialog({
   onOpenChange,
 }: UpdateOverviewDialogProps) {
   const [dontShowAgain, setDontShowAgain] = React.useState(false);
+  const [selectedIndex, setSelectedIndex] = React.useState(0);
 
   React.useEffect(() => {
     if (open) {
       setDontShowAgain(false);
+      setSelectedIndex(0);
     }
   }, [open]);
+
+  const selected =
+    updateOverviews[selectedIndex] ?? latestUpdateOverview;
+  const showDateSelect = updateOverviews.length > 1;
 
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen && dontShowAgain) {
@@ -101,30 +110,49 @@ export function UpdateOverviewDialog({
       <DialogContent className="sm:max-w-[520px] max-h-[85vh] flex flex-col gap-4">
         <DialogHeader className="shrink-0">
           <DialogTitle>Przegląd aktualizacji</DialogTitle>
-          <DialogDescription>
-            Data wydania: {formatReleaseDate(updateOverview.releaseDate)}
+          <DialogDescription className="sr-only">
+            Przegląd zmian w systemie. Możesz wybrać wcześniejszą datę wydania.
           </DialogDescription>
+          <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+            <span>Data wydania:</span>
+            {showDateSelect ? (
+              <select
+                value={selectedIndex}
+                onChange={(e) => setSelectedIndex(Number(e.target.value))}
+                className="h-8 max-w-full rounded-md border border-input bg-background px-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-[#DB5ABA]/40"
+                aria-label="Wybierz datę wydania przeglądu"
+              >
+                {updateOverviews.map((entry, index) => (
+                  <option key={entry.releaseDate} value={index}>
+                    {formatReleaseDate(entry.releaseDate)}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span>{formatReleaseDate(selected.releaseDate)}</span>
+            )}
+          </div>
         </DialogHeader>
 
         <div className="min-h-0 overflow-y-auto custom-scrollbar space-y-4 pr-1">
-          {updateOverview.highlights.length > 0 && (
+          {selected.highlights.length > 0 && (
             <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm space-y-2">
               <p className="font-medium text-foreground">Co się zmieniło</p>
               <ul className="list-disc pl-4 space-y-1.5 text-muted-foreground">
-                {updateOverview.highlights.map((item) => (
+                {selected.highlights.map((item) => (
                   <li key={item}>{item}</li>
                 ))}
               </ul>
             </div>
           )}
 
-          {updateOverview.worthChecking.length > 0 && (
+          {selected.worthChecking.length > 0 && (
             <div className="space-y-2">
               <p className="text-sm font-medium text-foreground">
                 Warto przejrzeć
               </p>
               <ul className="list-disc pl-4 space-y-1.5 text-sm text-muted-foreground">
-                {updateOverview.worthChecking.map((item) => (
+                {selected.worthChecking.map((item) => (
                   <li key={item}>{item}</li>
                 ))}
               </ul>

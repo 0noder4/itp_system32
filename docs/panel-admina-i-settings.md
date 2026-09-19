@@ -86,6 +86,16 @@ W tym samym rekordzie `Settings` (sekcja **Email contact**):
 - `general_contact_email` - ogólny kontakt w mailach do firm/wystawców (domyślnie `best@best.pw.edu.pl`).
 - `system_admin_email` - kontakt do administratora systemu w mailach do staff/FR (domyślnie generyczny `admin@example.com`; na produkcji ustaw właściwy adres w adminie).
 
+### 6. Dokumenty (regulamin)
+
+W tym samym rekordzie `Settings` (sekcja **Documents**):
+
+- `terms_pdf` - plik PDF regulaminu pokazywany firmom w dialogu przy zapisie etapu 1.
+  - upload / podmiana w Django Admin → Settings → Documents (bez redeployu frontendu),
+  - udostępniany przez endpoint API `GET /api/terms-pdf/` (`terms_pdf_url`),
+  - gdy brak pliku, frontend pokazuje komunikat zamiast martwego linku.
+  - plik trafia do mediów (`media/terms/`); stary plik na dysku po podmianie może wymagać ręcznego usunięcia.
+
 ## Ograniczenia i zasady działania `Settings`
 
 - W panelu admina można mieć tylko jeden rekord `Settings`.

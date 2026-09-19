@@ -552,6 +552,13 @@ class Settings(models.Model):
         verbose_name="administrator systemu (maile do staff/FR)",
         help_text="Adres w stopkach maili do opiekunów FR i staff. Ustaw właściwy adres w panelu admina na produkcji.",
     )
+    terms_pdf = models.FileField(
+        upload_to="terms",
+        blank=True,
+        null=True,
+        verbose_name="regulamin (PDF)",
+        help_text="PDF regulaminu pokazywany firmom przy zapisie etapu 1. Podmiana w adminie bez redeployu frontendu.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

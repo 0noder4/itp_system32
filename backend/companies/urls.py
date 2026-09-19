@@ -31,6 +31,9 @@ urlpatterns = [
     
     # Jobwall price
     path('jobwall-price/', views.JobwallPriceView.as_view(), name='jobwall-price'),
+
+    # Terms PDF (Stage 1 dialog)
+    path('terms-pdf/', views.TermsPdfView.as_view(), name='terms-pdf'),
     
     # Lunch price
     path('lunch-price/', views.LunchPriceView.as_view(), name='lunch-price'),

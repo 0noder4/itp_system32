@@ -144,6 +144,14 @@ class SettingsAdmin(admin.ModelAdmin):
                 'Set real production addresses in admin after deploy.'
             ),
         }),
+        ('Documents', {
+            'fields': ('terms_pdf',),
+            'description': (
+                'Upload the exhibitor terms PDF shown after Stage 1 save. '
+                'Replace the file here to update the link for companies without a frontend redeploy. '
+                'Old files on disk may remain until cleaned manually.'
+            ),
+        }),
     )
 
     def has_add_permission(self, request):

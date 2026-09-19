@@ -3,6 +3,7 @@
 import React from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { apiClient } from "@/lib/api";
 import { useTranslation } from "@/lib/i18n";
 import { Stage1Data } from "@/lib/types";
 import { stage1Schema, Stage1FormData } from "./schemas";
@@ -59,6 +60,27 @@ export function Stage1Form({
   const [showTermsDialog, setShowTermsDialog] = React.useState(false);
   const [pendingFormData, setPendingFormData] =
     React.useState<Stage1FormData | null>(null);
+  const [termsPdfUrl, setTermsPdfUrl] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await apiClient.get("/api/terms-pdf/");
+        if (!cancelled) {
+          setTermsPdfUrl(response.data?.terms_pdf_url || null);
+        }
+      } catch (error) {
+        console.error("Error fetching terms PDF URL:", error);
+        if (!cancelled) {
+          setTermsPdfUrl(null);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleFormSubmit = async (data: Stage1FormData) => {
     // Always show terms dialog if terms_accepted is not explicitly true
@@ -392,16 +414,23 @@ export function Stage1Form({
           </DialogHeader>
           <div className="space-y-4 pt-4">
             <div className="pt-2">
-              <a
-                href="/docs/regulamin.pdf"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 text-sm text-primary hover:underline font-medium"
-              >
-                <FileText className="h-4 w-4" />
-                <span>{t("exhibitor.form.viewTerms")}</span>
-                <ExternalLink className="h-3 w-3" />
-              </a>
+              {termsPdfUrl ? (
+                <a
+                  href={termsPdfUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 text-sm text-primary hover:underline font-medium"
+                >
+                  <FileText className="h-4 w-4" />
+                  <span>{t("exhibitor.form.viewTerms")}</span>
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              ) : (
+                <p className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+                  <FileText className="h-4 w-4" />
+                  <span>{t("exhibitor.form.termsUnavailable")}</span>
+                </p>
+              )}
             </div>
             <div className="pt-4 border-t">
               <p className="text-xs text-muted-foreground leading-relaxed">
