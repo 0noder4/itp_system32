@@ -507,30 +507,28 @@ class CompanyInvitationView(generics.CreateAPIView):
         # Select template based on language
         template_name = f"emails/invitation_{language}.html"
 
-        # Subject and plain text based on language
+        # Subject and plain text based on language (aligned with expiry-reminder tone)
         if language == 'pl':
-            subject = "Zaproszenie do firmy - ITP System"
+            subject = "Dokończ rejestrację - Inżynierskie Targi Pracy - ITP System"
             plain_message = dedent(f"""
-                Zostałeś zaproszony do platformy wystawców Inżynierskich Targów Pracy.
+                Twoje konto na platformie wystawców Inżynierskich Targów Pracy jest gotowe do rejestracji.
                 Twój login: {invitation.company_name}
 
-                Aby dokończyć rejestrację, kliknij poniższy link i ustaw hasło:
+                Dokończ rejestrację:
                 {registration_link}
 
-                Link do zaproszenia wygaśnie za {validity_days} dni.
-                Jeśli nie spodziewałeś się tego zaproszenia, możesz zignorować tę wiadomość.
+                Link wygaśnie za {validity_days} dni.
             """).strip()
         else:
-            subject = "Company Invitation - ITP System"
+            subject = "Complete registration - Engineering Job Fair - ITP System"
             plain_message = dedent(f"""
-                You have been invited to join the ITP System platform for exhibitors of the Engineering Job Fair.
+                Your exhibitor account for the Engineering Job Fair platform is ready to register.
                 Your login: {invitation.company_name}
 
-                To complete your registration, click the link below and set your password:
+                Complete your registration:
                 {registration_link}
 
-                This invitation link will expire in {validity_days} days.
-                If you did not expect this invitation, you can safely ignore this email.
+                This link will expire in {validity_days} days.
             """).strip()
 
         # Get staff contact email (fr_resp) or default

@@ -141,6 +141,9 @@ docker compose -f compose.prod.yml ps
 - Konto e-mail dla produkcji znajduje się na `home.pl`.
 - Dostęp do skrzynki i danych logowania ma sekretarz.
 - Wartości `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `EMAIL_USE_TLS`/`EMAIL_USE_SSL` w `.env` muszą odpowiadać konfiguracji SMTP z `home.pl`.
+- `DEFAULT_FROM_EMAIL` powinien być skrzynką / domeną zgodną z kontem SMTP (`EMAIL_HOST_USER`), np. `no-reply@targipracy.org.pl`.
+- SPF dla domeny nadawcy zwykle już przechodzi przez home.pl. W nagłówkach Gmail często brakuje DKIM — to osobny temat do panelu home.pl / DNS, nie do kodu aplikacji.
+- Treść maila ma znaczenie: pierwsze zaproszenie firmy powinno brzmieć podobnie do przypomnienia o wygaśnięciu (konkretny subject, krótki body). Generyczne „Company Invitation” / „You have been invited” częściej ląduje w Spam przy tym samym From/SPF.
 
 ## Kopie zapasowe i bezpieczeństwo danych
 
