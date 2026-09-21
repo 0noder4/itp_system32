@@ -22,6 +22,9 @@ export const stage2Schema = z.object({
       stand_type: z.enum(["provided_stand", "self_construction"], {
         message: "Stand type is required",
       }),
+      el_power_acknowledged: z.boolean().refine((val) => val === true, {
+        message: "Acknowledgement of electrical power in stage 5 is required",
+      }),
       sc_details: z.string().max(255, "Description must be 255 characters or less").optional(),
       name_sign_text: z.string().max(255, "Name sign text must be 255 characters or less").optional(),
       logo_sign_file: z.any().optional(), // File upload
@@ -56,7 +59,8 @@ export const stage2Schema = z.object({
           });
         }
       }
-      // If self_construction is selected, dimensions, fire_cert and stand_visualization are required
+      // If self_construction is selected, dimensions and stand_visualization are required
+      // (fire_cert is optional at submit — deadline enforced separately)
       if (data.stand_type === "self_construction") {
         const sc = typeof data.sc_details === "string" ? data.sc_details.trim() : "";
         const dimsMatch = sc.match(
@@ -67,18 +71,6 @@ export const stage2Schema = z.object({
             code: z.ZodIssueCode.custom,
             message: "Construction dimensions are required for self construction",
             path: ["sc_details"],
-          });
-        }
-        // Fire cert is required - either a new File or existing file URL
-        const hasFireCert =
-          data.fire_cert &&
-          (data.fire_cert instanceof File ||
-            typeof data.fire_cert === "string");
-        if (!hasFireCert) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: "Fire certificate is required for self construction",
-            path: ["fire_cert"],
           });
         }
         const hasVisualization =

@@ -18,6 +18,10 @@ import {
 } from "@/components/ui/tooltip";
 import { StatusBadges, TableRow as TableRowType } from "./StatusBadges";
 import { formatDate, formatDateWithTime, formatFrRespName, formatRepresentativeName } from "./utils";
+import {
+  nativeCheckboxClassName,
+  nativeChoiceAppearanceStyle,
+} from "@/lib/native-choice-styles";
 
 function formatStandDisplay(
   day1Stand: { stand_number: string; stand_size: string } | null,
@@ -130,8 +134,7 @@ export function CompaniesTable({
     }
   };
 
-  const checkboxClassName =
-    "h-4 w-4 rounded border border-input bg-white cursor-pointer focus:ring-2 focus:ring-ring focus:ring-offset-2 checked:bg-primary checked:border-primary";
+  const checkboxClassName = nativeCheckboxClassName;
 
   return (
     <div className="rounded-md border overflow-hidden">
@@ -152,11 +155,7 @@ export function CompaniesTable({
                     onChange={toggleAll}
                     onClick={(e) => e.stopPropagation()}
                     className={checkboxClassName}
-                    style={{
-                      appearance: "none",
-                      WebkitAppearance: "none",
-                      MozAppearance: "none",
-                    }}
+                    style={nativeChoiceAppearanceStyle}
                   />
                 </TableHead>
                 <TableHead className="text-xs sm:text-sm px-2 sm:px-4 whitespace-nowrap">{t("companies.table.name")}</TableHead>
@@ -189,11 +188,7 @@ export function CompaniesTable({
                         checked={isSelected}
                         onChange={() => toggleRow(key)}
                         className={checkboxClassName}
-                        style={{
-                          appearance: "none",
-                          WebkitAppearance: "none",
-                          MozAppearance: "none",
-                        }}
+                        style={nativeChoiceAppearanceStyle}
                       />
                     </TableCell>
                     <TableCell className="text-xs sm:text-sm px-2 sm:px-4 whitespace-nowrap">

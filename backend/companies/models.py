@@ -262,6 +262,11 @@ class Person(models.Model):
 class StandDetails(models.Model):
     company = models.OneToOneField(Company, on_delete=models.CASCADE, related_name='stand_details')
     stand_type = models.CharField(max_length=20, choices=STAND_TYPE_CHOICES, default='provided_stand', verbose_name="typ stanowiska")
+    el_power_acknowledged = models.BooleanField(
+        default=False,
+        verbose_name="potwierdzenie: moc elektryczna w etapie 5",
+        help_text="Firma przyjmuje do wiadomości, że moc elektryczną należy podać w etapie 5.",
+    )
     sc_details = models.CharField(max_length=255, verbose_name="z czego się składa własna zabudowa", blank=True)
     brought_equipment = models.TextField(blank=True, verbose_name="sprzęt przywożony przez firmę")
     name_sign_text = models.CharField(max_length=255, verbose_name="napis na fryz", blank=True)

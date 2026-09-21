@@ -4,10 +4,10 @@ import React from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+import useSWR from "swr";
 import { toast } from "sonner";
-import { apiClient } from "@/lib/api";
+import { apiClient, fetcher, LunchPriceResponse } from "@/lib/api";
 import { useTranslation } from "@/lib/i18n";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -25,7 +25,7 @@ import {
   FieldLabel,
 } from "@/components/ui/field";
 import { Loader2 } from "lucide-react";
-import { StageFeedback } from "@/lib/types";
+import { Stage2Data, StageFeedback } from "@/lib/types";
 import { STAFF_ACCENT_COLOR } from "@/lib/colors";
 
 const REJECT_COLOR = "#DC2626";
@@ -56,6 +56,25 @@ export function StageFeedbackForm({
   const { t } = useTranslation();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [showRejectDialog, setShowRejectDialog] = React.useState(false);
+
+  const needsFireCertWarning = stageNumber === 2;
+  const { data: stage2Data } = useSWR<Stage2Data>(
+    needsFireCertWarning
+      ? `/api/company/${companyId}/form/stage-2/`
+      : null,
+    fetcher
+  );
+  const { data: fairSettings } = useSWR<LunchPriceResponse>(
+    needsFireCertWarning ? "/api/lunch-price/" : null,
+    fetcher
+  );
+
+  const isSelfConstruction =
+    stage2Data?.stand_details?.stand_type === "self_construction";
+  const autoRejectDate = fairSettings?.fire_cert_auto_reject_date || null;
+  const deadlineDate = fairSettings?.fire_cert_deadline || null;
+  const showFireCertAutoRejectWarning =
+    needsFireCertWarning && isSelfConstruction;
 
   const form = useForm<FeedbackFormData>({
     resolver: zodResolver(feedbackSchema),
@@ -199,7 +218,6 @@ export function StageFeedbackForm({
         )}
       </div>
 
-      {/* Rejection Comment Dialog */}
       <Dialog open={showRejectDialog} onOpenChange={setShowRejectDialog}>
         <DialogContent>
           <DialogHeader>
@@ -209,6 +227,16 @@ export function StageFeedbackForm({
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
+            {showFireCertAutoRejectWarning && (
+              <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100">
+                {autoRejectDate && deadlineDate
+                  ? t("staff.companyDetail.fireCertAutoRejectWarning", {
+                      autoRejectDate,
+                      deadlineDate,
+                    })
+                  : t("staff.companyDetail.fireCertAutoRejectWarningNoDate")}
+              </div>
+            )}
             <FieldGroup>
               <Controller
                 name="comment"

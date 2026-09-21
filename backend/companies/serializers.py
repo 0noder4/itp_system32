@@ -693,6 +693,13 @@ class FeedbackSerializer(serializers.ModelSerializer):
         model = Feedback
         fields = '__all__'
 
+    def to_representation(self, instance):
+        from companies.fire_cert_deadline import public_feedback_comment
+
+        data = super().to_representation(instance)
+        data['comment'] = public_feedback_comment(data.get('comment'))
+        return data
+
 
 # NESTED SERIALIZERS - DLA CAŁYCH ETAPÓW -  POST, PATCH
 # 1 request zamiast kilku
@@ -796,8 +803,22 @@ class Stage2Serializer(serializers.Serializer):
                     field.allow_null = True
 
     def validate(self, data):
-        # Validation is handled in the view for file uploads
-        # This method can be used for additional validation if needed
+        if self.context.get('draft'):
+            return data
+        stand = data.get('stand_details') or {}
+        acknowledged = (
+            stand.get('el_power_acknowledged')
+            if isinstance(stand, dict)
+            else getattr(stand, 'el_power_acknowledged', False)
+        )
+        if not acknowledged:
+            raise serializers.ValidationError({
+                'stand_details': {
+                    'el_power_acknowledged': (
+                        'Acknowledgement of electrical power in stage 5 is required.'
+                    )
+                }
+            })
         return data
 
     def create(self, validated_data):

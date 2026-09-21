@@ -221,6 +221,10 @@ export function StageForm({
           if (standType) {
             formData.append("stand_details[stand_type]", standType);
           }
+          formData.append(
+            "stand_details[el_power_acknowledged]",
+            data.stand_details.el_power_acknowledged ? "true" : "false"
+          );
           if (data.stand_details.sc_details) {
             formData.append(
               "stand_details[sc_details]",
@@ -271,17 +275,8 @@ export function StageForm({
               fireCertFile,
               fireCertFile.name
             );
-          } else if (
-            !isDraft &&
-            isSelfConstruction &&
-            !(typeof fireCertFile === "string")
-          ) {
-            // Fire cert is required for self_construction but not provided (neither File nor existing URL)
-            throw new Error(
-              "Fire certificate is required for self construction"
-            );
           }
-          // If fireCertFile is a string (existing file URL), don't send it - backend will keep existing file
+          // Fire cert is optional at submit (deadline enforced by scheduler)
 
           if (visualizationFile instanceof File) {
             formData.append(

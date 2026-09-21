@@ -29,7 +29,12 @@ import {
   DIET_OPTIONS,
   normalizeDietInfo,
 } from "@/lib/stage5-utils";
+import { fetchInvoiceTotal } from "@/lib/invoice-cost-utils";
 import { StageDraftSaveButton } from "./StageDraftSaveButton";
+import {
+  nativeCheckboxClassName,
+  nativeChoiceAppearanceStyle,
+} from "@/lib/native-choice-styles";
 
 interface Stage5FormProps {
   companyId: number;
@@ -46,9 +51,6 @@ interface Stage5FormProps {
 const selectClassName =
   "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed";
 
-const checkboxClassName =
-  "h-4 w-4 rounded border border-gray-300 bg-white cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 focus:ring-2 focus:ring-ring focus:ring-offset-2 checked:bg-primary checked:border-primary";
-
 export function Stage5Form({
   companyId,
   initialData,
@@ -61,6 +63,9 @@ export function Stage5Form({
   const [showSubmitDialog, setShowSubmitDialog] = React.useState(false);
   const [pendingFormData, setPendingFormData] =
     React.useState<Stage5FormData | null>(null);
+  const [pendingLunchCost, setPendingLunchCost] = React.useState(0);
+  const [pendingInvoiceTotal, setPendingInvoiceTotal] = React.useState(0);
+  const [isPreparingDialog, setIsPreparingDialog] = React.useState(false);
 
   const { data: lunchSettings, isLoading: isLoadingSettings } =
     useSWR<LunchPriceResponse>("/api/lunch-price/", fetcher);
@@ -250,7 +255,7 @@ export function Stage5Form({
     }
   };
 
-  const handleValidSubmit = (data: Stage5FormData) => {
+  const handleValidSubmit = async (data: Stage5FormData) => {
     const normalized = { ...data, final_data: { ...data.final_data } };
     if (normalized.final_data.el_low_power) {
       normalized.final_data.el_power = "≤100";
@@ -260,8 +265,21 @@ export function Stage5Form({
         );
       }
     }
+    const stageCost = normalized.final_data.lunches_declined
+      ? 0
+      : calculateLunchSummary(normalized.lunches || [], lunchPrice).totalCost;
     setPendingFormData(normalized);
-    setShowSubmitDialog(true);
+    setPendingLunchCost(stageCost);
+    setIsPreparingDialog(true);
+    try {
+      const invoiceTotal = await fetchInvoiceTotal(companyId, {
+        lunch: stageCost,
+      });
+      setPendingInvoiceTotal(invoiceTotal);
+      setShowSubmitDialog(true);
+    } finally {
+      setIsPreparingDialog(false);
+    }
   };
 
   const handleConfirmSubmit = async () => {
@@ -380,12 +398,8 @@ export function Stage5Form({
                 id="el_low_power"
                 checked={elLowPower}
                 onChange={(e) => handleLowPowerChange(e.target.checked)}
-                className={checkboxClassName}
-                style={{
-                  appearance: "none",
-                  WebkitAppearance: "none",
-                  MozAppearance: "none",
-                }}
+                className={nativeCheckboxClassName}
+                style={nativeChoiceAppearanceStyle}
                 disabled={disabled}
               />
               <FieldLabel htmlFor="el_low_power" className="cursor-pointer">
@@ -481,12 +495,8 @@ export function Stage5Form({
                 id="lunches_declined"
                 checked={lunchesDeclined}
                 onChange={(e) => handleLunchesDeclinedChange(e.target.checked)}
-                className={checkboxClassName}
-                style={{
-                  appearance: "none",
-                  WebkitAppearance: "none",
-                  MozAppearance: "none",
-                }}
+                className={nativeCheckboxClassName}
+                style={nativeChoiceAppearanceStyle}
                 disabled={disabled}
               />
               <div>
@@ -723,12 +733,8 @@ export function Stage5Form({
                 onChange={(e) =>
                   handleNoOtherDelegatesChange(e.target.checked)
                 }
-                className={checkboxClassName}
-                style={{
-                  appearance: "none",
-                  WebkitAppearance: "none",
-                  MozAppearance: "none",
-                }}
+                className={nativeCheckboxClassName}
+                style={nativeChoiceAppearanceStyle}
                 disabled={disabled}
               />
               <FieldLabel htmlFor="no_other_delegates" className="cursor-pointer">
@@ -857,23 +863,24 @@ export function Stage5Form({
             )}
             <Button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || isPreparingDialog}
               className="w-full md:w-auto text-white"
               style={{
-                backgroundColor: isSubmitting ? undefined : ACCENT_COLOR,
+                backgroundColor:
+                  isSubmitting || isPreparingDialog ? undefined : ACCENT_COLOR,
               }}
               onMouseEnter={(e) => {
-                if (!isSubmitting) {
+                if (!isSubmitting && !isPreparingDialog) {
                   e.currentTarget.style.backgroundColor = "#E04E15";
                 }
               }}
               onMouseLeave={(e) => {
-                if (!isSubmitting) {
+                if (!isSubmitting && !isPreparingDialog) {
                   e.currentTarget.style.backgroundColor = ACCENT_COLOR;
                 }
               }}
             >
-              {isSubmitting ? (
+              {isSubmitting || isPreparingDialog ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   {t("common.loading")}
@@ -901,16 +908,19 @@ export function Stage5Form({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {lunchSummary.totalCost > 0
-                ? t("exhibitor.form.lunchPaymentDialogTitle")
-                : t("exhibitor.form.submitConfirmTitle")}
+              {t("exhibitor.form.lunchPaymentDialogTitle")}
             </DialogTitle>
-            <DialogDescription>
-              {lunchSummary.totalCost > 0
-                ? t("exhibitor.form.lunchPaymentDialogText", {
-                    amount: lunchSummary.totalCost.toFixed(2),
-                  })
-                : t("exhibitor.form.submitConfirmText")}
+            <DialogDescription className="space-y-2">
+              <span className="block">
+                {t("exhibitor.form.lunchPaymentDialogText", {
+                  amount: pendingLunchCost.toFixed(2),
+                })}
+              </span>
+              <span className="block">
+                {t("exhibitor.form.invoiceTotalDialogText", {
+                  amount: pendingInvoiceTotal.toFixed(2),
+                })}
+              </span>
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-0">

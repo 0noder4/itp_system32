@@ -1014,30 +1014,14 @@ class FormStage2View(APIView):
         is_update = False
         
         # Validate conditional requirements - files should already be in stand_details_dict
+        # fire_cert is optional at submit (deadline enforced by scheduler)
         if stand_type == 'self_construction':
-            # Check if fire_cert exists - check both stand_details_dict and request.FILES
-            has_fire_cert = False
-            # First check if it's already in stand_details_dict as a file object
-            fire_cert_in_dict = stand_details_dict.get('fire_cert')
-            if fire_cert_in_dict and (hasattr(fire_cert_in_dict, 'read') or hasattr(fire_cert_in_dict, 'name')):
-                has_fire_cert = True
-                logger.info(f"Found fire_cert in stand_details_dict: {fire_cert_in_dict.name if hasattr(fire_cert_in_dict, 'name') else 'file object'}")
-            
-            # If not found, check request.FILES directly
-            if not has_fire_cert:
+            # Still pick up fire_cert from FILES if provided (optional upload)
+            if not stand_details_dict.get('fire_cert'):
                 for key in request.FILES.keys():
                     if 'fire_cert' in key:
-                        has_fire_cert = True
-                        logger.info(f"Found fire_cert in request.FILES: {key}")
-                        # Add it to stand_details_dict
                         stand_details_dict['fire_cert'] = request.FILES[key]
                         break
-            
-            if not is_draft and not is_update and not has_fire_cert:
-                logger.error(f"Fire cert validation failed. stand_details_dict keys: {list(stand_details_dict.keys())}, request.FILES keys: {list(request.FILES.keys())}")
-                return Response({
-                    "detail": "Fire certificate is required for self construction"
-                }, status=status.HTTP_400_BAD_REQUEST)
 
             has_visualization = False
             viz_in_dict = stand_details_dict.get('stand_visualization')
@@ -1216,14 +1200,7 @@ class FormStage2View(APIView):
         stand_type = stand_details_data.get('stand_type') or stand.stand_type
         
         if not is_draft and stand_type == 'self_construction':
-            # Check if fire_cert exists in parsed data, request.FILES, or already in database
-            has_fire_cert = stand_details_data.get('fire_cert') is not None or stand.fire_cert
-            if not has_fire_cert:
-                has_fire_cert = any('fire_cert' in key for key in list(request.FILES.keys()))
-            if not has_fire_cert:
-                return Response({
-                    "detail": "Fire certificate is required for self construction"
-                }, status=status.HTTP_400_BAD_REQUEST)
+            # fire_cert is optional at submit (deadline enforced by scheduler)
             has_visualization = (
                 stand_details_data.get('stand_visualization') is not None
                 or bool(stand.stand_visualization)
@@ -2038,6 +2015,8 @@ class FormStatusView(APIView):
                 ensure_basic_workshop_skipped(company)
             
             # Get all feedbacks for this company, grouped by stage
+            from companies.fire_cert_deadline import public_feedback_comment
+
             feedbacks = Feedback.objects.filter(company=company).order_by('-id')
             
             # Get latest feedback per stage
@@ -2048,7 +2027,7 @@ class FormStatusView(APIView):
                 if stage_feedback:
                     stage_feedbacks[stage_key] = {
                         'status': stage_feedback.status,
-                        'comment': stage_feedback.comment,
+                        'comment': public_feedback_comment(stage_feedback.comment),
                     }
             
             # Check if stage data exists
@@ -2151,12 +2130,29 @@ class LunchPriceView(APIView):
     
     def get(self, request):
         try:
+            from companies.fire_cert_deadline import (
+                fire_cert_auto_reject_start,
+                fire_cert_upload_deadline,
+                format_deadline_pl,
+            )
+
             settings = Settings.get_settings()
             day_opt = dict(settings.get_day_opt())
+            fire_cert_deadline = None
+            fire_cert_auto_reject_date = None
+            if settings.day1_date:
+                fire_cert_deadline = format_deadline_pl(
+                    fire_cert_upload_deadline(settings.day1_date)
+                )
+                fire_cert_auto_reject_date = format_deadline_pl(
+                    fire_cert_auto_reject_start(settings.day1_date)
+                )
             return Response({
                 'lunch_price': str(settings.lunch_price),
                 'day1': day_opt.get('day1', '09.03.2027'),
                 'day2': day_opt.get('day2', '10.03.2027'),
+                'fire_cert_deadline': fire_cert_deadline,
+                'fire_cert_auto_reject_date': fire_cert_auto_reject_date,
             }, status=status.HTTP_200_OK)
         except Exception as e:
             logger.error(f"Error in LunchPriceView.get: {e}", exc_info=True)

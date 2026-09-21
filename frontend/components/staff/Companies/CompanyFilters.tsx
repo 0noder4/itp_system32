@@ -8,6 +8,10 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { STAFF_ACCENT_COLOR } from "@/lib/colors";
+import {
+  nativeCheckboxClassName,
+  nativeChoiceAppearanceStyle,
+} from "@/lib/native-choice-styles";
 
 import type { CompletedStageNumber } from "@/hooks/useStaffDashboardFilters";
 
@@ -127,12 +131,8 @@ export function CompanyFilters({
             id="show-invitations"
             checked={showInvitations}
             onChange={(e) => onShowInvitationsChange(e.target.checked)}
-            className="h-4 w-4 rounded border border-input bg-white cursor-pointer focus:ring-2 focus:ring-ring focus:ring-offset-2 checked:bg-primary checked:border-primary"
-            style={{
-              appearance: "none",
-              WebkitAppearance: "none",
-              MozAppearance: "none",
-            }}
+            className={nativeCheckboxClassName}
+            style={nativeChoiceAppearanceStyle}
           />
           <Label
             htmlFor="show-invitations"

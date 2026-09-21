@@ -25,6 +25,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { StageDraftSaveButton } from "./StageDraftSaveButton";
+import { fetchInvoiceTotal } from "@/lib/invoice-cost-utils";
+import { fetcher, LunchPriceResponse } from "@/lib/api";
+import useSWR from "swr";
+import {
+  nativeCheckboxClassName,
+  nativeChoiceAppearanceStyle,
+} from "@/lib/native-choice-styles";
 
 type ScDimensions = {
   length: string;
@@ -129,6 +136,7 @@ interface Stage2FormProps {
 }
 
 export function Stage2Form({
+  companyId,
   initialData,
   onSubmit,
   isSubmitting,
@@ -136,6 +144,11 @@ export function Stage2Form({
   isAccepted = false,
 }: Stage2FormProps) {
   const { t, locale } = useTranslation();
+  const { data: fairSettings } = useSWR<LunchPriceResponse>(
+    "/api/lunch-price/",
+    fetcher
+  );
+  const fireCertDeadline = fairSettings?.fire_cert_deadline || null;
   const [equipmentItems, setEquipmentItems] = React.useState<EquipmentItem[]>(
     []
   );
@@ -151,6 +164,8 @@ export function Stage2Form({
   const [pendingFormData, setPendingFormData] =
     React.useState<Stage2FormData | null>(null);
   const [pendingAdditionalCost, setPendingAdditionalCost] = React.useState(0);
+  const [pendingInvoiceTotal, setPendingInvoiceTotal] = React.useState(0);
+  const [isPreparingDialog, setIsPreparingDialog] = React.useState(false);
   const [scDimensions, setScDimensions] = React.useState<ScDimensions>(() =>
     parseScDimensions(initialData?.stand_details?.sc_details)
   );
@@ -211,6 +226,8 @@ export function Stage2Form({
             | "provided_stand"
             | "self_construction"
             | undefined) || undefined,
+        el_power_acknowledged:
+          initialData?.stand_details?.el_power_acknowledged || false,
         sc_details: initialData?.stand_details?.sc_details || "",
         name_sign_text: initialData?.stand_details?.name_sign_text || "",
         // Preserve existing file URLs for validation (they'll be strings, not File objects)
@@ -646,9 +663,19 @@ export function Stage2Form({
 
   const handleFormSubmit = async (data: Stage2FormData) => {
     const dataWithFiles = buildSubmitPayload(data);
+    const stageCost = calculateTotalAdditionalCost();
     setPendingFormData(dataWithFiles);
-    setPendingAdditionalCost(calculateTotalAdditionalCost());
-    setShowCostDialog(true);
+    setPendingAdditionalCost(stageCost);
+    setIsPreparingDialog(true);
+    try {
+      const invoiceTotal = companyId
+        ? await fetchInvoiceTotal(companyId, { equipment: stageCost })
+        : stageCost;
+      setPendingInvoiceTotal(invoiceTotal);
+      setShowCostDialog(true);
+    } finally {
+      setIsPreparingDialog(false);
+    }
   };
 
   const handleConfirmSubmit = async () => {
@@ -691,6 +718,41 @@ export function Stage2Form({
           />
         </div>
       )}
+      {/* Electrical power acknowledgement — before stand type */}
+      <FieldGroup>
+        <div className="flex items-start gap-2">
+          <Controller
+            name="stand_details.el_power_acknowledged"
+            control={form.control}
+            render={({ field }) => (
+              <input
+                type="checkbox"
+                id="el_power_acknowledged"
+                checked={!!field.value}
+                onChange={(e) => field.onChange(e.target.checked)}
+                onBlur={field.onBlur}
+                ref={field.ref}
+                className={nativeCheckboxClassName}
+                style={nativeChoiceAppearanceStyle}
+                disabled={disabled}
+              />
+            )}
+          />
+          <FieldLabel
+            htmlFor="el_power_acknowledged"
+            className="cursor-pointer font-normal leading-snug"
+          >
+            {t("exhibitor.form.elPowerAcknowledged")}
+          </FieldLabel>
+        </div>
+        {form.formState.errors.stand_details?.el_power_acknowledged && (
+          <FieldError>
+            {form.formState.errors.stand_details.el_power_acknowledged
+              .message || t("exhibitor.form.required")}
+          </FieldError>
+        )}
+      </FieldGroup>
+
       {/* Stand Type Selection */}
       <div className="space-y-4">
         <h3 className="font-medium">{t("exhibitor.form.standType")}</h3>
@@ -920,17 +982,11 @@ export function Stage2Form({
             )}
           </div>
           <FieldGroup>
-            <FieldLabel>
-              {t("exhibitor.form.uploadFireCert")}{" "}
-              <span className="text-red-500">*</span>
-            </FieldLabel>
+            <FieldLabel>{t("exhibitor.form.uploadFireCert")}</FieldLabel>
             <div className="relative">
               <input
                 type="file"
                 accept=".pdf,.jpg,.jpeg,.png"
-                required={
-                  watchStandType === "self_construction" && !existingFireCert
-                }
                 onChange={(e) => {
                   const file = e.target.files?.[0] || null;
                   handleFileChange("fire_cert", file);
@@ -973,6 +1029,13 @@ export function Stage2Form({
                 <ExternalLink className="h-3 w-3" />
               </a>
             )}
+            <p className="mt-1 text-xs text-muted-foreground">
+              {fireCertDeadline
+                ? t("exhibitor.form.fireCertDeadlineHint", {
+                    date: fireCertDeadline,
+                  })
+                : t("exhibitor.form.fireCertDeadlineHintNoDate")}
+            </p>
             <p className="mt-1 text-xs text-muted-foreground">
               {existingFireCert
                 ? t("exhibitor.form.replaceFile") ||
@@ -1276,23 +1339,24 @@ export function Stage2Form({
           )}
           <Button
             type="submit"
-            disabled={isSubmitting}
+            disabled={isSubmitting || isPreparingDialog}
             className="w-full md:w-auto text-white"
             style={{
-              backgroundColor: isSubmitting ? undefined : ACCENT_COLOR,
+              backgroundColor:
+                isSubmitting || isPreparingDialog ? undefined : ACCENT_COLOR,
             }}
             onMouseEnter={(e) => {
-              if (!isSubmitting) {
+              if (!isSubmitting && !isPreparingDialog) {
                 e.currentTarget.style.backgroundColor = "#E04E15";
               }
             }}
             onMouseLeave={(e) => {
-              if (!isSubmitting) {
+              if (!isSubmitting && !isPreparingDialog) {
                 e.currentTarget.style.backgroundColor = ACCENT_COLOR;
               }
             }}
           >
-            {isSubmitting ? (
+            {isSubmitting || isPreparingDialog ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 {t("common.loading")}
@@ -1322,10 +1386,17 @@ export function Stage2Form({
             <DialogTitle>
               {t("exhibitor.form.equipmentPaymentDialogTitle")}
             </DialogTitle>
-            <DialogDescription>
-              {t("exhibitor.form.equipmentPaymentDialogText", {
-                amount: pendingAdditionalCost.toFixed(2),
-              })}
+            <DialogDescription className="space-y-2">
+              <span className="block">
+                {t("exhibitor.form.equipmentPaymentDialogText", {
+                  amount: pendingAdditionalCost.toFixed(2),
+                })}
+              </span>
+              <span className="block">
+                {t("exhibitor.form.invoiceTotalDialogText", {
+                  amount: pendingInvoiceTotal.toFixed(2),
+                })}
+              </span>
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-0">

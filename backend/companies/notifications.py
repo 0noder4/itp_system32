@@ -122,6 +122,78 @@ def today_in_invitation_tz():
     return timezone.now().astimezone(INVITATION_REMINDER_TZ).date()
 
 
+def send_stage_rejected_email(company, stage_num, comment):
+    """Notify company representative that a stage requires corrections. Return True if sent."""
+    representative = company.representative
+    if not representative or not representative.email:
+        logger.warning("No representative email found for company %s", company.id)
+        return False
+
+    language = _user_language(representative)
+    stage_name = STAGE_NAMES.get(stage_num, {}).get(language, f"Stage {stage_num}")
+    dashboard_link = f"{settings.FRONTEND_BASE_URL}/panel/exhibitor"
+    staff_email = company.fr_resp.email if company.fr_resp and company.fr_resp.email else None
+    default_email = _general_contact_email()
+    # Strip internal auto marker from exhibitor-facing email body
+    from companies.fire_cert_deadline import public_feedback_comment
+
+    display_comment = public_feedback_comment(comment)
+
+    if staff_email:
+        contact_text_en = f" your staff contact at {staff_email} or us at {default_email}"
+        contact_text_pl = (
+            f" ze swoim opiekunem pod adresem {staff_email} "
+            f"lub z nami pod adresem {default_email}"
+        )
+    else:
+        contact_text_en = f" us at {default_email}"
+        contact_text_pl = f" z nami pod adresem {default_email}"
+
+    if language == "en":
+        subject = f"Stage {stage_num} Requires Corrections - ITP System"
+        plain_message = dedent(
+            f"""
+            {stage_name} for {company.name} requires corrections.
+
+            {f'Comment: {display_comment}' if display_comment else ''}
+
+            Please review and update the stage in the panel: {dashboard_link}
+
+            If you have any questions, please contact{contact_text_en}.
+            """
+        ).strip()
+    else:
+        subject = f"Etap {stage_num} wymaga poprawek - ITP System"
+        plain_message = dedent(
+            f"""
+            {stage_name} dla firmy {company.name} wymaga poprawek.
+
+            {f'Komentarz: {display_comment}' if display_comment else ''}
+
+            Sprawdź i zaktualizuj etap w panelu: {dashboard_link}
+
+            Jeśli masz pytania, skontaktuj się{contact_text_pl}.
+            """
+        ).strip()
+
+    _send_html_email(
+        subject=subject,
+        plain_message=plain_message,
+        template_name=f"emails/stage_rejected_{language}.html",
+        context={
+            "company_name": company.name,
+            "stage_name": stage_name,
+            "comment": display_comment,
+            "dashboard_link": dashboard_link,
+            "logo_url": _logo_url(),
+            "staff_email": staff_email,
+            "default_email": default_email,
+        },
+        to_email=representative.email,
+    )
+    return True
+
+
 def send_invitation_expiry_reminder_exhibitor(invitation, days_before):
     """Return True if email was sent, False if skipped (no recipient)."""
     if not invitation.email:

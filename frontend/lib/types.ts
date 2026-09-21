@@ -172,6 +172,7 @@ export interface StandDetails {
   id?: number;
   company: number;
   stand_type: "provided_stand" | "self_construction";
+  el_power_acknowledged?: boolean;
   sc_details?: string;
   name_sign_text?: string;
   logo_sign_file?: string;

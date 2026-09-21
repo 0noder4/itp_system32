@@ -268,6 +268,10 @@ export interface LunchPriceResponse {
   lunch_price: string;
   day1: string;
   day2: string;
+  /** DD.MM.YYYY — day1 minus 4 weeks; null if day1_date unset */
+  fire_cert_deadline?: string | null;
+  /** DD.MM.YYYY — day1 minus 6 weeks; auto-reject job starts */
+  fire_cert_auto_reject_date?: string | null;
 }
 
 // Download order summary PDF

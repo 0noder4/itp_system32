@@ -73,6 +73,17 @@ export function Stage2Viewer({ data }: Stage2ViewerProps) {
           </p>
         </div>
 
+        <div>
+          <p className="text-sm font-medium text-muted-foreground mb-2">
+            {t("exhibitor.form.elPowerAcknowledgedShort")}
+          </p>
+          <p className="text-base">
+            {data.stand_details?.el_power_acknowledged
+              ? t("exhibitor.form.elPowerAcknowledgedYes")
+              : t("exhibitor.form.elPowerAcknowledgedNo")}
+          </p>
+        </div>
+
         {/* Provided Stand Details */}
         {isProvidedStand && (
           <div className="space-y-4">

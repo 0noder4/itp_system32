@@ -379,6 +379,9 @@ export function Stage1Form({
             </FieldGroup>
           </div>
         </div>
+        <p className="text-sm text-muted-foreground">
+          {t("exhibitor.form.invoiceIssuedOnAboveData")}
+        </p>
         {!disabled && (
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             {!isAccepted && (

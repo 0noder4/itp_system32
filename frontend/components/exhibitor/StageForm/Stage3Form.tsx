@@ -23,6 +23,11 @@ import { Loader2, Plus, Save, Trash2 } from "lucide-react";
 import useSWR from "swr";
 import { fetcher, LunchPriceResponse } from "@/lib/api";
 import { StageDraftSaveButton } from "./StageDraftSaveButton";
+import {
+  nativeCheckboxClassName,
+  nativeChoiceAppearanceStyle,
+  nativeRadioClassName,
+} from "@/lib/native-choice-styles";
 
 interface Stage3FormProps {
   companyId?: number;
@@ -35,12 +40,6 @@ interface Stage3FormProps {
   disabled?: boolean;
   isAccepted?: boolean;
 }
-
-const choiceInputClassName =
-  "h-4 w-4 border border-gray-300 bg-white cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 focus:ring-2 focus:ring-ring focus:ring-offset-2 checked:bg-primary checked:border-primary";
-
-const checkboxClassName =
-  "h-4 w-4 rounded border border-gray-300 bg-white cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 focus:ring-2 focus:ring-ring focus:ring-offset-2 checked:bg-primary checked:border-primary";
 
 const selectClassName =
   "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed";
@@ -428,11 +427,9 @@ export function Stage3Form({
               name="workshop"
               checked={watchWorkshop === true}
               onChange={() => setWorkshopChoice(true)}
-              className={choiceInputClassName}
+              className={nativeRadioClassName}
               style={{
-                appearance: "none",
-                WebkitAppearance: "none",
-                MozAppearance: "none",
+                ...nativeChoiceAppearanceStyle,
                 borderRadius: "50%",
               }}
               disabled={disabled}
@@ -448,11 +445,9 @@ export function Stage3Form({
               name="workshop"
               checked={watchWorkshop === false}
               onChange={() => setWorkshopChoice(false)}
-              className={choiceInputClassName}
+              className={nativeRadioClassName}
               style={{
-                appearance: "none",
-                WebkitAppearance: "none",
-                MozAppearance: "none",
+                ...nativeChoiceAppearanceStyle,
                 borderRadius: "50%",
               }}
               disabled={disabled}
@@ -695,12 +690,8 @@ export function Stage3Form({
                   onChange={(e) =>
                     form.setValue("room_projector", e.target.checked)
                   }
-                  className={checkboxClassName}
-                  style={{
-                    appearance: "none",
-                    WebkitAppearance: "none",
-                    MozAppearance: "none",
-                  }}
+                  className={nativeCheckboxClassName}
+                  style={nativeChoiceAppearanceStyle}
                   disabled={disabled}
                 />
                 <FieldLabel htmlFor="room_projector" className="cursor-pointer">
@@ -715,12 +706,8 @@ export function Stage3Form({
                   onChange={(e) =>
                     form.setValue("room_hdmi", e.target.checked)
                   }
-                  className={checkboxClassName}
-                  style={{
-                    appearance: "none",
-                    WebkitAppearance: "none",
-                    MozAppearance: "none",
-                  }}
+                  className={nativeCheckboxClassName}
+                  style={nativeChoiceAppearanceStyle}
                   disabled={disabled}
                 />
                 <FieldLabel htmlFor="room_hdmi" className="cursor-pointer">
@@ -758,12 +745,8 @@ export function Stage3Form({
                     setSelectedFacilitatorPhoneIndexes([]);
                   }
                 }}
-                className={checkboxClassName}
-                style={{
-                  appearance: "none",
-                  WebkitAppearance: "none",
-                  MozAppearance: "none",
-                }}
+                className={nativeCheckboxClassName}
+                style={nativeChoiceAppearanceStyle}
                 disabled={disabled}
               />
               <FieldLabel
@@ -803,12 +786,8 @@ export function Stage3Form({
                             return prev.filter((i) => i !== index);
                           });
                         }}
-                        className={checkboxClassName}
-                        style={{
-                          appearance: "none",
-                          WebkitAppearance: "none",
-                          MozAppearance: "none",
-                        }}
+                        className={nativeCheckboxClassName}
+                        style={nativeChoiceAppearanceStyle}
                         disabled={disabled || !phone}
                       />
                       <FieldLabel

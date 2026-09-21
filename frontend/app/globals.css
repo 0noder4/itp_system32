@@ -284,11 +284,48 @@ body {
     border-left: 3px solid var(--warning-border) !important;
   }
 
-  /* Custom checkbox styling with appearance-none */
-  input[type="checkbox"][style*="appearance: none"]:checked {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' d='M2 6l2.5 2.5L10 3'/%3E%3C/svg%3E");
+  /* Native checkbox/radio with appearance:none — readable in light + dark */
+  input[type="checkbox"][style*="appearance: none"],
+  input[type="radio"][style*="appearance: none"] {
+    background-color: #ffffff !important;
+    border-color: #d1d5db !important;
     background-position: center;
     background-repeat: no-repeat;
+  }
+
+  .dark input[type="checkbox"][style*="appearance: none"],
+  .dark input[type="radio"][style*="appearance: none"] {
+    background-color: oklch(0.22 0 0) !important;
+    border-color: oklch(0.62 0 0) !important;
+  }
+
+  input[type="checkbox"][style*="appearance: none"]:checked {
+    background-color: oklch(0.205 0 0) !important;
+    border-color: oklch(0.205 0 0) !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' d='M2 6l2.5 2.5L10 3'/%3E%3C/svg%3E");
     background-size: 12px 12px;
+  }
+
+  .dark input[type="checkbox"][style*="appearance: none"]:checked {
+    /* Brand accent — high contrast vs white checkmark (primary is near-white in dark) */
+    background-color: #f55718 !important;
+    border-color: #f55718 !important;
+  }
+
+  input[type="radio"][style*="appearance: none"]:checked {
+    background-color: oklch(0.205 0 0) !important;
+    border-color: oklch(0.205 0 0) !important;
+    background-image: radial-gradient(
+      circle,
+      #ffffff 0%,
+      #ffffff 32%,
+      transparent 36%
+    );
+    background-size: 100% 100%;
+  }
+
+  .dark input[type="radio"][style*="appearance: none"]:checked {
+    background-color: #f55718 !important;
+    border-color: #f55718 !important;
   }
 }

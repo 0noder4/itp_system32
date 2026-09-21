@@ -14,6 +14,14 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Loader2,
   Save,
   Plus,
@@ -23,6 +31,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { StageDraftSaveButton } from "./StageDraftSaveButton";
+import { fetchInvoiceTotal } from "@/lib/invoice-cost-utils";
 
 interface Stage4FormProps {
   companyId?: number;
@@ -37,6 +46,7 @@ interface Stage4FormProps {
 }
 
 export function Stage4Form({
+  companyId,
   initialData,
   onSubmit,
   isSubmitting,
@@ -46,6 +56,12 @@ export function Stage4Form({
   const { t } = useTranslation();
   const [jobwallPrice, setJobwallPrice] = React.useState<number>(0);
   const [isLoadingPrice, setIsLoadingPrice] = React.useState(true);
+  const [showCostDialog, setShowCostDialog] = React.useState(false);
+  const [pendingFormData, setPendingFormData] =
+    React.useState<Stage4FormData | null>(null);
+  const [pendingJobwallCost, setPendingJobwallCost] = React.useState(0);
+  const [pendingInvoiceTotal, setPendingInvoiceTotal] = React.useState(0);
+  const [isPreparingDialog, setIsPreparingDialog] = React.useState(false);
   const [selectedLogoFileName, setSelectedLogoFileName] = React.useState<
     string | null
   >(null);
@@ -181,17 +197,14 @@ export function Stage4Form({
     }
   };
 
-  const handleFormSubmit = async (data: Stage4FormData) => {
-    // Get current form values to ensure files are included (React Hook Form might strip files during validation)
+  const buildSubmitPayload = (data: Stage4FormData): Stage4FormData => {
     const currentFormValues = form.getValues();
 
-    // Ensure files are included in the data (files might be stripped by zod validation)
-    const dataWithFiles = {
+    return {
       ...data,
       description: data.description
         ? {
             ...data.description,
-            // Use form values if files are missing from validated data
             logo_file:
               data.description.logo_file instanceof File
                 ? data.description.logo_file
@@ -201,55 +214,57 @@ export function Stage4Form({
           }
         : null,
     };
-    
+  };
+
+  const submitFormData = async (dataWithFiles: Stage4FormData) => {
     try {
       await onSubmit(dataWithFiles);
     } catch (error: any) {
       // Handle backend validation errors and set them on form fields
       if (error.response?.status === 400 && error.response?.data) {
         const errorData = error.response.data;
-        // Log error data for debugging
-        console.error('Stage4Form error response:', errorData);
+        console.error("Stage4Form error response:", errorData);
         let hasFieldErrors = false;
-        
-        // Handle jobwall errors
+
         if (errorData.jobwalls) {
-          // Handle both array format [{}] and object format {0: {}, 1: {}}
           if (Array.isArray(errorData.jobwalls)) {
             errorData.jobwalls.forEach((jobwallErrors: any, index: number) => {
-              if (jobwallErrors && typeof jobwallErrors === 'object') {
+              if (jobwallErrors && typeof jobwallErrors === "object") {
                 Object.keys(jobwallErrors).forEach((field) => {
                   const fieldErrors = jobwallErrors[field];
-                  const errorMessage = Array.isArray(fieldErrors) 
-                    ? fieldErrors[0] 
-                    : typeof fieldErrors === 'string' 
-                    ? fieldErrors 
+                  const errorMessage = Array.isArray(fieldErrors)
+                    ? fieldErrors[0]
+                    : typeof fieldErrors === "string"
+                    ? fieldErrors
                     : String(fieldErrors);
-                  
+
                   form.setError(`jobwalls.${index}.${field}` as any, {
-                    type: 'server',
+                    type: "server",
                     message: errorMessage,
                   });
                   hasFieldErrors = true;
                 });
               }
             });
-          } else if (typeof errorData.jobwalls === 'object') {
-            // Handle object format {0: {...}, 1: {...}}
+          } else if (typeof errorData.jobwalls === "object") {
             Object.keys(errorData.jobwalls).forEach((indexStr) => {
               const index = parseInt(indexStr, 10);
               const jobwallErrors = errorData.jobwalls[indexStr];
-              if (jobwallErrors && typeof jobwallErrors === 'object' && !isNaN(index)) {
+              if (
+                jobwallErrors &&
+                typeof jobwallErrors === "object" &&
+                !isNaN(index)
+              ) {
                 Object.keys(jobwallErrors).forEach((field) => {
                   const fieldErrors = jobwallErrors[field];
-                  const errorMessage = Array.isArray(fieldErrors) 
-                    ? fieldErrors[0] 
-                    : typeof fieldErrors === 'string' 
-                    ? fieldErrors 
+                  const errorMessage = Array.isArray(fieldErrors)
+                    ? fieldErrors[0]
+                    : typeof fieldErrors === "string"
+                    ? fieldErrors
                     : String(fieldErrors);
-                  
+
                   form.setError(`jobwalls.${index}.${field}` as any, {
-                    type: 'server',
+                    type: "server",
                     message: errorMessage,
                   });
                   hasFieldErrors = true;
@@ -361,6 +376,32 @@ export function Stage4Form({
     }
   };
 
+  const handleFormSubmit = async (data: Stage4FormData) => {
+    const dataWithFiles = buildSubmitPayload(data);
+    const stageCost = dataWithFiles.jobwalls?.length
+      ? dataWithFiles.jobwalls.length * jobwallPrice
+      : 0;
+    setPendingFormData(dataWithFiles);
+    setPendingJobwallCost(stageCost);
+    setIsPreparingDialog(true);
+    try {
+      const invoiceTotal = companyId
+        ? await fetchInvoiceTotal(companyId, { jobwall: stageCost })
+        : stageCost;
+      setPendingInvoiceTotal(invoiceTotal);
+      setShowCostDialog(true);
+    } finally {
+      setIsPreparingDialog(false);
+    }
+  };
+
+  const handleConfirmSubmit = async () => {
+    if (!pendingFormData) return;
+    await submitFormData(pendingFormData);
+    setShowCostDialog(false);
+    setPendingFormData(null);
+  };
+
   const handleSaveDraft = async () => {
     try {
       await onSubmit(form.getValues(), { draft: true });
@@ -385,6 +426,7 @@ export function Stage4Form({
   };
 
   return (
+    <>
     <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-6">
       {!disabled && !isAccepted && (
         <div>
@@ -709,23 +751,24 @@ export function Stage4Form({
           )}
           <Button
             type="submit"
-            disabled={isSubmitting}
+            disabled={isSubmitting || isPreparingDialog}
             className="w-full md:w-auto text-white"
             style={{
-              backgroundColor: isSubmitting ? undefined : ACCENT_COLOR,
+              backgroundColor:
+                isSubmitting || isPreparingDialog ? undefined : ACCENT_COLOR,
             }}
             onMouseEnter={(e) => {
-              if (!isSubmitting) {
+              if (!isSubmitting && !isPreparingDialog) {
                 e.currentTarget.style.backgroundColor = "#E04E15";
               }
             }}
             onMouseLeave={(e) => {
-              if (!isSubmitting) {
+              if (!isSubmitting && !isPreparingDialog) {
                 e.currentTarget.style.backgroundColor = ACCENT_COLOR;
               }
             }}
           >
-            {isSubmitting ? (
+            {isSubmitting || isPreparingDialog ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 {t("common.loading")}
@@ -740,5 +783,64 @@ export function Stage4Form({
         </div>
       )}
     </form>
+
+      <Dialog
+        open={showCostDialog}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowCostDialog(false);
+            setPendingFormData(null);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {t("exhibitor.form.jobwallPaymentDialogTitle")}
+            </DialogTitle>
+            <DialogDescription className="space-y-2">
+              <span className="block">
+                {t("exhibitor.form.jobwallPaymentDialogText", {
+                  amount: pendingJobwallCost.toFixed(2),
+                })}
+              </span>
+              <span className="block">
+                {t("exhibitor.form.invoiceTotalDialogText", {
+                  amount: pendingInvoiceTotal.toFixed(2),
+                })}
+              </span>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setShowCostDialog(false);
+                setPendingFormData(null);
+              }}
+            >
+              {t("common.cancel")}
+            </Button>
+            <Button
+              type="button"
+              onClick={handleConfirmSubmit}
+              disabled={isSubmitting}
+              className="text-white"
+              style={{ backgroundColor: ACCENT_COLOR }}
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  {t("common.loading")}
+                </>
+              ) : (
+                t("exhibitor.form.confirmSubmit")
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
