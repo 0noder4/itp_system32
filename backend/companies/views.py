@@ -92,6 +92,68 @@ def create_or_update_feedback(company, stage_num, feedback_status='pending', com
             logger.error(f"Error sending stage pending FR email: {e}", exc_info=True)
     return feedback
 
+
+def parse_is_draft(request):
+    """True when exhibitor saves a draft (no Feedback / no FR email)."""
+    raw = None
+    if hasattr(request.data, 'get'):
+        raw = request.data.get('draft')
+    if isinstance(raw, list) and raw:
+        raw = raw[0]
+    if isinstance(raw, bool):
+        return raw
+    if raw is None:
+        return False
+    return str(raw).strip().lower() in ('1', 'true', 'yes', 'on')
+
+
+def stage_has_feedback(company, stage_num):
+    return Feedback.objects.filter(company=company, form=f'stage_{stage_num}').exists()
+
+
+def check_previous_stages_submitted(company, stage_num):
+    """
+    Gate stages 2–5: previous stages must be submitted (Feedback exists).
+    Draft-only ORM rows are not enough. Stage 3 is skipped for basic exhibitors.
+    Returns a Response on failure, else None.
+    """
+    for n in range(1, stage_num):
+        if n == 3 and not company_can_access_stage3(company):
+            ensure_basic_workshop_skipped(company)
+            continue
+        if not stage_has_feedback(company, n):
+            return Response(
+                {"detail": f"Stage {n} must be submitted before accessing stage {stage_num}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+    return None
+
+
+def draft_blocked_response(latest_feedback):
+    """Drafts are not allowed while pending review or after acceptance (use resubmit)."""
+    if latest_feedback and latest_feedback.status in ('pending', 'accepted'):
+        return Response(
+            {"detail": "Cannot save a draft while this stage is pending approval or accepted"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    return None
+
+
+def apply_stage_write_side_effects(company, form, stage_num, *, is_draft, latest_feedback=None, is_create=False):
+    """
+    After a successful stage write: submit creates/updates Feedback pending;
+    draft leaves Feedback untouched and does not flip completion for submit path.
+    """
+    if is_draft:
+        return
+    if latest_feedback and latest_feedback.status == 'accepted':
+        setattr(form, f'stage_{stage_num}_completed', False)
+        form.save(update_fields=[f'stage_{stage_num}_completed', 'updated_at'])
+    elif is_create:
+        setattr(form, f'stage_{stage_num}_completed', False)
+        form.save(update_fields=[f'stage_{stage_num}_completed', 'updated_at'])
+    create_or_update_feedback(company, stage_num, 'pending', '', notify_fr=True)
+
 # --- COMPANY VIEWS ---
 class CompanyListView(APIView):
     permission_classes = [IsAuthenticated, IsAdminOrStaff]
@@ -651,17 +713,23 @@ class FormStage1View(APIView):
             return Response({"detail": "An error occurred while creating stage 1 data"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         form, _ = Form.objects.get_or_create(company=company)
+        is_draft = parse_is_draft(request)
         data = request.data.copy()
+        if hasattr(data, '_mutable'):
+            data._mutable = True
+        data.pop('draft', None)
         if 'basic_data' in data:
             data['basic_data']['company'] = company.id
-        serializer = Stage1Serializer(data=data)
+        serializer = Stage1Serializer(
+            data=data,
+            partial=is_draft,
+            context={'draft': is_draft, 'company': company},
+        )
         if serializer.is_valid():
             serializer.save()
-            # Create feedback with pending status
-            create_or_update_feedback(company, 1, 'pending', '', notify_fr=True)
-            # Reset completion flag when creating new submission
-            form.stage_1_completed = False
-            form.save()
+            apply_stage_write_side_effects(
+                company, form, 1, is_draft=is_draft, is_create=True
+            )
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     def patch(self, request, company_id):
@@ -685,25 +753,31 @@ class FormStage1View(APIView):
         except Exception as e:
             logger.error(f"Error in FormStage1View.patch: {e}", exc_info=True)
             return Response({"detail": "An error occurred while updating stage 1 data"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        is_draft = parse_is_draft(request)
+        blocked = draft_blocked_response(latest_feedback) if is_draft else None
+        if blocked:
+            return blocked
         
         # Remove company field from request data for PATCH (it's a OneToOneField and shouldn't change)
         data = request.data.copy()
+        if hasattr(data, '_mutable'):
+            data._mutable = True
+        data.pop('draft', None)
         if 'basic_data' in data and 'company' in data['basic_data']:
             del data['basic_data']['company']
         
         serializer = Stage1Serializer(
             {'basic_data': basic_data, 'address': address},
             data=data,
-            partial=True
+            partial=True,
+            context={'draft': is_draft, 'company': company},
         )
         if serializer.is_valid():
             serializer.save()
-            # If stage was accepted and user is editing, cancel acceptance only after successful save
-            if latest_feedback and latest_feedback.status == 'accepted':
-                form.stage_1_completed = False
-                form.save()
-            # Create or update feedback with pending status
-            create_or_update_feedback(company, 1, 'pending', '', notify_fr=True)
+            apply_stage_write_side_effects(
+                company, form, 1, is_draft=is_draft, latest_feedback=latest_feedback
+            )
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -762,9 +836,9 @@ class FormStage2View(APIView):
             validate_company_id(company_id)
             company = Company.objects.get(id=company_id, representative=request.user)
             form = Form.objects.get(company=company)
-            # Check if stage 1 data exists (not if it's approved)
-            if not BasicData.objects.filter(company=company).exists():
-                return Response({"detail": "Stage 1 must be completed before accessing stage 2"}, status=status.HTTP_400_BAD_REQUEST)
+            gate = check_previous_stages_submitted(company, 2)
+            if gate:
+                return gate
         except ValidationError as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except Company.DoesNotExist:
@@ -774,6 +848,8 @@ class FormStage2View(APIView):
         except Exception as e:
             logger.error(f"Error in FormStage2View.post: {e}", exc_info=True)
             return Response({"detail": "An error occurred while creating stage 2 data"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        is_draft = parse_is_draft(request)
         
         # DRF's MultiPartParser may or may not parse bracket notation
         # Check all keys to see what we're dealing with
@@ -923,7 +999,7 @@ class FormStage2View(APIView):
         logger.info(f"Parsed FormData for stage 2: {data}")
         
         # Validate that stand_type is present
-        if 'stand_type' not in stand_details_dict or not stand_details_dict.get('stand_type'):
+        if not is_draft and ('stand_type' not in stand_details_dict or not stand_details_dict.get('stand_type')):
             logger.error(f"Missing stand_type in stand_details_dict: {stand_details_dict}")
             logger.error(f"All request.data keys: {list(request.data.keys())}")
             return Response({
@@ -957,7 +1033,7 @@ class FormStage2View(APIView):
                         stand_details_dict['fire_cert'] = request.FILES[key]
                         break
             
-            if not is_update and not has_fire_cert:
+            if not is_draft and not is_update and not has_fire_cert:
                 logger.error(f"Fire cert validation failed. stand_details_dict keys: {list(stand_details_dict.keys())}, request.FILES keys: {list(request.FILES.keys())}")
                 return Response({
                     "detail": "Fire certificate is required for self construction"
@@ -973,12 +1049,12 @@ class FormStage2View(APIView):
                         has_visualization = True
                         stand_details_dict['stand_visualization'] = request.FILES[key]
                         break
-            if not is_update and not has_visualization:
+            if not is_draft and not is_update and not has_visualization:
                 return Response({
                     "detail": "Stand visualization file is required for self construction"
                 }, status=status.HTTP_400_BAD_REQUEST)
         elif stand_type == 'provided_stand':
-            if not stand_details_data.get('name_sign_text'):
+            if not is_draft and not stand_details_data.get('name_sign_text'):
                 return Response({
                     "detail": "Name sign text is required for our stand"
                 }, status=status.HTTP_400_BAD_REQUEST)
@@ -1001,7 +1077,7 @@ class FormStage2View(APIView):
                         stand_details_dict['logo_sign_file'] = request.FILES[key]
                         break
             
-            if not is_update and not has_logo:
+            if not is_draft and not is_update and not has_logo:
                 logger.error(f"Logo validation failed. stand_details_dict keys: {list(stand_details_dict.keys())}, request.FILES keys: {list(request.FILES.keys())}")
                 return Response({
                     "detail": "Logo file is required for our stand"
@@ -1015,14 +1091,19 @@ class FormStage2View(APIView):
         logger.info(f"Data before serializer: stand_details keys={list(stand_details_dict.keys())}")
         logger.info(f"File objects: logo={type(stand_details_dict.get('logo_sign_file'))}, fire_cert={type(stand_details_dict.get('fire_cert'))}")
         logger.info(f"Has logo file: {bool(stand_details_dict.get('logo_sign_file'))}, Has fire_cert: {bool(stand_details_dict.get('fire_cert'))}")
-        serializer = Stage2Serializer(data=data)
+        if 'company' not in stand_details_dict:
+            stand_details_dict['company'] = company.id
+            data['stand_details'] = stand_details_dict
+        serializer = Stage2Serializer(
+            data=data,
+            partial=is_draft,
+            context={'draft': is_draft, 'company': company, 'request': request},
+        )
         if serializer.is_valid():
             result = serializer.save()
-            # Create feedback with pending status
-            create_or_update_feedback(company, 2, 'pending', '', notify_fr=True)
-            # Reset completion flag when creating new submission
-            form.stage_2_completed = False
-            form.save()
+            apply_stage_write_side_effects(
+                company, form, 2, is_draft=is_draft, is_create=True
+            )
             
             # Return serialized response
             response_data = {
@@ -1054,6 +1135,11 @@ class FormStage2View(APIView):
         except Exception as e:
             logger.error(f"Error in FormStage2View.patch: {e}", exc_info=True)
             return Response({"detail": "An error occurred while updating stage 2 data"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        is_draft = parse_is_draft(request)
+        blocked = draft_blocked_response(latest_feedback) if is_draft else None
+        if blocked:
+            return blocked
         
         # Parse FormData for PATCH (same as POST)
         # DRF's MultiPartParser may or may not parse bracket notation
@@ -1125,11 +1211,11 @@ class FormStage2View(APIView):
         if 'company' in stand_details_dict:
             del stand_details_dict['company']
         
-        # Validate conditional requirements for updates
+        # Validate conditional requirements for updates (skipped for drafts)
         stand_details_data = data.get('stand_details', {})
         stand_type = stand_details_data.get('stand_type') or stand.stand_type
         
-        if stand_type == 'self_construction':
+        if not is_draft and stand_type == 'self_construction':
             # Check if fire_cert exists in parsed data, request.FILES, or already in database
             has_fire_cert = stand_details_data.get('fire_cert') is not None or stand.fire_cert
             if not has_fire_cert:
@@ -1150,7 +1236,7 @@ class FormStage2View(APIView):
                 return Response({
                     "detail": "Stand visualization file is required for self construction"
                 }, status=status.HTTP_400_BAD_REQUEST)
-        elif stand_type == 'provided_stand':
+        elif not is_draft and stand_type == 'provided_stand':
             if not stand_details_data.get('name_sign_text') and not stand.name_sign_text:
                 return Response({
                     "detail": "Name sign text is required for our stand"
@@ -1169,15 +1255,17 @@ class FormStage2View(APIView):
             'equipment_selections': equipment_selections
         }
         
-        serializer = Stage2Serializer(instance_data, data=data, partial=True)
+        serializer = Stage2Serializer(
+            instance_data,
+            data=data,
+            partial=True,
+            context={'draft': is_draft, 'company': company, 'request': request},
+        )
         if serializer.is_valid():
             result = serializer.save()
-            # If stage was accepted and user is editing, cancel acceptance only after successful save
-            if latest_feedback and latest_feedback.status == 'accepted':
-                form.stage_2_completed = False
-                form.save()
-            # Create or update feedback with pending status
-            create_or_update_feedback(company, 2, 'pending', '', notify_fr=True)
+            apply_stage_write_side_effects(
+                company, form, 2, is_draft=is_draft, latest_feedback=latest_feedback
+            )
             
             # Return serialized response
             response_data = {
@@ -1222,11 +1310,9 @@ class FormStage3View(APIView):
                     status=status.HTTP_403_FORBIDDEN,
                 )
             form = Form.objects.get(company=company)
-            # Check if previous stages have data (not if they're approved)
-            if not BasicData.objects.filter(company=company).exists():
-                return Response({"detail": "Stage 1 must be completed before accessing stage 3"}, status=status.HTTP_400_BAD_REQUEST)
-            if not StandDetails.objects.filter(company=company).exists():
-                return Response({"detail": "Stage 2 must be completed before accessing stage 3"}, status=status.HTTP_400_BAD_REQUEST)
+            gate = check_previous_stages_submitted(company, 3)
+            if gate:
+                return gate
         except ValidationError as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except Company.DoesNotExist:
@@ -1237,16 +1323,22 @@ class FormStage3View(APIView):
             logger.error(f"Error in FormStage3View.post: {e}", exc_info=True)
             return Response({"detail": "An error occurred while creating stage 3 data"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
+        is_draft = parse_is_draft(request)
         data = request.data.copy()
+        if hasattr(data, '_mutable'):
+            data._mutable = True
+        data.pop('draft', None)
         data['company'] = company.id
-        serializer = WorkshopSerializer(data=data)
+        serializer = WorkshopSerializer(
+            data=data,
+            partial=is_draft,
+            context={'draft': is_draft},
+        )
         if serializer.is_valid():
             serializer.save()
-            # Create feedback with pending status
-            create_or_update_feedback(company, 3, 'pending', '', notify_fr=True)
-            # Reset completion flag when creating new submission
-            form.stage_3_completed = False
-            form.save()
+            apply_stage_write_side_effects(
+                company, form, 3, is_draft=is_draft, is_create=True
+            )
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
@@ -1275,16 +1367,24 @@ class FormStage3View(APIView):
         except Exception as e:
             logger.error(f"Error in FormStage3View.patch: {e}", exc_info=True)
             return Response({"detail": "An error occurred while updating stage 3 data"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
-        serializer = WorkshopSerializer(workshop, data=request.data, partial=True)
+
+        is_draft = parse_is_draft(request)
+        blocked = draft_blocked_response(latest_feedback) if is_draft else None
+        if blocked:
+            return blocked
+
+        data = request.data.copy()
+        if hasattr(data, '_mutable'):
+            data._mutable = True
+        data.pop('draft', None)
+        serializer = WorkshopSerializer(
+            workshop, data=data, partial=True, context={'draft': is_draft}
+        )
         if serializer.is_valid():
             serializer.save()
-            # If stage was accepted and user is editing, cancel acceptance only after successful save
-            if latest_feedback and latest_feedback.status == 'accepted':
-                form.stage_3_completed = False
-                form.save()
-            # Create or update feedback with pending status
-            create_or_update_feedback(company, 3, 'pending', '', notify_fr=True)
+            apply_stage_write_side_effects(
+                company, form, 3, is_draft=is_draft, latest_feedback=latest_feedback
+            )
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -1318,15 +1418,9 @@ class FormStage4View(APIView):
             validate_company_id(company_id)
             company = Company.objects.get(id=company_id, representative=request.user)
             form = Form.objects.get(company=company)
-            # Check if previous stages have data (not if they're approved)
-            if not BasicData.objects.filter(company=company).exists():
-                return Response({"detail": "Stage 1 must be completed before accessing stage 4"}, status=status.HTTP_400_BAD_REQUEST)
-            if not StandDetails.objects.filter(company=company).exists():
-                return Response({"detail": "Stage 2 must be completed before accessing stage 4"}, status=status.HTTP_400_BAD_REQUEST)
-            if not company_can_access_stage3(company):
-                ensure_basic_workshop_skipped(company)
-            elif not Workshop.objects.filter(company=company).exists():
-                return Response({"detail": "Stage 3 must be completed before accessing stage 4"}, status=status.HTTP_400_BAD_REQUEST)
+            gate = check_previous_stages_submitted(company, 4)
+            if gate:
+                return gate
         except ValidationError as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except Company.DoesNotExist:
@@ -1336,6 +1430,8 @@ class FormStage4View(APIView):
         except Exception as e:
             logger.error(f"Error in FormStage4View.post: {e}", exc_info=True)
             return Response({"detail": "An error occurred while creating stage 4 data"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        is_draft = parse_is_draft(request)
         
         # Parse FormData if needed (similar to Stage2View)
         all_keys = list(request.data.keys()) if hasattr(request.data, 'keys') else []
@@ -1410,14 +1506,14 @@ class FormStage4View(APIView):
         if 'description' in data:
             logger.info(f"Stage4 description data: {data['description']}")
         
-        serializer = Stage4Serializer(data=data, context={'company': company})
+        serializer = Stage4Serializer(
+            data=data, context={'company': company, 'draft': is_draft}
+        )
         if serializer.is_valid():
             result = serializer.save()
-            # Create feedback with pending status
-            create_or_update_feedback(company, 4, 'pending', '', notify_fr=True)
-            # Reset completion flag when creating new submission
-            form.stage_4_completed = False
-            form.save()
+            apply_stage_write_side_effects(
+                company, form, 4, is_draft=is_draft, is_create=True
+            )
             
             # Return serialized response
             response_data = {
@@ -1444,7 +1540,12 @@ class FormStage4View(APIView):
         except Exception as e:
             logger.error(f"Error in FormStage4View.patch: {e}", exc_info=True)
             return Response({"detail": "An error occurred while updating stage 4 data"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
+
+        is_draft = parse_is_draft(request)
+        blocked = draft_blocked_response(latest_feedback) if is_draft else None
+        if blocked:
+            return blocked
+
         # Get existing data
         jobwalls = list(Jobwall.objects.filter(company=company))
         description = Description.objects.filter(company=company).first()
@@ -1524,15 +1625,17 @@ class FormStage4View(APIView):
         # Don't add company ID to description here - it causes unique constraint validation error
         # The serializer will handle it in create()/update() methods
         
-        serializer = Stage4Serializer(instance_data, data=data, partial=True, context={'company': company})
+        serializer = Stage4Serializer(
+            instance_data,
+            data=data,
+            partial=True,
+            context={'company': company, 'draft': is_draft},
+        )
         if serializer.is_valid():
             result = serializer.save()
-            # If stage was accepted and user is editing, cancel acceptance only after successful save
-            if latest_feedback and latest_feedback.status == 'accepted':
-                form.stage_4_completed = False
-                form.save()
-            # Create or update feedback with pending status
-            create_or_update_feedback(company, 4, 'pending', '', notify_fr=True)
+            apply_stage_write_side_effects(
+                company, form, 4, is_draft=is_draft, latest_feedback=latest_feedback
+            )
             
             # Return serialized response
             response_data = {
@@ -1616,18 +1719,9 @@ class FormStage5View(APIView):
             validate_company_id(company_id)
             company = Company.objects.get(id=company_id, representative=request.user)
             form = Form.objects.get(company=company)
-            # Check if previous stages have data (not if they're approved)
-            if not BasicData.objects.filter(company=company).exists():
-                return Response({"detail": "Stage 1 must be completed before accessing stage 5"}, status=status.HTTP_400_BAD_REQUEST)
-            if not StandDetails.objects.filter(company=company).exists():
-                return Response({"detail": "Stage 2 must be completed before accessing stage 5"}, status=status.HTTP_400_BAD_REQUEST)
-            if not company_can_access_stage3(company):
-                ensure_basic_workshop_skipped(company)
-            elif not Workshop.objects.filter(company=company).exists():
-                return Response({"detail": "Stage 3 must be completed before accessing stage 5"}, status=status.HTTP_400_BAD_REQUEST)
-            # Stage 4 can have either Jobwalls or Description (or both)
-            if not Jobwall.objects.filter(company=company).exists() and not Description.objects.filter(company=company).exists():
-                return Response({"detail": "Stage 4 must be completed before accessing stage 5"}, status=status.HTTP_400_BAD_REQUEST)
+            gate = check_previous_stages_submitted(company, 5)
+            if gate:
+                return gate
         except ValidationError as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except Company.DoesNotExist:
@@ -1638,18 +1732,26 @@ class FormStage5View(APIView):
             logger.error(f"Error in FormStage5View.post: {e}", exc_info=True)
             return Response({"detail": "An error occurred while creating stage 5 data"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+        is_draft = parse_is_draft(request)
         data = request.data.copy()
+        if hasattr(data, '_mutable'):
+            data._mutable = True
+        data.pop('draft', None)
         if 'final_data' in data:
             data['final_data']['company'] = company.id
+        elif is_draft:
+            data['final_data'] = {'company': company.id}
 
-        serializer = Stage5Serializer(data=data, context={'company': company})
+        serializer = Stage5Serializer(
+            data=data,
+            partial=is_draft,
+            context={'company': company, 'draft': is_draft},
+        )
         if serializer.is_valid():
             serializer.save()
-            # Create feedback with pending status
-            create_or_update_feedback(company, 5, 'pending', '', notify_fr=True)
-            # Reset completion flag when creating new submission
-            form.stage_5_completed = False
-            form.save()
+            apply_stage_write_side_effects(
+                company, form, 5, is_draft=is_draft, is_create=True
+            )
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -1670,6 +1772,11 @@ class FormStage5View(APIView):
         except Exception as e:
             logger.error(f"Error in FormStage5View.patch: {e}", exc_info=True)
             return Response({"detail": "An error occurred while updating stage 5 data"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        is_draft = parse_is_draft(request)
+        blocked = draft_blocked_response(latest_feedback) if is_draft else None
+        if blocked:
+            return blocked
 
         objects = self.get_objects(company)
         if not objects['final_data']:
@@ -1693,18 +1800,23 @@ class FormStage5View(APIView):
 
         # Remove company field from request data for PATCH (it's a OneToOneField and shouldn't change)
         data = request.data.copy()
+        if hasattr(data, '_mutable'):
+            data._mutable = True
+        data.pop('draft', None)
         if 'final_data' in data and 'company' in data['final_data']:
             del data['final_data']['company']
 
-        serializer = Stage5Serializer(instance_data, data=data, partial=True, context={'company': company})
+        serializer = Stage5Serializer(
+            instance_data,
+            data=data,
+            partial=True,
+            context={'company': company, 'draft': is_draft},
+        )
         if serializer.is_valid():
             serializer.save()
-            # If stage was accepted and user is editing, cancel acceptance only after successful save
-            if latest_feedback and latest_feedback.status == 'accepted':
-                form.stage_5_completed = False
-                form.save()
-            # Create or update feedback with pending status
-            create_or_update_feedback(company, 5, 'pending', '', notify_fr=True)
+            apply_stage_write_side_effects(
+                company, form, 5, is_draft=is_draft, latest_feedback=latest_feedback
+            )
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 

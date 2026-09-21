@@ -209,7 +209,7 @@ function ExhibitorFormsPageContent() {
     await mutateFormStatus();
   };
 
-  // Check if a stage can be submitted (all previous stages must be saved)
+  // Check if a stage can be submitted (all previous stages must be submitted, not only drafted)
   // Unavailable previous stages (e.g. Stage 3 for basic) count as cleared.
   const canSubmitStage = (stageNumber: number): boolean => {
     if (stageNumber === 1) return true;
@@ -220,7 +220,7 @@ function ExhibitorFormsPageContent() {
       const prevStage = stages.find((s) => s.stageNumber === i);
       if (!prevStage) return false;
       if (prevStage.unavailable) continue;
-      if (!prevStage.dataExists) {
+      if (!prevStage.feedback) {
         return false;
       }
     }
@@ -239,7 +239,7 @@ function ExhibitorFormsPageContent() {
         continue;
       }
       if (prevStage.unavailable) continue;
-      if (!prevStage.dataExists) {
+      if (!prevStage.feedback) {
         incomplete.push(i);
       }
     }

@@ -80,8 +80,8 @@ function computeStageStatus(
     if (feedback && feedback.status === "rejected") return "rejected";
     if (feedback && feedback.status === "pending") return "pending_approval";
     if (feedback && feedback.status === "accepted") return "accepted";
-    // Submitted data awaiting review (no feedback yet) or draft edits
-    return "pending_approval";
+    // Draft: ORM rows without Feedback
+    return "in_progress";
   }
 
   // No data exists
@@ -134,7 +134,8 @@ function convertFormStatusToStages(
       unavailable,
     });
 
-    previousStageCompleted = unavailable || isCompleted || dataExists;
+    previousStageCompleted =
+      unavailable || isCompleted || Boolean(feedback);
   }
 
   return stages;
@@ -446,6 +447,12 @@ export default function CompanyDetailPage() {
                         </div>
                       )}
 
+                      {stage.status === "in_progress" && stage.dataExists && (
+                        <div className="rounded-md bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+                          <p>{t("staff.companyDetail.draftInProgressMessage")}</p>
+                        </div>
+                      )}
+
                       {stage.dataExists && (
                         <StageViewer
                           companyId={companyId!}
@@ -453,7 +460,7 @@ export default function CompanyDetailPage() {
                         />
                       )}
 
-                      {stage.dataExists && (
+                      {stage.dataExists && stage.status !== "in_progress" && (
                         <StageFeedbackForm
                           companyId={companyId!}
                           stageNumber={stage.stageNumber}

@@ -391,6 +391,8 @@ class WorkshopSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
     def validate_workshop(self, value):
+        if self.context.get('draft'):
+            return value
         if value is None:
             raise serializers.ValidationError(
                 'Choose whether you will conduct a workshop (yes or no).'
@@ -398,6 +400,8 @@ class WorkshopSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
+        if self.context.get('draft'):
+            return attrs
         workshop = attrs.get('workshop')
         if workshop is None and self.instance is not None:
             workshop = self.instance.workshop
@@ -564,6 +568,18 @@ class WorkshopSerializer(serializers.ModelSerializer):
 # ETAP 4: Jobwall
 
 class JobwallSerializer(serializers.ModelSerializer):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.context.get('draft'):
+            for name, field in self.fields.items():
+                if name == 'company':
+                    continue
+                field.required = False
+                if hasattr(field, 'allow_blank'):
+                    field.allow_blank = True
+                if hasattr(field, 'allow_null'):
+                    field.allow_null = True
+
     def validate_url(self, value):
         """Validate that url is either a valid URL or a valid email address"""
         if not value:
@@ -582,6 +598,8 @@ class JobwallSerializer(serializers.ModelSerializer):
             # If not a URL, check if it's a valid email
             email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
             if re.match(email_pattern, value):
+                return value
+            if self.context.get('draft'):
                 return value
             raise serializers.ValidationError("Must be a valid URL or email address")
     
@@ -683,12 +701,41 @@ class Stage1Serializer(serializers.Serializer):
     basic_data = BasicDataSerializer()
     address = AddressSerializer()
 
-    def create(self, validated_data):
-        basic_data_data = validated_data.pop('basic_data')
-        address_data = validated_data.pop('address')
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.context.get('draft'):
+            self.fields['basic_data'] = BasicDataSerializer(required=False)
+            self.fields['address'] = AddressSerializer(required=False)
+            for field in self.fields['basic_data'].fields.values():
+                field.required = False
+                if hasattr(field, 'allow_blank'):
+                    field.allow_blank = True
+            for field in self.fields['address'].fields.values():
+                field.required = False
+                if hasattr(field, 'allow_blank'):
+                    field.allow_blank = True
 
+    def create(self, validated_data):
+        basic_data_data = dict(validated_data.pop('basic_data', None) or {})
+        address_data = dict(validated_data.pop('address', None) or {})
+
+        company = self.context.get('company')
+        if company is not None and 'company' not in basic_data_data:
+            basic_data_data['company'] = company
+
+        basic_data_data.setdefault('full_name', '')
+        basic_data_data.setdefault('nip', '')
         basic_data_obj = BasicData.objects.create(**basic_data_data)
 
+        for key, default in (
+            ('street', ''),
+            ('home_number', ''),
+            ('apt_number', ''),
+            ('city', ''),
+            ('country', ''),
+            ('postal_code', ''),
+        ):
+            address_data.setdefault(key, default)
         address_data['form'] = basic_data_obj
         address_obj = Address.objects.create(**address_data)
 
@@ -701,15 +748,30 @@ class Stage1Serializer(serializers.Serializer):
         basic_data_data = validated_data.get('basic_data')
         address_data = validated_data.get('address')
 
-        if basic_data_data:
+        if basic_data_data and instance.get('basic_data'):
             for key, value in basic_data_data.items():
                 setattr(instance['basic_data'], key, value)
             instance['basic_data'].save()
 
         if address_data:
-            for key, value in address_data.items():
-                setattr(instance['address'], key, value)
-            instance['address'].save()
+            address_obj = instance.get('address')
+            if address_obj is None and instance.get('basic_data'):
+                for key, default in (
+                    ('street', ''),
+                    ('home_number', ''),
+                    ('apt_number', ''),
+                    ('city', ''),
+                    ('country', ''),
+                    ('postal_code', ''),
+                ):
+                    address_data.setdefault(key, default)
+                address_data['form'] = instance['basic_data']
+                address_obj = Address.objects.create(**address_data)
+                instance['address'] = address_obj
+            elif address_obj is not None:
+                for key, value in address_data.items():
+                    setattr(address_obj, key, value)
+                address_obj.save()
 
         return instance
 
@@ -722,19 +784,34 @@ class Stage2Serializer(serializers.Serializer):
         allow_empty=True
     )
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.context.get('draft'):
+            self.fields['stand_details'] = StandDetailsSerializer(required=False)
+            for field in self.fields['stand_details'].fields.values():
+                field.required = False
+                if hasattr(field, 'allow_blank'):
+                    field.allow_blank = True
+                if hasattr(field, 'allow_null'):
+                    field.allow_null = True
+
     def validate(self, data):
         # Validation is handled in the view for file uploads
         # This method can be used for additional validation if needed
         return data
 
     def create(self, validated_data):
-        stand_details_data = validated_data.pop('stand_details')
+        stand_details_data = dict(validated_data.pop('stand_details', None) or {})
         equipment_selections_data = validated_data.pop('equipment_selections', [])
         
         # Extract file fields separately to ensure they're file objects
         logo_file = stand_details_data.pop('logo_sign_file', None)
         fire_cert_file = stand_details_data.pop('fire_cert', None)
         visualization_file = stand_details_data.pop('stand_visualization', None)
+
+        company = self.context.get('company')
+        if company is not None and 'company' not in stand_details_data:
+            stand_details_data['company'] = company
 
         stand_details_obj = StandDetails.objects.create(**stand_details_data)
 
@@ -883,6 +960,23 @@ class Stage4Serializer(serializers.Serializer):
     jobwalls = JobwallSerializer(many=True, required=False, allow_empty=True)
     description = DescriptionSerializer(required=False, allow_null=True)
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.context.get('draft'):
+            self.fields['jobwalls'] = JobwallSerializer(
+                many=True,
+                required=False,
+                allow_empty=True,
+                context={**self.context, 'draft': True},
+            )
+            if 'description' in self.fields:
+                for field in self.fields['description'].fields.values():
+                    field.required = False
+                    if hasattr(field, 'allow_blank'):
+                        field.allow_blank = True
+                    if hasattr(field, 'allow_null'):
+                        field.allow_null = True
+
     def to_internal_value(self, data):
         """
         Remove company field from description data before nested serializer validation.
@@ -913,7 +1007,27 @@ class Stage4Serializer(serializers.Serializer):
         Jobwall.objects.filter(company=company).delete()
         jobwall_objs = []
         for jobwall_data in jobwalls_data:
+            jobwall_data = dict(jobwall_data)
             jobwall_data['company'] = company
+            for key in (
+                'name',
+                'form',
+                'workload',
+                'contract',
+                'description',
+                'benefits',
+                'requirements',
+                'url',
+            ):
+                jobwall_data.setdefault(key, '')
+            # Choice fields need a valid value; use first option as draft placeholder if empty
+            if self.context.get('draft'):
+                if not jobwall_data.get('form'):
+                    jobwall_data['form'] = 's'
+                if not jobwall_data.get('workload'):
+                    jobwall_data['workload'] = 'pelen'
+                if not jobwall_data.get('contract'):
+                    jobwall_data['contract'] = 'uop'
             jobwall_objs.append(Jobwall.objects.create(**jobwall_data))
 
         # Create or update description if provided
@@ -963,7 +1077,26 @@ class Stage4Serializer(serializers.Serializer):
             # Create new jobwalls
             jobwall_objs = []
             for jobwall_data in jobwalls_data:
+                jobwall_data = dict(jobwall_data)
                 jobwall_data['company'] = company
+                for key in (
+                    'name',
+                    'form',
+                    'workload',
+                    'contract',
+                    'description',
+                    'benefits',
+                    'requirements',
+                    'url',
+                ):
+                    jobwall_data.setdefault(key, '')
+                if self.context.get('draft'):
+                    if not jobwall_data.get('form'):
+                        jobwall_data['form'] = 's'
+                    if not jobwall_data.get('workload'):
+                        jobwall_data['workload'] = 'pelen'
+                    if not jobwall_data.get('contract'):
+                        jobwall_data['contract'] = 'uop'
                 jobwall_objs.append(Jobwall.objects.create(**jobwall_data))
             instance['jobwalls'] = jobwall_objs
 
@@ -1008,7 +1141,20 @@ class Stage5Serializer(serializers.Serializer):
     pdi_attendees = PDIAttendeeSerializer(many=True, required=False)
     exhibitors = ExhibitorSerializer(many=True, required=False)
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.context.get('draft'):
+            self.fields['final_data'] = FinalDataSerializer(required=False)
+            for field in self.fields['final_data'].fields.values():
+                field.required = False
+                if hasattr(field, 'allow_blank'):
+                    field.allow_blank = True
+                if hasattr(field, 'allow_null'):
+                    field.allow_null = True
+
     def validate(self, data):
+        if self.context.get('draft'):
+            return data
         instance = getattr(self, 'instance', None) or {}
         fd_instance = instance.get('final_data')
 
@@ -1171,11 +1317,15 @@ class Stage5Serializer(serializers.Serializer):
         return Form.objects.filter(company=company).first()
 
     def create(self, validated_data):
-        final_data_data = validated_data.pop('final_data')
+        final_data_data = dict(validated_data.pop('final_data', None) or {})
         lunches_data = validated_data.pop('lunches', [])
         pdi_data = validated_data.pop('pdi', None)
         pdi_attendees_data = validated_data.pop('pdi_attendees', [])
         exhibitors_data = validated_data.pop('exhibitors', [])
+
+        company = self.context.get('company')
+        if company is not None and 'company' not in final_data_data:
+            final_data_data['company'] = company
 
         final_data_obj = FinalData.objects.create(**final_data_data)
         

@@ -164,12 +164,10 @@ export function useFormStatus(): UseFormStatusReturn {
       isAllCompleted = false;
     }
 
-    // Unlock next stage when this one has data, is completed, or is skipped
+    // Unlock next stage after submit (Feedback exists), accept, or skip — not after draft alone
+    const hasFeedback = Boolean(feedback);
     previousStageCleared =
-      unavailable ||
-      isCompleted ||
-      dataExists ||
-      (formStatus?.data_exists[stageKey] ?? false);
+      unavailable || isCompleted || hasFeedback;
   }
 
   return {

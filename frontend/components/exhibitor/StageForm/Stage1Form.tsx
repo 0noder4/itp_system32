@@ -20,11 +20,15 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Loader2, Save, FileText, ExternalLink } from "lucide-react";
+import { StageDraftSaveButton } from "./StageDraftSaveButton";
 
 interface Stage1FormProps {
   companyId?: number;
   initialData?: Stage1Data;
-  onSubmit: (data: Stage1FormData) => Promise<void>;
+  onSubmit: (
+    data: Stage1FormData,
+    options?: { draft?: boolean }
+  ) => Promise<void>;
   isSubmitting: boolean;
   disabled?: boolean;
   isAccepted?: boolean;
@@ -153,6 +157,21 @@ export function Stage1Form({
     setPendingFormData(data);
     // Show the dialog
     setShowTermsDialog(true);
+  };
+
+  const handleSaveDraft = async () => {
+    try {
+      await onSubmit(form.getValues(), { draft: true });
+    } catch (error: any) {
+      if (error.response?.status === 400 && error.response?.data?.detail) {
+        form.setError("root", {
+          type: "server",
+          message: String(error.response.data.detail),
+        });
+        return;
+      }
+      throw error;
+    }
   };
 
   const handleAcceptTerms = async () => {
@@ -361,36 +380,44 @@ export function Stage1Form({
           </div>
         </div>
         {!disabled && (
-          <Button
-            type="submit"
-            disabled={isSubmitting}
-            className="w-full md:w-auto text-white"
-            style={{
-              backgroundColor: isSubmitting ? undefined : ACCENT_COLOR,
-            }}
-            onMouseEnter={(e) => {
-              if (!isSubmitting) {
-                e.currentTarget.style.backgroundColor = "#E04E15";
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (!isSubmitting) {
-                e.currentTarget.style.backgroundColor = ACCENT_COLOR;
-              }
-            }}
-          >
-            {isSubmitting ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                {t("common.loading")}
-              </>
-            ) : (
-              <>
-                <Save className="mr-2 h-4 w-4" />
-                {isAccepted ? t("common.sendAgain") : t("common.save")}
-              </>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            {!isAccepted && (
+              <StageDraftSaveButton
+                onClick={handleSaveDraft}
+                isSubmitting={isSubmitting}
+              />
             )}
-          </Button>
+            <Button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full md:w-auto text-white"
+              style={{
+                backgroundColor: isSubmitting ? undefined : ACCENT_COLOR,
+              }}
+              onMouseEnter={(e) => {
+                if (!isSubmitting) {
+                  e.currentTarget.style.backgroundColor = "#E04E15";
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!isSubmitting) {
+                  e.currentTarget.style.backgroundColor = ACCENT_COLOR;
+                }
+              }}
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  {t("common.loading")}
+                </>
+              ) : (
+                <>
+                  <Save className="mr-2 h-4 w-4" />
+                  {isAccepted ? t("common.sendAgain") : t("common.save")}
+                </>
+              )}
+            </Button>
+          </div>
         )}
       </form>
 

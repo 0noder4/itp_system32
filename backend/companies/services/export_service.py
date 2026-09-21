@@ -78,6 +78,7 @@ class ExportService:
             'stand_details__equipment_selections',
             'stand_details__equipment_selections__equipment_item',
             'stand_all',
+            'feedback',
             'workshops',
             'workshops__facilitators',
             'finaldata',
@@ -309,8 +310,16 @@ class ExportService:
             logger.error(f"Error extracting base data for company {company.id}: {str(e)}")
             raise
 
-        # Basic Data (Stage 1)
-        if hasattr(company, 'basic_data') and company.basic_data:
+        stage_feedback = {
+            fb.form: fb for fb in company.feedback.all()
+        }
+        has_stage_1 = 'stage_1' in stage_feedback
+        has_stage_2 = 'stage_2' in stage_feedback
+        has_stage_3 = 'stage_3' in stage_feedback
+        has_stage_5 = 'stage_5' in stage_feedback
+
+        # Basic Data (Stage 1) — omit draft-only rows (no Feedback)
+        if has_stage_1 and hasattr(company, 'basic_data') and company.basic_data:
             try:
                 bd = company.basic_data
                 base_data.update({
@@ -356,7 +365,7 @@ class ExportService:
         # Initialize equipment columns to 0 for all companies
         equipment_totals = {header: 0 for header in self.equipment_headers.values()}
         
-        if hasattr(company, 'stand_details') and company.stand_details:
+        if has_stage_2 and hasattr(company, 'stand_details') and company.stand_details:
             try:
                 sd = company.stand_details
                 stand_type_display = self.CHOICE_MAPPINGS['stand_type'].get(sd.stand_type, sd.stand_type)
@@ -422,7 +431,7 @@ class ExportService:
             base_data['Montaż TV'] = ''
 
         # Workshops (Stage 3)
-        if hasattr(company, 'workshops') and company.workshops:
+        if has_stage_3 and hasattr(company, 'workshops') and company.workshops:
             try:
                 workshop = company.workshops
                 if workshop.workshop is True:
@@ -505,7 +514,7 @@ class ExportService:
         # Jobwall removed from export
 
         # Final Data (Stage 5)
-        if hasattr(company, 'finaldata') and company.finaldata:
+        if has_stage_5 and hasattr(company, 'finaldata') and company.finaldata:
             try:
                 fd = company.finaldata
                 base_data.update({

@@ -1,6 +1,6 @@
 # Weryfikacja zgłoszeń użytkowników
 
-Data weryfikacji: `2026-06-02`. Ostatnia aktualizacja: `2026-08-29`.
+Data weryfikacji: `2026-06-02`. Ostatnia aktualizacja: `2026-09-20`.
 
 Dokument zawiera przegląd zgłoszeń od użytkowników wraz ze statusem w aktualnej wersji systemu.
 
@@ -16,18 +16,17 @@ Dokument zawiera przegląd zgłoszeń od użytkowników wraz ze statusem w aktua
 - Logowanie loginem firmy lub adresem e-mail (bez rozróżniania wielkości liter); spójne nazewnictwo „login” w UI i tłumaczeniach PL/EN.
 - Mail do opiekuna FR po przesłaniu lub poprawie etapu (sygnał „oczekuje na akceptację”); bez ponownego maila przy kolejnym zapisie tego samego etapu w statusie pending.
 - Automatyczne przypomnienia o zbliżającym się wygaśnięciu zaproszenia (do wystawcy i opiekuna); progi dni, liczba przypomnień (`0` = wyłączone) i ważność nowych linków w `Settings` (Invitation settings).
-
 - Etap 5: obiady i delegaci wymagają jawnej decyzji przed finalnym przesłaniem (rezygnacja z obiadów / zamówienie, główny przedstawiciel, brak innych delegatów lub lista delegatów, pokrycie obecności każdego dnia targów).
+- Etap 3 (warsztaty): świadomy wybór tak/nie oraz dedykowane pola kontaktowe — telefon ds. warsztatów (z opcją z numerów prowadzących) i lista prowadzących (imię, nazwisko, telefon, opis).
+- Wersja robocza etapu: przycisk „Zapisz wersję roboczą” (bez Feedback / maila do FR / CSV); status „Firemka wciąż edytuje”; kolejny etap odblokowuje się po „Prześlij” (nie po samym szkicu).
 
 ## Częściowo wdrożone / wymaga doprecyzowania
 
-- Warsztaty są w systemie jako etap 3, ale brakuje dedykowanych pól osoby kontaktowej do warsztatów.
 - Pole mocy elektrycznej istnieje (`łączna moc urządzeń` w etapie 5), ale nie jest opisane jako wymagane szczególnie dla własnej zabudowy.
 
 ## Braki do realizacji
 
 - Brak pytań zbierających komplet danych organizacyjnych na starcie (pakiet, rozmiar stoiska, własna zabudowa, dzień wystawiania) w jednym spójnym miejscu procesu.
-- Nazewnictwo statusów etapów jest dla użytkowników nieintuicyjne (szczególnie odróżnienie "w trakcie" vs "oczekuje na akceptację").
 - FR nie ma trybu "podglądu formularza przed wysłaniem" (wgląd jest dopiero po zapisaniu danych przez firmę).
 - Mapka nie wspiera przypisania jednej firmy do wielu stoisk w tym samym dniu (np. `E11` + `E12`) jako osobnych pozycji.
 - Brak opcji trwałego usuwania zaproszeń (jest anulowanie, ale bez usuwania rekordu).
@@ -38,6 +37,6 @@ Dokument zawiera przegląd zgłoszeń od użytkowników wraz ze statusem w aktua
 
 ## Rekomendowany priorytet
 
-1. Wymagalność kluczowych pól (dane warsztatowe).
-2. Poprawa statusów i komunikatów UI (statusy etapów).
-3. Rozszerzenie mapki o wiele stoisk dla jednej firmy.
+1. Moc elektryczna — wymaganie / copy szczególnie przy własnej zabudowie (etap 5).
+2. Rozszerzenie mapki o wiele stoisk dla jednej firmy.
+3. Podgląd FR formularza przed wysłaniem firmy.

@@ -294,6 +294,110 @@ class StagePendingFrEmailTests(TestCase):
         self.assertEqual(feedback.status, "accepted")
 
 
+@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+class StageDraftTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.staff = User.objects.create_user(
+            username="draft-fr",
+            email="draft-fr@example.com",
+            password="TestPass123!",
+            type="staff",
+            language="pl",
+        )
+        self.company_user = User.objects.create_user(
+            username="Draft Company",
+            email="draft-co@example.com",
+            password="TestPass123!",
+            type="company",
+        )
+        self.company = Company.objects.create(
+            name="Draft Company",
+            email="draft-co@example.com",
+            representative=self.company_user,
+            fr_resp=self.staff,
+            status="basic",
+        )
+        Form.objects.get_or_create(company=self.company)
+
+    def _stage1_payload(self, **overrides):
+        payload = {
+            "basic_data": {
+                **STAGE_1_PAYLOAD["basic_data"],
+                "company": self.company.id,
+                "full_name": "Draft Partial",
+            },
+            "address": STAGE_1_PAYLOAD["address"],
+        }
+        payload.update(overrides)
+        return payload
+
+    def test_draft_stage_1_saves_without_feedback_or_email(self):
+        self.client.force_authenticate(self.company_user)
+        response = self.client.post(
+            f"/api/company/{self.company.id}/form/stage-1/",
+            {**self._stage1_payload(), "draft": True},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertTrue(BasicData.objects.filter(company=self.company).exists())
+        self.assertFalse(
+            Feedback.objects.filter(company=self.company, form="stage_1").exists()
+        )
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_draft_stage_1_does_not_unlock_stage_2(self):
+        self.client.force_authenticate(self.company_user)
+        self.client.post(
+            f"/api/company/{self.company.id}/form/stage-1/",
+            {**self._stage1_payload(), "draft": True},
+            format="json",
+        )
+        response = self.client.post(
+            f"/api/company/{self.company.id}/form/stage-2/",
+            {"stand_details[stand_type]": "provided_stand", "draft": "true"},
+            format="multipart",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, response.data)
+        self.assertIn("Stage 1 must be submitted", str(response.data))
+
+    def test_submit_after_draft_creates_feedback_and_allows_stage_2(self):
+        self.client.force_authenticate(self.company_user)
+        self.client.post(
+            f"/api/company/{self.company.id}/form/stage-1/",
+            {**self._stage1_payload(), "draft": True},
+            format="json",
+        )
+        mail.outbox.clear()
+        response = self.client.patch(
+            f"/api/company/{self.company.id}/form/stage-1/",
+            self._stage1_payload(),
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertTrue(
+            Feedback.objects.filter(
+                company=self.company, form="stage_1", status="pending"
+            ).exists()
+        )
+        self.assertEqual(len(mail.outbox), 1)
+
+        stage2 = self.client.post(
+            f"/api/company/{self.company.id}/form/stage-2/",
+            {
+                "stand_details[stand_type]": "provided_stand",
+                "stand_details[name_sign_text]": "Fryz",
+                "draft": "true",
+            },
+            format="multipart",
+        )
+        # Draft stage 2 allowed once stage 1 has Feedback; logo optional on draft
+        self.assertEqual(stage2.status_code, status.HTTP_201_CREATED, stage2.data)
+        self.assertFalse(
+            Feedback.objects.filter(company=self.company, form="stage_2").exists()
+        )
+
+
 class InvitationSettingsValidationTests(TestCase):
     def test_count_zero_skips_slot_validation(self):
         settings_obj = Settings.get_settings()

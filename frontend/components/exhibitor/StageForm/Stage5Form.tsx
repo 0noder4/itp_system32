@@ -29,11 +29,15 @@ import {
   DIET_OPTIONS,
   normalizeDietInfo,
 } from "@/lib/stage5-utils";
+import { StageDraftSaveButton } from "./StageDraftSaveButton";
 
 interface Stage5FormProps {
   companyId: number;
   initialData?: Stage5Data;
-  onSubmit: (data: Stage5FormData) => Promise<void>;
+  onSubmit: (
+    data: Stage5FormData,
+    options?: { draft?: boolean }
+  ) => Promise<void>;
   isSubmitting: boolean;
   disabled?: boolean;
   isAccepted?: boolean;
@@ -267,6 +271,21 @@ export function Stage5Form({
     setPendingFormData(null);
   };
 
+  const handleSaveDraft = async () => {
+    try {
+      await onSubmit(form.getValues(), { draft: true });
+    } catch (error: any) {
+      if (error.response?.status === 400 && error.response?.data?.detail) {
+        form.setError("root", {
+          type: "server",
+          message: String(error.response.data.detail),
+        });
+        return;
+      }
+      throw error;
+    }
+  };
+
   const handleLowPowerChange = (checked: boolean) => {
     form.setValue("final_data.el_low_power", checked);
     if (checked) {
@@ -335,6 +354,14 @@ export function Stage5Form({
         onSubmit={form.handleSubmit(handleValidSubmit)}
         className="space-y-6"
       >
+        {!disabled && !isAccepted && (
+          <div>
+            <StageDraftSaveButton
+              onClick={handleSaveDraft}
+              isSubmitting={isSubmitting}
+            />
+          </div>
+        )}
         {form.formState.errors.root && (
           <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive border border-destructive/20">
             {form.formState.errors.root.message}
@@ -821,36 +848,44 @@ export function Stage5Form({
         </div>
 
         {!disabled && (
-          <Button
-            type="submit"
-            disabled={isSubmitting}
-            className="w-full md:w-auto text-white"
-            style={{
-              backgroundColor: isSubmitting ? undefined : ACCENT_COLOR,
-            }}
-            onMouseEnter={(e) => {
-              if (!isSubmitting) {
-                e.currentTarget.style.backgroundColor = "#E04E15";
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (!isSubmitting) {
-                e.currentTarget.style.backgroundColor = ACCENT_COLOR;
-              }
-            }}
-          >
-            {isSubmitting ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                {t("common.loading")}
-              </>
-            ) : (
-              <>
-                <Save className="mr-2 h-4 w-4" />
-                {isAccepted ? t("common.sendAgain") : t("common.save")}
-              </>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            {!isAccepted && (
+              <StageDraftSaveButton
+                onClick={handleSaveDraft}
+                isSubmitting={isSubmitting}
+              />
             )}
-          </Button>
+            <Button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full md:w-auto text-white"
+              style={{
+                backgroundColor: isSubmitting ? undefined : ACCENT_COLOR,
+              }}
+              onMouseEnter={(e) => {
+                if (!isSubmitting) {
+                  e.currentTarget.style.backgroundColor = "#E04E15";
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!isSubmitting) {
+                  e.currentTarget.style.backgroundColor = ACCENT_COLOR;
+                }
+              }}
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  {t("common.loading")}
+                </>
+              ) : (
+                <>
+                  <Save className="mr-2 h-4 w-4" />
+                  {isAccepted ? t("common.sendAgain") : t("common.save")}
+                </>
+              )}
+            </Button>
+          </div>
         )}
       </form>
 

@@ -180,18 +180,26 @@ export function StageForm({
     fetchStageData();
   }, [companyId, stageNumber, initialData]);
 
-  const handleSubmit = async (data: any) => {
-    // If editing an accepted stage, show warning dialog first
-    if (isAccepted && stageInfo.dataExists) {
-      setPendingSubmit(data);
+  const handleSubmit = async (
+    data: any,
+    options?: { draft?: boolean }
+  ) => {
+    const isDraft = options?.draft === true;
+    // If editing an accepted stage for a real submit, show warning dialog first
+    if (!isDraft && isAccepted && stageInfo.dataExists) {
+      setPendingSubmit({ data, options });
       setShowWarningDialog(true);
       return;
     }
 
-    await performSubmit(data);
+    await performSubmit(data, options);
   };
 
-  const performSubmit = async (data: any) => {
+  const performSubmit = async (
+    data: any,
+    options?: { draft?: boolean }
+  ) => {
+    const isDraft = options?.draft === true;
     setIsSubmitting(true);
     try {
       const method = stageInfo.dataExists ? "patch" : "post";
@@ -200,13 +208,19 @@ export function StageForm({
       // Handle file uploads for stage 2
       if (stageNumber === 2) {
         const formData = new FormData();
+        if (isDraft) {
+          formData.append("draft", "true");
+        }
 
         // Add stand_details fields
         if (data.stand_details) {
           formData.append("stand_details[company]", companyId.toString());
-          // stand_type is required, always send it
-          const standType = data.stand_details.stand_type || "provided_stand";
-          formData.append("stand_details[stand_type]", standType);
+          const standType =
+            data.stand_details.stand_type ||
+            (isDraft ? "" : "provided_stand");
+          if (standType) {
+            formData.append("stand_details[stand_type]", standType);
+          }
           if (data.stand_details.sc_details) {
             formData.append(
               "stand_details[sc_details]",
@@ -241,7 +255,11 @@ export function StageForm({
               logoFile,
               logoFile.name
             );
-          } else if (isProvidedStand && !(typeof logoFile === "string")) {
+          } else if (
+            !isDraft &&
+            isProvidedStand &&
+            !(typeof logoFile === "string")
+          ) {
             // Logo is required for provided_stand but not provided (neither File nor existing URL)
             throw new Error("Logo file is required for provided stand");
           }
@@ -254,6 +272,7 @@ export function StageForm({
               fireCertFile.name
             );
           } else if (
+            !isDraft &&
             isSelfConstruction &&
             !(typeof fireCertFile === "string")
           ) {
@@ -271,6 +290,7 @@ export function StageForm({
               visualizationFile.name
             );
           } else if (
+            !isDraft &&
             isSelfConstruction &&
             !(typeof visualizationFile === "string")
           ) {
@@ -312,12 +332,24 @@ export function StageForm({
       } else if (stageNumber === 4) {
         // Handle file uploads for stage 4
         const formData = new FormData();
+        if (isDraft) {
+          formData.append("draft", "true");
+        }
 
         // Add jobwalls
         if (data.jobwalls && Array.isArray(data.jobwalls)) {
-          const validJobwalls = data.jobwalls.filter(
-            (jobwall: any) => jobwall.name
-          );
+          // Full submit: only offers with a title. Draft: keep any partially filled offer.
+          const validJobwalls = isDraft
+            ? data.jobwalls.filter((jobwall: any) =>
+                Boolean(
+                  jobwall.name ||
+                    jobwall.description ||
+                    jobwall.benefits ||
+                    jobwall.requirements ||
+                    jobwall.url
+                )
+              )
+            : data.jobwalls.filter((jobwall: any) => jobwall.name);
           validJobwalls.forEach((jobwall: any, index: number) => {
             Object.keys(jobwall).forEach((key) => {
               if (key !== "company" && key !== "id") {
@@ -353,6 +385,9 @@ export function StageForm({
       } else {
         // Add company ID to the data where needed
         const payload = { ...data };
+        if (isDraft) {
+          payload.draft = true;
+        }
         if (stageNumber === 1 && payload.basic_data) {
           payload.basic_data.company = companyId;
         } else if (stageNumber === 3) {
@@ -364,12 +399,26 @@ export function StageForm({
         await apiClient[method](endpoint, payload);
       }
 
-      toast.success(t("exhibitor.form.saveSuccess"));
+      toast.success(
+        isDraft
+          ? t("exhibitor.form.draftSavedMessage")
+          : t("exhibitor.form.saveSuccess")
+      );
       onSuccess?.();
     } catch (error: any) {
       // For all stages, let the form component handle validation errors for better UX
       // Other errors or non-validation errors still show toast
       if (error.response?.status === 400) {
+        if (isDraft) {
+          const detail =
+            error.response?.data?.detail ||
+            error.response?.data?.message ||
+            t("exhibitor.form.saveError");
+          toast.error(
+            typeof detail === "string" ? detail : t("exhibitor.form.saveError")
+          );
+          return;
+        }
         // Re-throw validation errors so form components can handle them
         throw error;
       }
@@ -432,7 +481,8 @@ export function StageForm({
   const handleConfirmEdit = () => {
     setShowWarningDialog(false);
     if (pendingSubmit) {
-      performSubmit(pendingSubmit);
+      const { data, options } = pendingSubmit;
+      performSubmit(data, options);
     }
   };
 
@@ -486,6 +536,12 @@ export function StageForm({
               </p>
               <p>{stageInfo.feedback.comment}</p>
             </div>
+          </div>
+        )}
+        {stageInfo.status === "in_progress" && (
+          <div className="mt-1 flex items-start gap-2 rounded-md bg-amber-50 p-3 text-sm text-amber-800">
+            <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+            <p>{t("exhibitor.form.draftSavedMessage")}</p>
           </div>
         )}
         {isPending && (
