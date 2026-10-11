@@ -1,8 +1,8 @@
 # Weryfikacja zgłoszeń użytkowników
 
-Data weryfikacji: `2026-06-02`. Ostatnia aktualizacja: `2026-09-23`.
+Data weryfikacji: `2026-06-02`. Ostatnia aktualizacja: `2026-10-11`.
 
-Dokument zawiera przegląd zgłoszeń od użytkowników wraz ze statusem w aktualnej wersji systemu. Uzupełniony o ustalenia ze spotkania wizyjnego (2026-08-13) i decyzji produktowych.
+Dokument zawiera przegląd zgłoszeń od użytkowników wraz ze statusem w aktualnej wersji systemu. Uzupełniony o ustalenia ze spotkania wizyjnego (2026-08-13) i decyzji produktowych (w tym doprecyzowanie mapki 2026-10-06).
 
 ## Już wdrożone
 
@@ -25,19 +25,27 @@ Dokument zawiera przegląd zgłoszeń od użytkowników wraz ze statusem w aktua
 - Etap 2: checkbox mocy elektrycznej (`el_power_acknowledged`); etap 5: pola mocy / urządzeń.
 - Etap 2 / własna zabudowa: certyfikat niepalności opcjonalny przy przesłaniu; deadline i auto „wymaga poprawy” bez pliku (job `auto_reject_missing_fire_certs`).
 - Etap 2 / wyposażenie: kosz i wieszak w pakiecie (firma nie odznacza); wieszak ukryty przy własnej zabudowie; TV — wybór montażu (stojak / ściana) wg reguł typu stoiska.
+- Etap 4 / Jobwall: liczba darmowych ogłoszeń w `Settings` (`jobwall_free_count`, domyślnie 2); koszt tylko za kolejne; limity długości (opis katalogu 1700, ciało oferty 2000); linki do Katalog / Oferty Pracy na stronie targów.
 
 ## Częściowo wdrożone / wymaga doprecyzowania
 
 - Etap 2 / własna zabudowa: rdzeń jest (typ stoiska, certyfikat, wizualizacja); dalej brakuje m.in. podglądu mebli, wykładziny i doprecyzowań formularza (punkty poniżej).
-- Mapka stoisk: podgląd i przypisanie jednego stoiska na dzień działają; brak wielu stoisk / łączenia rozmiarów / rezerwacji roboczej (WBS 4.5 + mapa poniżej).
+- Mapka stoisk: podgląd i przypisanie jednego stoiska na dzień działają; brak łączenia / rozłączania, podstoisk (A1.A), dużego dialogu wyboru i rezerwacji roboczej (WBS 4.5 + mapa poniżej).
 - Dzień wystawy + rozmiar stoiska (ew. pakiet): na razie uzupełnia FR (firma ma widzieć ustalone wartości, bez edycji); finalny model zbierania tych danych — do dalszego ustalenia.
 
 ## Braki do realizacji
 
-- **Mapka / plan hali:** wiele stoisk jednej firmy tego samego dnia, łączenie rozmiarów, rezerwacja robocza vs ostateczne przypisanie, firma nie widzi mapy roboczej. Docelowo: arkusze planowania w systemie + eksport (zamiast równoległych Exceli).
+- **Mapka / plan hali** (doprecyzowanie 2026-10-06):
+  - łączenie mniejszych stanowisk w większe oraz rozłączanie większych z powrotem na mniejsze;
+  - tworzenie podstoisk typu `A1.A` / `A1.B` (np. przy rozbijaniu stoiska 8 m lub 12 m na mniejsze segmenty);
+  - FR wybiera stanowisko → mapka od razu się aktualizuje (widać zajęte miejsca);
+  - duży dialog z mapką przy ustawianiu miejsca przez staff (widoczne też inne już zajęte stoiska);
+  - wiele stoisk jednej firmy tego samego dnia; rezerwacja robocza vs ostateczne przypisanie;
+  - widoczność mapy: **staff / FR** — pełna mapa (w tym zajęte miejsca innych firm); **firma** — na mapie widzi tylko siebie;
+  - docelowo: arkusze planowania w systemie + eksport (zamiast równoległych Exceli).
 - **Firmy „tylko na mapkę”:** nowy typ wystawcy (okrojone konto, obok `basic` / `main` / `partner`) — firma widnieje na planie bez pełnego wypełniania etapów.
 - **Import Excela z Google Forms** (nie Forms bezpośrednio) do systemu — prefills / wczesne zgłoszenia; termin: przed oddaniem systemu (~1.11).
-- **Jobwall:** logika i komunikat „2 pierwsze ogłoszenia darmowe, kolejne płatne” + dedykowany eksport / skrypt pod E-JobWall (WBS 4.6).
+- **Jobwall / E-JobWall:** dedykowany eksport / skrypt i integracja ze stroną WWW (WBS 4.6) — darmowe ogłoszenia w panelu już są.
 - **Etap 2 / wyposażenie:** podgląd wizualny mebli (np. hover); kolor wykładziny z paletą (głównie partnerzy); wyjaśnienie własna vs standardowa zabudowa; wymiary własnej zabudowy osobnymi polami (nie free text); pole „co przywiozą”.
 - **Etap 5:** godzina przyjazdu (WBS 2.5).
 - **Anulowanie zaproszenia:** w dialogu opcja ustawienia statusu „Firma rezygnuje” (sygnał dla logistyki / Excela).
@@ -52,7 +60,7 @@ Dokument zawiera przegląd zgłoszeń od użytkowników wraz ze statusem w aktua
 ## Rekomendowany priorytet
 
 1. Import Excela z Forms (przed ~1.11) + dzień/rozmiar widoczne dla firmy (FR uzupełnia).
-2. Mapka: wiele stoisk / rezerwacja; potem arkusze w systemie → role.
-3. Jobwall: „2 pierwsze darmowe” + eksport E-JobWall.
+2. Mapka: łączenie/rozłączanie + podstoiska (A1.A) + duży dialog wyboru (FR) + rezerwacja; potem arkusze w systemie → role.
+3. Jobwall: eksport / integracja E-JobWall ze stroną.
 4. Etap 2: meble / wykładzina / doprecyzowanie formularza własnej zabudowy.
 5. Godzina przyjazdu; status „Firma rezygnuje” przy anulowaniu; nowy typ wystawcy (okrojone konto).
