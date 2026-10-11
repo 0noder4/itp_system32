@@ -32,6 +32,9 @@ urlpatterns = [
     # Jobwall price
     path('jobwall-price/', views.JobwallPriceView.as_view(), name='jobwall-price'),
 
+    # Edition number (public — app name / browser title)
+    path('edition/', views.EditionNumberView.as_view(), name='edition-number'),
+
     # Terms PDF (Stage 1 dialog)
     path('terms-pdf/', views.TermsPdfView.as_view(), name='terms-pdf'),
     

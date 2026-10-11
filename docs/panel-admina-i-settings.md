@@ -52,6 +52,9 @@ Model `Settings` jest globalny (singleton) i służy do konfiguracji zachowania 
 - `jobwall_price` - cena jednostkowa ogłoszenia jobwall.
   - używana przez frontend do wyliczania kosztu etapu jobwall,
   - udostępniana przez endpoint API (`JobwallPriceView`).
+- `jobwall_free_count` - ile pierwszych ogłoszeń jobwall jest darmowych (domyślnie `2`; `0` = wszystkie płatne).
+  - koszt = `max(0, liczba_ogłoszeń - jobwall_free_count) * jobwall_price`,
+  - zwracana razem z ceną przez `JobwallPriceView`.
 - `lunch_price` - cena dodatkowego obiadu (ponad pulę darmową).
   - używana przez frontend do wyliczania kosztu obiadów,
   - udostępniana przez endpoint API (`LunchPriceView`).
@@ -64,10 +67,13 @@ Model `Settings` jest globalny (singleton) i służy do konfiguracji zachowania 
 
 Uwaga: terminy są obecnie informacyjne (nie blokują technicznie zapisu formularza).
 
-### 3. Daty dni targowych
+### 3. Daty dni targowych i numer edycji
 
 - `day1_date`, `day2_date` - daty dni targów używane w prezentacji danych (UI, e-maile, PDF).
 - model zawiera metody formatujące te daty dla PL/EN.
+- `edition_number` - numer edycji (domyślnie 33), widoczny jako „System N” w panelu i w tytule karty przeglądarki.
+  - zmiana w Django Admin → Settings → Job Fair Dates (bez redeployu frontendu),
+  - publiczny endpoint `GET /api/edition/` (`edition_number`).
 
 ### 4. Ustawienia zaproszeń
 

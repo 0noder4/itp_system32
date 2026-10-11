@@ -243,8 +243,8 @@ class BasicData(models.Model):
 class Address(models.Model):
     form = models.OneToOneField(BasicData, on_delete=models.CASCADE, related_name='adress')
     street = models.CharField(max_length=255, verbose_name="ulica")
-    home_number = models.CharField(max_length=10, verbose_name="numer domu")
-    apt_number = models.CharField(max_length=10, verbose_name="numer lokalu", blank=True)  # optional
+    home_number = models.CharField(max_length=10, verbose_name="numer domu", blank=True)
+    apt_number = models.CharField(max_length=10, verbose_name="numer lokalu", blank=True)
     city = models.CharField(max_length=100, verbose_name="miasto")
     country = models.CharField(max_length=100, verbose_name="kraj")
     postal_code = models.CharField(max_length=20, verbose_name="kod pocztowy")
@@ -469,6 +469,11 @@ class Settings(models.Model):
         default=0.00,
         help_text="Cena za jedno ogłoszenie jobwall"
     )
+    jobwall_free_count = models.PositiveIntegerField(
+        default=2,
+        verbose_name="liczba darmowych ogłoszeń jobwall",
+        help_text="Ile pierwszych ogłoszeń jobwall jest darmowych (0 = wszystkie płatne).",
+    )
     lunch_price = models.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -563,6 +568,15 @@ class Settings(models.Model):
         null=True,
         verbose_name="regulamin (PDF)",
         help_text="PDF regulaminu pokazywany firmom przy zapisie etapu 1. Podmiana w adminie bez redeployu frontendu.",
+    )
+    edition_number = models.PositiveSmallIntegerField(
+        default=33,
+        validators=[MinValueValidator(1), MaxValueValidator(99)],
+        verbose_name="numer edycji",
+        help_text=(
+            "Numer edycji Targów Pracy (np. 33). Widoczny w nazwie systemu w panelu i tytule przeglądarki. "
+            "Zmiana w adminie bez redeployu frontendu."
+        ),
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

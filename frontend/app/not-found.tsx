@@ -6,12 +6,14 @@ import Link from "next/link";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/lib/i18n";
+import { useEdition } from "@/components/layout/EditionProvider";
 import { isAuthenticated, getUserType, getUserRoute } from "@/lib/auth";
 import { ACCENT_COLOR } from "@/lib/colors";
 
 export default function NotFound() {
   const router = useRouter();
   const { t } = useTranslation();
+  const { edition } = useEdition();
   const [isLoading, setIsLoading] = React.useState(true);
   const [homeRoute, setHomeRoute] = React.useState("/");
   const [isDarkMode, setIsDarkMode] = React.useState(false);
@@ -150,7 +152,7 @@ export default function NotFound() {
             href="/"
             className="text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
-            {t("common.appName")}
+            {t("common.appName", { edition })}
           </Link>
         </div>
       </div>

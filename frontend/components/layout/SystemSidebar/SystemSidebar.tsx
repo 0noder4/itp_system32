@@ -16,6 +16,7 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar";
 import { useTranslation } from "@/lib/i18n";
+import { useEdition } from "@/components/layout/EditionProvider";
 
 type Routes = {
   title: string;
@@ -29,10 +30,11 @@ export function SystemSidebar({
 }: React.ComponentProps<typeof Sidebar> & { routes: Routes }) {
   const pathname = usePathname();
   const { t } = useTranslation();
+  const { edition } = useEdition();
 
   return (
     <Sidebar {...props}>
-      <SidebarHeader>{t("common.appName")}</SidebarHeader>
+      <SidebarHeader>{t("common.appName", { edition })}</SidebarHeader>
       <SidebarContent>
         {/* We create a SidebarGroup for each parent. */}
         {routes?.map((item) => (

@@ -87,6 +87,11 @@ const isPublicEndpoint = (
     return true;
   }
 
+  // Edition number (app name / browser title) is public
+  if (url.includes("/api/edition/")) {
+    return true;
+  }
+
   return false;
 };
 

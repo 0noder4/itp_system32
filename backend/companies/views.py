@@ -10,7 +10,7 @@ from django.core.exceptions import ValidationError
 from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from users.permissions import IsAdminOrStaff
 
 from django.db import IntegrityError
@@ -2093,10 +2093,31 @@ class JobwallPriceView(APIView):
             settings = Settings.get_settings()
             return Response({
                 'jobwall_price': str(settings.jobwall_price),
+                'jobwall_free_count': settings.jobwall_free_count,
             }, status=status.HTTP_200_OK)
         except Exception as e:
             logger.error(f"Error in JobwallPriceView.get: {e}", exc_info=True)
             return Response({"detail": "An error occurred while retrieving jobwall price"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class EditionNumberView(APIView):
+    """
+    Public edition number for app name / browser title (no auth).
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        try:
+            settings = Settings.get_settings()
+            return Response({
+                'edition_number': settings.edition_number,
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Error in EditionNumberView.get: {e}", exc_info=True)
+            return Response(
+                {"detail": "An error occurred while retrieving edition number"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class TermsPdfView(APIView):

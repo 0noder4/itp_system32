@@ -108,16 +108,16 @@ class EquipmentSelectionAdmin(admin.ModelAdmin):
 class SettingsAdmin(admin.ModelAdmin):
     fieldsets = (
         ('Pricing', {
-            'fields': ('jobwall_price', 'lunch_price',),
-            'description': 'Set prices for jobwall postings and additional lunches. Jobwall price is charged per posting. Lunch price is charged for each lunch beyond the 2 free lunches per day included in the package (4 free lunches total for 2 days).'
+            'fields': ('jobwall_price', 'jobwall_free_count', 'lunch_price',),
+            'description': 'Set prices for jobwall postings and additional lunches. The first N jobwall postings (jobwall_free_count) are free; further postings are charged at jobwall_price each. Lunch price is charged for each lunch beyond the 2 free lunches per day included in the package (4 free lunches total for 2 days).'
         }),
         ('Stage Deadlines', {
             'fields': ('stage_1_deadline', 'stage_2_deadline', 'stage_3_deadline', 'stage_4_deadline', 'stage_5_deadline',),
             'description': 'Set global deadlines for each form stage. Deadlines are informational only and do not block form access. Leave blank if no deadline is needed for a stage.'
         }),
         ('Job Fair Dates', {
-            'fields': ('day1_date', 'day2_date',),
-            'description': 'Set the dates for the job fair days. These dates will be used in emails, PDFs, and throughout the system. Format: YYYY-MM-DD (e.g., 2025-03-10)'
+            'fields': ('day1_date', 'day2_date', 'edition_number',),
+            'description': 'Set the dates for the job fair days and the edition number shown in the app name / browser title (e.g. System 33). Format for dates: YYYY-MM-DD (e.g., 2025-03-10)'
         }),
         ('Invitation settings', {
             'fields': (
