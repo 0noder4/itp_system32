@@ -307,10 +307,7 @@ export function Stage1Form({
               )}
             </FieldGroup>
             <FieldGroup>
-              <FieldLabel>
-                {t("exhibitor.form.homeNumber")}
-                <span className="text-red-500">*</span>
-              </FieldLabel>
+              <FieldLabel>{t("exhibitor.form.homeNumber")}</FieldLabel>
               <Input
                 {...form.register("address.home_number")}
                 disabled={disabled}
@@ -323,14 +320,17 @@ export function Stage1Form({
               )}
             </FieldGroup>
             <FieldGroup>
-              <FieldLabel>
-                {t("exhibitor.form.aptNumber")}
-                <span className="text-red-500">*</span>
-              </FieldLabel>
+              <FieldLabel>{t("exhibitor.form.aptNumber")}</FieldLabel>
               <Input
                 {...form.register("address.apt_number")}
                 disabled={disabled}
               />
+              {form.formState.errors.address?.apt_number && (
+                <FieldError>
+                  {form.formState.errors.address.apt_number.message ||
+                    t("exhibitor.form.required")}
+                </FieldError>
+              )}
             </FieldGroup>
             <FieldGroup>
               <FieldLabel>

@@ -433,10 +433,11 @@ class OrderSummaryPDFGenerator:
                     Paragraph(self._t("Street:", "Ulica:"), self.bold_label_style),
                     Paragraph(address.street, self.normal_style)
                 ])
-                data.append([
-                    Paragraph(self._t("Home Number:", "Numer domu:"), self.bold_label_style),
-                    Paragraph(address.home_number, self.normal_style)
-                ])
+                if address.home_number:
+                    data.append([
+                        Paragraph(self._t("Home Number:", "Numer domu:"), self.bold_label_style),
+                        Paragraph(address.home_number, self.normal_style)
+                    ])
                 if address.apt_number:
                     data.append([
                         Paragraph(self._t("Apt Number:", "Numer lokalu:"), self.bold_label_style),
