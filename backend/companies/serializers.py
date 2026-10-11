@@ -568,6 +568,9 @@ class WorkshopSerializer(serializers.ModelSerializer):
 # ETAP 4: Jobwall
 
 class JobwallSerializer(serializers.ModelSerializer):
+    # Keep in sync with frontend JOBWALL_BODY_MAX_CHARS (print A4 fit).
+    JOBWALL_BODY_MAX_CHARS = 2000
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if self.context.get('draft'):
@@ -580,16 +583,40 @@ class JobwallSerializer(serializers.ModelSerializer):
                 if hasattr(field, 'allow_null'):
                     field.allow_null = True
 
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+
+        def field_text(name):
+            if name in attrs and attrs[name] is not None:
+                return str(attrs[name])
+            if self.instance is not None:
+                return str(getattr(self.instance, name, "") or "")
+            return ""
+
+        total = (
+            len(field_text("description"))
+            + len(field_text("benefits"))
+            + len(field_text("requirements"))
+        )
+        if total > self.JOBWALL_BODY_MAX_CHARS:
+            raise serializers.ValidationError({
+                "requirements": (
+                    f"Combined description, benefits and requirements must be "
+                    f"at most {self.JOBWALL_BODY_MAX_CHARS} characters."
+                )
+            })
+        return attrs
+
     def validate_url(self, value):
         """Validate that url is either a valid URL or a valid email address"""
         if not value:
             return value
-        
+
         # Check if it's a valid URL
         from django.core.validators import URLValidator
         from django.core.exceptions import ValidationError
         import re
-        
+
         url_validator = URLValidator()
         try:
             url_validator(value)
@@ -602,7 +629,7 @@ class JobwallSerializer(serializers.ModelSerializer):
             if self.context.get('draft'):
                 return value
             raise serializers.ValidationError("Must be a valid URL or email address")
-    
+
     class Meta:
         model = Jobwall
         fields = '__all__'
@@ -611,12 +638,26 @@ class JobwallSerializer(serializers.ModelSerializer):
 # ETAP 5: Inne dane
 
 class DescriptionSerializer(serializers.ModelSerializer):
+    # Keep in sync with frontend CATALOGUE_DESCR_MAX_CHARS (print catalogue fit).
+    CATALOGUE_DESCR_MAX_CHARS = 1700
+
     class Meta:
         model = Description
         exclude = ('company',)  # Company is set by Stage4Serializer.create(), not validated here
         extra_kwargs = {
             'logo_file': {'required': False, 'allow_null': True},
         }
+
+    def validate_descr(self, value):
+        if value is None:
+            return value
+        text = str(value)
+        if len(text) > self.CATALOGUE_DESCR_MAX_CHARS:
+            raise serializers.ValidationError(
+                f"Catalogue description must be at most "
+                f"{self.CATALOGUE_DESCR_MAX_CHARS} characters."
+            )
+        return value
 
 
 class FinalDataSerializer(serializers.ModelSerializer):

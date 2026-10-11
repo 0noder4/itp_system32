@@ -7,8 +7,8 @@ export const stage1Schema = z.object({
   }),
   address: z.object({
     street: z.string().min(1, "Street is required").max(255, "Street must be 255 characters or less"),
-    home_number: z.string().min(1, "Home number is required").max(10, "Home number must be 10 characters or less"),
-    apt_number: z.string().max(10, "Apartment number must be 10 characters or less").optional(),
+    home_number: z.string().max(10, "Home number must be 10 characters or less"),
+    apt_number: z.string().max(10, "Apartment number must be 10 characters or less"),
     city: z.string().min(1, "City is required").max(100, "City must be 100 characters or less"),
     country: z.string().min(1, "Country is required").max(100, "Country must be 100 characters or less"),
     postal_code: z.string().min(1, "Postal code is required").max(20, "Postal code must be 20 characters or less"),
@@ -279,48 +279,74 @@ export const stage3Schema = z
     }
   });
 
+/** Max combined length of description + benefits + requirements (print A4 fit). */
+export const JOBWALL_BODY_MAX_CHARS = 2000;
+
+/** Max length of company catalogue description (print catalogue fit). */
+export const CATALOGUE_DESCR_MAX_CHARS = 1700;
+
 export const stage4Schema = z.object({
   jobwalls: z
     .array(
-      z.object({
-        name: z.string().min(1, "Position name is required"),
-        form: z.enum(["s", "z", "h", "k", "m"], {
-          message: "Work form is required",
-        }),
-        workload: z.enum(["pelen", "pol", "trzyczwarte", "el"], {
-          message: "Workload is required",
-        }),
-        contract: z.enum(["uop", "uoz", "uod", "b2b", "uos"], {
-          message: "Contract type is required",
-        }),
-        description: z.string().min(1, "Description is required"),
-        benefits: z.string().min(1, "Benefits are required"),
-        requirements: z.string().min(1, "Requirements are required"),
-        url: z
-          .string()
-          .min(1, "Application URL or email is required")
-          .refine(
-            (val) => {
-              // Check if it's a valid URL
-              try {
-                new URL(val);
-                return true;
-              } catch {
-                // Check if it's a valid email
-                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-                return emailRegex.test(val);
+      z
+        .object({
+          name: z.string().min(1, "Position name is required"),
+          form: z.enum(["s", "z", "h", "k", "m"], {
+            message: "Work form is required",
+          }),
+          workload: z.enum(["pelen", "pol", "trzyczwarte", "el"], {
+            message: "Workload is required",
+          }),
+          contract: z.enum(["uop", "uoz", "uod", "b2b", "uos"], {
+            message: "Contract type is required",
+          }),
+          description: z.string().min(1, "Description is required"),
+          benefits: z.string().min(1, "Benefits are required"),
+          requirements: z.string().min(1, "Requirements are required"),
+          url: z
+            .string()
+            .min(1, "Application URL or email is required")
+            .refine(
+              (val) => {
+                // Check if it's a valid URL
+                try {
+                  new URL(val);
+                  return true;
+                } catch {
+                  // Check if it's a valid email
+                  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                  return emailRegex.test(val);
+                }
+              },
+              {
+                message: "Must be a valid URL or email address",
               }
-            },
-            {
-              message: "Must be a valid URL or email address",
-            }
-          ),
-      })
+            ),
+        })
+        .superRefine((data, ctx) => {
+          const total =
+            (data.description?.length ?? 0) +
+            (data.benefits?.length ?? 0) +
+            (data.requirements?.length ?? 0);
+          if (total > JOBWALL_BODY_MAX_CHARS) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: `Combined description, benefits and requirements must be at most ${JOBWALL_BODY_MAX_CHARS} characters`,
+              path: ["requirements"],
+            });
+          }
+        })
     )
     .optional(),
   description: z
     .object({
-      descr: z.string().min(1, "Description is required"),
+      descr: z
+        .string()
+        .min(1, "Description is required")
+        .max(
+          CATALOGUE_DESCR_MAX_CHARS,
+          `Must be at most ${CATALOGUE_DESCR_MAX_CHARS} characters`
+        ),
       logo_file: z.any().optional(), // File upload
     })
     .refine(

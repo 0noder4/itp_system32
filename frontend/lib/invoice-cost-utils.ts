@@ -25,19 +25,34 @@ export function calculateEquipmentAdditionalCost(
 
 export function calculateJobwallCost(
   jobwallCount: number,
-  jobwallPrice: number
+  jobwallPrice: number,
+  freeCount: number = 0
 ): number {
-  return Math.max(0, jobwallCount) * Math.max(0, jobwallPrice);
+  const chargeable = Math.max(0, Math.max(0, jobwallCount) - Math.max(0, freeCount));
+  return chargeable * Math.max(0, jobwallPrice);
 }
 
-async function fetchJobwallUnitPrice(): Promise<number> {
+type JobwallPricing = {
+  jobwall_price: number;
+  jobwall_free_count: number;
+};
+
+async function fetchJobwallPricing(): Promise<JobwallPricing> {
   try {
-    const response = await apiClient.get<{ jobwall_price?: string }>(
-      "/api/jobwall-price/"
-    );
-    return parseFloat(String(response.data?.jobwall_price ?? "0")) || 0;
+    const response = await apiClient.get<{
+      jobwall_price?: string;
+      jobwall_free_count?: number;
+    }>("/api/jobwall-price/");
+    return {
+      jobwall_price:
+        parseFloat(String(response.data?.jobwall_price ?? "0")) || 0,
+      jobwall_free_count: Math.max(
+        0,
+        Number(response.data?.jobwall_free_count ?? 0) || 0
+      ),
+    };
   } catch {
-    return 0;
+    return { jobwall_price: 0, jobwall_free_count: 0 };
   }
 }
 
@@ -69,16 +84,27 @@ export async function fetchSavedEquipmentCost(
 
 export async function fetchSavedJobwallCost(
   companyId: number,
-  jobwallPrice?: number
+  jobwallPrice?: number,
+  jobwallFreeCount?: number
 ): Promise<number> {
+  const pricing =
+    jobwallPrice === undefined || jobwallFreeCount === undefined
+      ? await fetchJobwallPricing()
+      : null;
   const price =
-    jobwallPrice === undefined ? await fetchJobwallUnitPrice() : jobwallPrice;
+    jobwallPrice === undefined
+      ? (pricing?.jobwall_price ?? 0)
+      : jobwallPrice;
+  const freeCount =
+    jobwallFreeCount === undefined
+      ? (pricing?.jobwall_free_count ?? 0)
+      : jobwallFreeCount;
   try {
     const response = await apiClient.get<Stage4Data>(
       `/api/company/${companyId}/form/stage-4/`
     );
     const count = response.data?.jobwalls?.length ?? 0;
-    return calculateJobwallCost(count, price);
+    return calculateJobwallCost(count, price, freeCount);
   } catch {
     return 0;
   }
@@ -117,9 +143,9 @@ export async function fetchInvoiceTotal(
   companyId: number,
   overrides: InvoiceCostOverrides = {}
 ): Promise<number> {
-  const needJobwallPrice = overrides.jobwall === undefined;
-  const jobwallPrice = needJobwallPrice
-    ? await fetchJobwallUnitPrice()
+  const needJobwallPricing = overrides.jobwall === undefined;
+  const jobwallPricing = needJobwallPricing
+    ? await fetchJobwallPricing()
     : undefined;
 
   const [equipment, jobwall, lunch] = await Promise.all([
@@ -128,7 +154,11 @@ export async function fetchInvoiceTotal(
       : fetchSavedEquipmentCost(companyId),
     overrides.jobwall !== undefined
       ? Promise.resolve(overrides.jobwall)
-      : fetchSavedJobwallCost(companyId, jobwallPrice),
+      : fetchSavedJobwallCost(
+          companyId,
+          jobwallPricing?.jobwall_price,
+          jobwallPricing?.jobwall_free_count
+        ),
     overrides.lunch !== undefined
       ? Promise.resolve(overrides.lunch)
       : fetchSavedLunchCost(companyId),

@@ -6,7 +6,12 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { apiClient } from "@/lib/api";
 import { useTranslation } from "@/lib/i18n";
 import { Stage4Data } from "@/lib/types";
-import { stage4Schema, Stage4FormData } from "./schemas";
+import {
+  CATALOGUE_DESCR_MAX_CHARS,
+  JOBWALL_BODY_MAX_CHARS,
+  stage4Schema,
+  Stage4FormData,
+} from "./schemas";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ACCENT_COLOR } from "@/lib/colors";
@@ -31,7 +36,10 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { StageDraftSaveButton } from "./StageDraftSaveButton";
-import { fetchInvoiceTotal } from "@/lib/invoice-cost-utils";
+import {
+  calculateJobwallCost,
+  fetchInvoiceTotal,
+} from "@/lib/invoice-cost-utils";
 
 interface Stage4FormProps {
   companyId?: number;
@@ -55,6 +63,7 @@ export function Stage4Form({
 }: Stage4FormProps) {
   const { t } = useTranslation();
   const [jobwallPrice, setJobwallPrice] = React.useState<number>(0);
+  const [jobwallFreeCount, setJobwallFreeCount] = React.useState<number>(2);
   const [isLoadingPrice, setIsLoadingPrice] = React.useState(true);
   const [showCostDialog, setShowCostDialog] = React.useState(false);
   const [pendingFormData, setPendingFormData] =
@@ -137,15 +146,19 @@ export function Stage4Form({
     name: "jobwalls",
   });
 
-  // Fetch jobwall price on mount
+  // Fetch jobwall price and free count on mount
   React.useEffect(() => {
     async function fetchJobwallPrice() {
       try {
         const response = await apiClient.get("/api/jobwall-price/");
         setJobwallPrice(parseFloat(response.data.jobwall_price) || 0);
+        setJobwallFreeCount(
+          Math.max(0, Number(response.data.jobwall_free_count ?? 2) || 0)
+        );
       } catch (error) {
         console.error("Error fetching jobwall price:", error);
         setJobwallPrice(0);
+        setJobwallFreeCount(2);
       } finally {
         setIsLoadingPrice(false);
       }
@@ -177,7 +190,12 @@ export function Stage4Form({
   ];
 
   const watchJobwalls = form.watch("jobwalls") || [];
-  const totalJobwallCost = watchJobwalls.length * jobwallPrice;
+  const watchCatalogueDescr = form.watch("description.descr") || "";
+  const totalJobwallCost = calculateJobwallCost(
+    watchJobwalls.length,
+    jobwallPrice,
+    jobwallFreeCount
+  );
 
   const handleFileChange = (file: File | null) => {
     if (file) {
@@ -378,9 +396,11 @@ export function Stage4Form({
 
   const handleFormSubmit = async (data: Stage4FormData) => {
     const dataWithFiles = buildSubmitPayload(data);
-    const stageCost = dataWithFiles.jobwalls?.length
-      ? dataWithFiles.jobwalls.length * jobwallPrice
-      : 0;
+    const stageCost = calculateJobwallCost(
+      dataWithFiles.jobwalls?.length ?? 0,
+      jobwallPrice,
+      jobwallFreeCount
+    );
     setPendingFormData(dataWithFiles);
     setPendingJobwallCost(stageCost);
     setIsPreparingDialog(true);
@@ -440,15 +460,40 @@ export function Stage4Form({
       <div className="space-y-3">
         <h3 className="font-medium">{t("exhibitor.form.catalogue")}</h3>
         <p className="text-sm text-muted-foreground">
-          {t("exhibitor.form.catalogueDescription")}
+          {t("exhibitor.form.catalogueDescriptionBefore")}
+          <a
+            href="https://targipracy.org.pl/catalogue"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline underline-offset-2 hover:text-foreground"
+          >
+            {t("exhibitor.form.catalogueDescriptionLink")}
+          </a>
+          {t("exhibitor.form.catalogueDescriptionAfter")}
         </p>
         <FieldGroup>
-          <FieldLabel>{t("exhibitor.form.description")}</FieldLabel>
+          <FieldLabel>
+            {t("exhibitor.form.description")}{" "}
+            <span className="text-red-500">*</span>
+          </FieldLabel>
           <Textarea
             {...form.register("description.descr")}
             rows={4}
             disabled={disabled}
+            maxLength={CATALOGUE_DESCR_MAX_CHARS}
           />
+          <p
+            className={cn(
+              "text-xs text-muted-foreground",
+              watchCatalogueDescr.length >= CATALOGUE_DESCR_MAX_CHARS &&
+                "text-destructive"
+            )}
+          >
+            {t("exhibitor.form.catalogueDescrCharCount", {
+              current: String(watchCatalogueDescr.length),
+              max: String(CATALOGUE_DESCR_MAX_CHARS),
+            })}
+          </p>
           {form.formState.errors.description?.descr && (
             <FieldError>
               {form.formState.errors.description.descr.message ||
@@ -528,7 +573,16 @@ export function Stage4Form({
       <div className="space-y-3">
         <h3 className="font-medium">{t("exhibitor.form.jobwallInfo")}</h3>
         <p className="text-sm text-muted-foreground">
-          {t("exhibitor.form.jobwallDescription")}
+          {t("exhibitor.form.jobwallDescriptionBefore")}
+          <a
+            href="https://targipracy.org.pl/jobs"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline underline-offset-2 hover:text-foreground"
+          >
+            {t("exhibitor.form.jobwallDescriptionLink")}
+          </a>
+          {t("exhibitor.form.jobwallDescriptionAfter")}
         </p>
         <div className="flex justify-start">
           <Button
@@ -553,15 +607,28 @@ export function Stage4Form({
             {t("exhibitor.form.addJobwall")}
           </Button>
         </div>
-        {jobwallPrice > 0 && (
-          <div className="rounded-md bg-information/10 p-3 text-sm text-information border border-information/20 dark:bg-information/20 dark:text-information-foreground dark:border-information/30">
-            <p className="font-medium mb-1">
-              {t("exhibitor.form.jobwallPricingDisclaimer")}
-            </p>
-            <p>
-              {t("exhibitor.form.jobwallPricePerPosting")}:{" "}
-              {jobwallPrice.toFixed(2)} PLN
-            </p>
+        {!isLoadingPrice && jobwallPrice > 0 && (
+          <div className="rounded-md bg-information/10 p-3 text-sm text-information border border-information/20 dark:bg-information/20 dark:text-information-foreground dark:border-information/30 space-y-1">
+            {jobwallFreeCount > 0 ? (
+              <>
+                <p className="font-medium">
+                  {t("exhibitor.form.jobwallPricingDisclaimerFree", {
+                    freeCount: String(jobwallFreeCount),
+                  })}
+                </p>
+                <p className="font-medium">
+                  {t("exhibitor.form.jobwallPricingDisclaimerPaid", {
+                    price: jobwallPrice.toFixed(2),
+                  })}
+                </p>
+              </>
+            ) : (
+              <p className="font-medium">
+                {`${t("exhibitor.form.jobwallPricingDisclaimer")} ${t(
+                  "exhibitor.form.jobwallPricePerPosting"
+                )}: ${jobwallPrice.toFixed(2)} PLN`}
+              </p>
+            )}
           </div>
         )}
         {jobwallFields.map((field, index) => (
@@ -585,7 +652,10 @@ export function Stage4Form({
             </div>
             <div className="grid gap-4">
               <FieldGroup>
-                <FieldLabel>{t("exhibitor.form.positionName")}</FieldLabel>
+                <FieldLabel>
+                  {t("exhibitor.form.positionName")}{" "}
+                  <span className="text-red-500">*</span>
+                </FieldLabel>
                 <Input
                   {...form.register(`jobwalls.${index}.name`)}
                   disabled={disabled}
@@ -600,7 +670,10 @@ export function Stage4Form({
 
               <div className="grid gap-4 md:grid-cols-3">
                 <FieldGroup>
-                  <FieldLabel>{t("exhibitor.form.workForm")}</FieldLabel>
+                  <FieldLabel>
+                    {t("exhibitor.form.workForm")}{" "}
+                    <span className="text-red-500">*</span>
+                  </FieldLabel>
                   <Controller
                     name={`jobwalls.${index}.form`}
                     control={form.control}
@@ -621,7 +694,10 @@ export function Stage4Form({
                 </FieldGroup>
 
                 <FieldGroup>
-                  <FieldLabel>{t("exhibitor.form.workload")}</FieldLabel>
+                  <FieldLabel>
+                    {t("exhibitor.form.workload")}{" "}
+                    <span className="text-red-500">*</span>
+                  </FieldLabel>
                   <Controller
                     name={`jobwalls.${index}.workload`}
                     control={form.control}
@@ -642,7 +718,10 @@ export function Stage4Form({
                 </FieldGroup>
 
                 <FieldGroup>
-                  <FieldLabel>{t("exhibitor.form.contract")}</FieldLabel>
+                  <FieldLabel>
+                    {t("exhibitor.form.contract")}{" "}
+                    <span className="text-red-500">*</span>
+                  </FieldLabel>
                   <Controller
                     name={`jobwalls.${index}.contract`}
                     control={form.control}
@@ -665,7 +744,8 @@ export function Stage4Form({
 
               <FieldGroup>
                 <FieldLabel>
-                  {t("exhibitor.form.positionDescription")}
+                  {t("exhibitor.form.positionDescription")}{" "}
+                  <span className="text-red-500">*</span>
                 </FieldLabel>
                 <Textarea
                   {...form.register(`jobwalls.${index}.description`)}
@@ -681,7 +761,10 @@ export function Stage4Form({
               </FieldGroup>
 
               <FieldGroup>
-                <FieldLabel>{t("exhibitor.form.benefits")}</FieldLabel>
+                <FieldLabel>
+                  {t("exhibitor.form.benefits")}{" "}
+                  <span className="text-red-500">*</span>
+                </FieldLabel>
                 <Textarea
                   {...form.register(`jobwalls.${index}.benefits`)}
                   rows={3}
@@ -696,12 +779,34 @@ export function Stage4Form({
               </FieldGroup>
 
               <FieldGroup>
-                <FieldLabel>{t("exhibitor.form.requirements")}</FieldLabel>
+                <FieldLabel>
+                  {t("exhibitor.form.requirements")}{" "}
+                  <span className="text-red-500">*</span>
+                </FieldLabel>
                 <Textarea
                   {...form.register(`jobwalls.${index}.requirements`)}
                   rows={3}
                   disabled={disabled}
                 />
+                {(() => {
+                  const bodyLen =
+                    (watchJobwalls[index]?.description?.length ?? 0) +
+                    (watchJobwalls[index]?.benefits?.length ?? 0) +
+                    (watchJobwalls[index]?.requirements?.length ?? 0);
+                  return (
+                    <p
+                      className={cn(
+                        "text-xs text-muted-foreground",
+                        bodyLen > JOBWALL_BODY_MAX_CHARS && "text-destructive"
+                      )}
+                    >
+                      {t("exhibitor.form.jobwallBodyCharCount", {
+                        current: String(bodyLen),
+                        max: String(JOBWALL_BODY_MAX_CHARS),
+                      })}
+                    </p>
+                  );
+                })()}
                 {form.formState.errors.jobwalls?.[index]?.requirements && (
                   <FieldError>
                     {form.formState.errors.jobwalls[index]?.requirements?.message ||
