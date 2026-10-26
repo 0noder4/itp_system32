@@ -21,7 +21,8 @@ STAND_NUMBER_REMAP = {
 
 def remap_stand_numbers(apps, schema_editor):
     Stand = apps.get_model("companies", "Stand")
-    TEMP_PREFIX = "__remap_ade__"
+    # Must fit CharField(max_length=10) with pk — see 0022 note.
+    TEMP_PREFIX = "~"
 
     stands = list(Stand.objects.exclude(stand_number__in=["", "brak"]).all())
     planned = []

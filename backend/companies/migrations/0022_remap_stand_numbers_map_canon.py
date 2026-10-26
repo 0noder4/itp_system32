@@ -100,7 +100,9 @@ def remap_stand_numbers(apps, schema_editor):
     Stand = apps.get_model("companies", "Stand")
     # Two-phase update avoids collisions when old ID equals another booth's new ID
     # (e.g. C5→C4 while old C4→C8). Use a temporary prefix, then final values.
-    TEMP_PREFIX = "__remap__"
+    # Must fit CharField(max_length=10) with pk (e.g. "_42"); long prefixes like
+    # "__remap__" overflow and abort migrate on MySQL (DataError 1406).
+    TEMP_PREFIX = "_"
 
     stands = list(Stand.objects.exclude(stand_number__in=["", "brak"]).all())
     planned = []
