@@ -75,46 +75,10 @@ export default function Index() {
       // Redirect to appropriate panel based on user type
       // RouteGuard will handle the authorization check
       router.replace(route);
-    } catch (error: any) {
-      // Handle authentication errors
-      let errorMessage = t("auth.login.errorDescription");
-      
-      if (error.response?.data) {
-        const errorData = error.response.data;
-        
-        // Check for detail field first (most common in DRF)
-        if (errorData.detail) {
-          errorMessage = errorData.detail;
-        } else if (errorData.message) {
-          errorMessage = errorData.message;
-        } else if (errorData.non_field_errors) {
-          // Handle non_field_errors array
-          const nonFieldErrors = errorData.non_field_errors;
-          if (Array.isArray(nonFieldErrors)) {
-            errorMessage = nonFieldErrors[0];
-          } else if (typeof nonFieldErrors === "string") {
-            errorMessage = nonFieldErrors;
-          }
-        } else {
-          // Try to extract the first error from any field
-          const errorKeys = Object.keys(errorData);
-          if (errorKeys.length > 0) {
-            const firstError = errorData[errorKeys[0]];
-            if (Array.isArray(firstError)) {
-              errorMessage = firstError[0];
-            } else if (typeof firstError === "string") {
-              errorMessage = firstError;
-            } else if (typeof firstError === "object") {
-              errorMessage = Object.values(firstError)[0] as string;
-            }
-          }
-        }
-      } else if (error.message) {
-        errorMessage = error.message;
-      }
-
+    } catch {
+      // Always use translated copy — API detail is English-only (DRF).
       toast.error(t("auth.login.error"), {
-        description: errorMessage,
+        description: t("auth.login.errorDescription"),
       });
     } finally {
       setIsLoading(false);
@@ -125,14 +89,16 @@ export default function Index() {
     <Card className="w-full sm:max-w-md">
       <CardHeader>
         <div className="flex flex-col items-center gap-4 mb-2">
-          <Image
-            src="/images/ITP_LOGO_horizontal_black.png"
-            alt="ITP Logo"
-            width={200}
-            height={60}
-            className="h-auto w-auto max-h-12 object-contain"
-            priority
-          />
+          <div className="rounded-md px-3 py-2 dark:bg-white">
+            <Image
+              src="/images/ITP_LOGO_horizontal_black.png"
+              alt="ITP Logo"
+              width={200}
+              height={60}
+              className="h-auto w-auto max-h-12 object-contain"
+              priority
+            />
+          </div>
         </div>
         <div className="flex items-center justify-between">
           <CardTitle>{t("auth.login.title")}</CardTitle>

@@ -13,9 +13,9 @@ import {
 } from "@/components/ui/popover";
 import { ACCENT_COLOR, STAFF_ACCENT_COLOR } from "@/lib/colors";
 
-const languages: { code: Locale; label: string; flag: string }[] = [
-  { code: "en", label: "English", flag: "🇬🇧" },
-  { code: "pl", label: "Polski", flag: "🇵🇱" },
+const languages: { code: Locale; label: string; abbr: string }[] = [
+  { code: "en", label: "English", abbr: "EN" },
+  { code: "pl", label: "Polski", abbr: "PL" },
 ];
 
 interface LanguageSelectorProps {
@@ -72,7 +72,7 @@ export function LanguageSelector({ accentColor = ACCENT_COLOR }: LanguageSelecto
           }}
         >
           <Globe className="h-4 w-4" />
-          <span className="hidden sm:inline">{currentLanguage?.flag}</span>
+          <span className="hidden sm:inline">{currentLanguage?.abbr}</span>
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[300px] p-0" align="end">
@@ -110,7 +110,9 @@ export function LanguageSelector({ accentColor = ACCENT_COLOR }: LanguageSelecto
                   }
                 }}
             >
-              <span className="text-lg">{lang.flag}</span>
+              <span className="text-xs font-semibold tracking-wide opacity-80">
+                {lang.abbr}
+              </span>
               <span>{lang.label}</span>
                 {isActive && (
                 <span className="ml-auto text-xs opacity-60">✓</span>
