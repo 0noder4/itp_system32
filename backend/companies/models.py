@@ -2,6 +2,7 @@ from django.db import models
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
+import copy
 import uuid
 import datetime
 import django.utils
@@ -222,6 +223,42 @@ class Stand(models.Model):
     day = models.CharField(max_length=15, choices=DAY_OPT)
     stand_number = models.CharField(max_length=10, blank=True, default='brak')
     stand_size = models.CharField(max_length=11, choices=SIZE_OPT)
+
+
+class MapLayout(models.Model):
+    """Singleton hall map layout for day1/day2 (editable by staff)."""
+
+    sync_days = models.BooleanField(
+        default=True,
+        verbose_name="synchronizuj dzień 2 z dniem 1",
+    )
+    day1 = models.JSONField(default=dict, verbose_name="layout dzień 1")
+    day2 = models.JSONField(default=dict, verbose_name="layout dzień 2")
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="map_layouts_updated",
+    )
+
+    class Meta:
+        verbose_name = "Map layout"
+        verbose_name_plural = "Map layouts"
+
+    def __str__(self):
+        return f"MapLayout(sync={self.sync_days})"
+
+    @classmethod
+    def get_solo(cls):
+        from .map_seed import default_layout
+
+        obj = cls.objects.first()
+        if obj is None:
+            layout = default_layout()
+            obj = cls.objects.create(sync_days=True, day1=layout, day2=copy.deepcopy(layout))
+        return obj
 
 
 class Deadline(models.Model):

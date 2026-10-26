@@ -2,7 +2,7 @@
  * Przegląd aktualizacji dla panelu staff.
  * Aktualizuj przy commicie batcha na main (reguła: update-overview-przed-deployem),
  * nie dopiero przy tar — wpis ma wejść w ten sam commit co zmiany.
- * Najnowszy wpis pierwszy; trzymaj ok. 5 ostatnich.
+ * Najnowszy wpis pierwszy; trzymaj ok. 10 ostatnich.
  */
 
 export type UpdateOverviewEntry = {
@@ -12,6 +12,23 @@ export type UpdateOverviewEntry = {
 };
 
 export const updateOverviews: readonly UpdateOverviewEntry[] = [
+  {
+    releaseDate: "2026-10-26",
+    highlights: [
+      "Mapa stoisk jest edytowalna w panelu staff: łączenie i rozłączanie stoisk (4/6/8/12 m²) w torach A–F, z wariantami etykiet (np. B1a + B1b + B2) oraz ręcznym podziałem.",
+      "Dzień 2 domyślnie synchronizuje się z dniem 1 (można wyłączyć). Przy zajętym stoisku jest ostrzeżenie o konsultacji z opiekunem FR.",
+      "Przypisanie stoiska firmie ma mapę z zajętymi miejscami; nie da się zapisać numeru już zajętego przez inną firmę.",
+      "Firma widzi na mapie tylko swoje stoisko (layout z systemu, bez osobnych plików SVG).",
+      "Konto admina może przywrócić domyślną mapę (kasuje też przypisania stoisk) — z potwierdzeniem.",
+    ],
+    worthChecking: [
+      "Panel staff → Mapa → Edytuj mapę → zaznacz stoiska → Zmień podział / podział ręczny → sprawdź etykiety.",
+      "Panel staff → Mapa → odznacz synchronizację dnia 2 → zmień dzień 1 → sprawdź dzień 2.",
+      "Panel staff → firma → Edytuj stoisko → kliknij wolne miejsce na mapie → zapisz; spróbuj zajętego numeru.",
+      "Panel firmy → Mapa → własne stoisko podświetlone; bez stoisk innych firm.",
+      "Konto admin → Mapa → Przywróć domyślną → potwierdź.",
+    ],
+  },
   {
     releaseDate: "2026-10-11",
     highlights: [

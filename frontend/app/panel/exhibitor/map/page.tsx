@@ -6,25 +6,34 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertCircle } from "lucide-react";
-import { MapViewer } from "@/components/exhibitor/Map/MapViewer";
+import { MapCanvas } from "@/components/map/MapCanvas";
 import useSWR from "swr";
 import { fetcher } from "@/lib/api";
 import { Company, Stage4Data, Stage1Data } from "@/lib/types";
 import { useFormStatus } from "@/hooks/use-form-status";
+import {
+  MapLayoutResponse,
+  segmentsForDay,
+} from "@/lib/mapLayout";
+import { getFileUrl } from "@/components/staff/StageViewer/utils";
 
 export default function MapPage() {
   const { t } = useTranslation();
   const { companyId, isLoading: isLoadingStatus } = useFormStatus();
-  const [selectedDay, setSelectedDay] = useState<string>("day1");
+  const [selectedDay, setSelectedDay] = useState<"day1" | "day2">("day1");
 
-  // Fetch company data
   const {
     data: company,
     error: companyError,
     isLoading: isLoadingCompany,
   } = useSWR<Company>(companyId ? `/api/company/${companyId}/` : null, fetcher);
 
-  // Fetch stage 4 data for catalogue logo (description.logo_file)
+  const {
+    data: layout,
+    error: layoutError,
+    isLoading: isLoadingLayout,
+  } = useSWR<MapLayoutResponse>("/api/map-layout/", fetcher);
+
   const {
     data: stage4Data,
     error: stage4Error,
@@ -34,7 +43,6 @@ export default function MapPage() {
     fetcher
   );
 
-  // Fetch stage 1 data for company full name
   const {
     data: stage1Data,
     error: stage1Error,
@@ -44,73 +52,42 @@ export default function MapPage() {
     fetcher
   );
 
-  // Helper function to get full URL for file fields
-  const getFileUrl = (fileUrl: string | undefined) => {
-    if (!fileUrl) return null;
-    // If already a full URL, return as is
-    if (fileUrl.startsWith("http://") || fileUrl.startsWith("https://")) {
-      return fileUrl;
-    }
-    // Get API base URL
-    const apiBaseUrl =
-      process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-    const base = apiBaseUrl.replace(/\/$/, "");
+  const logoUrl = stage4Data?.description?.logo_file
+    ? getFileUrl(
+        typeof stage4Data.description.logo_file === "string"
+          ? stage4Data.description.logo_file
+          : undefined
+      )
+    : null;
 
-    // DRF FileField returns paths relative to MEDIA_URL
-    let path = fileUrl;
-
-    // If path doesn't start with /, prepend /media/
-    if (!path.startsWith("/")) {
-      path = `/media/${path}`;
-    }
-    // If path starts with / but not /media/, and looks like a media file path
-    else if (!path.startsWith("/media/")) {
-      // Check if it's a known media file pattern
-      if (
-        path.startsWith("/logos/") ||
-        path.startsWith("/fire_certs/") ||
-        path.startsWith("/catalogue_logos/")
-      ) {
-        path = `/media${path}`;
-      }
-      // Otherwise assume it needs /media/ prefix
-      else if (!path.startsWith("/static/") && !path.startsWith("/api/")) {
-        path = `/media${path}`;
-      }
-    }
-
-    return `${base}${path}`;
-  };
-
-  // Get catalogue logo URL from stage 4 data (description.logo_file)
-  const logoUrl =
-    stage4Data?.description?.logo_file
-      ? getFileUrl(
-          typeof stage4Data.description.logo_file === "string"
-            ? stage4Data.description.logo_file
-            : undefined
-        )
-      : null;
-
-  // Get company full name (fallback to name if not available)
   const companyFullName =
     stage1Data?.basic_data?.full_name || company?.name || null;
 
   const isLoading =
-    isLoadingStatus || isLoadingCompany || isLoadingStage4 || isLoadingStage1;
-  const hasError = !!companyError || !!stage4Error || !!stage1Error;
+    isLoadingStatus ||
+    isLoadingCompany ||
+    isLoadingStage4 ||
+    isLoadingStage1 ||
+    isLoadingLayout;
+  const hasError =
+    !!companyError || !!stage4Error || !!stage1Error || !!layoutError;
 
-  // Loading state
+  const dayLayout = selectedDay === "day1" ? layout?.day1 : layout?.day2;
+  const segments = segmentsForDay(dayLayout);
+  const standNumber =
+    selectedDay === "day1"
+      ? company?.day1_stand?.stand_number
+      : company?.day2_stand?.stand_number;
+
   if (isLoading) {
     return (
-      <div className="flex flex-1 flex-col overflow-auto p-6 space-y-6">
+      <div className="flex flex-1 flex-col space-y-6 overflow-auto p-6">
         <Skeleton className="h-8 w-48" />
         <Skeleton className="h-96 w-full" />
       </div>
     );
   }
 
-  // Error state
   if (hasError) {
     return (
       <div className="flex flex-1 flex-col overflow-auto p-6">
@@ -131,10 +108,9 @@ export default function MapPage() {
 
   return (
     <div className="flex flex-1 flex-col overflow-auto bg-background">
-      <div className="max-w-7xl mx-auto w-full p-6 lg:p-8 space-y-6">
-        {/* Header */}
+      <div className="mx-auto w-full max-w-7xl space-y-6 p-6 lg:p-8">
         <div className="space-y-2">
-          <h1 className="text-3xl lg:text-4xl font-bold tracking-tight text-foreground">
+          <h1 className="text-3xl font-bold tracking-tight lg:text-4xl">
             {t("exhibitor.map.title")}
           </h1>
           <p className="text-lg text-muted-foreground">
@@ -142,47 +118,43 @@ export default function MapPage() {
           </p>
         </div>
 
-        {/* Map Card */}
         <Card>
           <CardHeader>
             <CardTitle>{t("exhibitor.map.title")}</CardTitle>
           </CardHeader>
           <CardContent>
-            <Tabs value={selectedDay} onValueChange={(v) => setSelectedDay(v as "day1" | "day2")}>
+            <Tabs
+              value={selectedDay}
+              onValueChange={(v) => setSelectedDay(v as "day1" | "day2")}
+            >
               <TabsList className="mb-4">
-                <TabsTrigger value="day1">{t("exhibitor.map.day1")}</TabsTrigger>
-                <TabsTrigger value="day2">{t("exhibitor.map.day2")}</TabsTrigger>
+                <TabsTrigger value="day1">
+                  {t("exhibitor.map.day1")}
+                </TabsTrigger>
+                <TabsTrigger value="day2">
+                  {t("exhibitor.map.day2")}
+                </TabsTrigger>
               </TabsList>
-              <TabsContent value="day1" className="mt-0">
-                {company?.day1_stand?.stand_number ? (
+              <TabsContent value={selectedDay} className="mt-0">
+                {standNumber ? (
                   <div className="space-y-2">
                     <p className="text-sm text-muted-foreground">
-                      {t("exhibitor.map.yourStand")}: <span className="font-semibold text-foreground">{company.day1_stand.stand_number}</span>
+                      {t("exhibitor.map.yourStand")}:{" "}
+                      <span className="font-semibold text-foreground">
+                        {standNumber}
+                      </span>
                     </p>
-                    <MapViewer
-                      mapPath="/maps/programmable_map_day_1.svg"
-                      userStandNumber={company.day1_stand.stand_number}
-                      companyName={companyFullName || company.name}
-                      companyLogoUrl={logoUrl || undefined}
-                    />
-                  </div>
-                ) : (
-                  <div className="py-12 text-center text-muted-foreground">
-                    {t("exhibitor.map.noStandAssigned")}
-                  </div>
-                )}
-              </TabsContent>
-              <TabsContent value="day2" className="mt-0">
-                {company?.day2_stand?.stand_number ? (
-                  <div className="space-y-2">
-                    <p className="text-sm text-muted-foreground">
-                      {t("exhibitor.map.yourStand")}: <span className="font-semibold text-foreground">{company.day2_stand.stand_number}</span>
-                    </p>
-                    <MapViewer
-                      mapPath="/maps/programmable_map_day_2.svg"
-                      userStandNumber={company.day2_stand.stand_number}
-                      companyName={companyFullName || company.name}
-                      companyLogoUrl={logoUrl || undefined}
+                    <MapCanvas
+                      segments={segments}
+                      userStandNumber={standNumber}
+                      companyStands={[
+                        {
+                          companyId: company!.id,
+                          companyName: companyFullName || company!.name,
+                          standNumber,
+                          logoUrl,
+                        },
+                      ]}
                     />
                   </div>
                 ) : (

@@ -11,7 +11,7 @@ from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
-from users.permissions import IsAdminOrStaff
+from users.permissions import IsAdminOrStaff, IsAdmin
 
 from django.db import IntegrityError
 from django.utils import timezone
@@ -20,8 +20,22 @@ from .models import (
     Company, CompanyInvitation, Form, Feedback, BasicData, Address,
     StandDetails, Stand, EquipmentItem, EquipmentSelection, Workshop, Jobwall,
     Description, FinalData, Lunch, PDI, PDIAttendee, Exhibitor, Settings,
-    InvitationExpiryReminderSent, compute_invitation_expires_at,
+    InvitationExpiryReminderSent, MapLayout, compute_invitation_expires_at,
     company_can_access_stage3, ensure_basic_workshop_skipped,
+)
+from .map_seed import (
+    find_track_for_labels,
+    repartition_options,
+    seed_span_for_selection,
+    suggest_labels_for_manual,
+    validate_manual_partition,
+    validate_track_segments,
+)
+from .map_layout_service import (
+    apply_repartition_to_layout,
+    get_day_layout,
+    reset_layout,
+    serialize_layout,
 )
 from .notifications import (
     invitation_calendar_date,
@@ -240,23 +254,61 @@ class CompanyDetailView(APIView):
         # Handle stand updates
         day1_stand_data = request.data.get('day1_stand')
         day2_stand_data = request.data.get('day2_stand')
+
+        def _stand_taken_by_other(day: str, stand_number: str):
+            """Return company name if another firm already has this booth that day."""
+            if not stand_number or stand_number == "brak":
+                return None
+            other = (
+                Stand.objects.filter(day=day, stand_number=stand_number)
+                .exclude(company_id=company.id)
+                .select_related("company")
+                .first()
+            )
+            return other.company.name if other else None
+
+        valid_sizes = ["podstawowy", "standardowy", "rozszerzony", "12m2"]
+
+        # Validate both days before writing (avoid partial day1 save then day2 conflict)
+        for day_key, stand_data in (
+            ("day1", day1_stand_data),
+            ("day2", day2_stand_data),
+        ):
+            if stand_data is None:
+                continue
+            raw_num = stand_data.get("stand_number")
+            raw_size = stand_data.get("stand_size")
+            if not raw_num or not raw_size:
+                continue
+            stand_number = str(raw_num).strip()
+            if len(stand_number) < 2 or len(stand_number) > 10:
+                return Response(
+                    {"detail": "Stand number must be 2-10 characters"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if raw_size not in valid_sizes:
+                return Response(
+                    {
+                        "detail": f"Stand size must be one of: {', '.join(valid_sizes)}"
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            taken_by = _stand_taken_by_other(day_key, stand_number)
+            if taken_by:
+                day_label = "dzień 1" if day_key == "day1" else "dzień 2"
+                return Response(
+                    {
+                        "detail": (
+                            f"Stoisko {stand_number} ({day_label}) jest już "
+                            f"przypisane firmie „{taken_by}”."
+                        )
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
         
         if day1_stand_data is not None:
             if day1_stand_data.get('stand_number') and day1_stand_data.get('stand_size'):
-                # Validate stand_number length (2-10 characters, matches DB max_length)
                 stand_number = day1_stand_data.get('stand_number').strip()
-                if len(stand_number) < 2 or len(stand_number) > 10:
-                    return Response(
-                        {"detail": "Stand number must be 2-10 characters"},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-                # Validate stand_size
-                valid_sizes = ['podstawowy', 'standardowy', 'rozszerzony', '12m2']
-                if day1_stand_data.get('stand_size') not in valid_sizes:
-                    return Response(
-                        {"detail": f"Stand size must be one of: {', '.join(valid_sizes)}"},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
                 # Check if stand actually changed
                 if not existing_day1 or existing_day1.stand_number != stand_number or existing_day1.stand_size != day1_stand_data.get('stand_size'):
                     Stand.objects.update_or_create(
@@ -276,20 +328,7 @@ class CompanyDetailView(APIView):
         
         if day2_stand_data is not None:
             if day2_stand_data.get('stand_number') and day2_stand_data.get('stand_size'):
-                # Validate stand_number length (2-10 characters, matches DB max_length)
                 stand_number = day2_stand_data.get('stand_number').strip()
-                if len(stand_number) < 2 or len(stand_number) > 10:
-                    return Response(
-                        {"detail": "Stand number must be 2-10 characters"},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-                # Validate stand_size
-                valid_sizes = ['podstawowy', 'standardowy', 'rozszerzony', '12m2']
-                if day2_stand_data.get('stand_size') not in valid_sizes:
-                    return Response(
-                        {"detail": f"Stand size must be one of: {', '.join(valid_sizes)}"},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
                 # Check if stand actually changed
                 if not existing_day2 or existing_day2.stand_number != stand_number or existing_day2.stand_size != day2_stand_data.get('stand_size'):
                     Stand.objects.update_or_create(
@@ -3014,3 +3053,188 @@ class ExportMediaFilesView(APIView):
             f"{files_count} files exported"
         )
         return response
+
+
+class MapLayoutView(APIView):
+    """GET/PATCH hall map layout (staff/admin). Companies may GET for exhibitor map."""
+
+    def get_permissions(self):
+        if self.request.method == "GET":
+            return [IsAuthenticated()]
+        return [IsAuthenticated(), IsAdminOrStaff()]
+
+    def get(self, request):
+        layout = MapLayout.get_solo()
+        return Response(serialize_layout(layout))
+
+    def patch(self, request):
+        layout = MapLayout.get_solo()
+        if "sync_days" in request.data:
+            layout.sync_days = bool(request.data["sync_days"])
+        # Optional full day replace (advanced)
+        for day in ("day1", "day2"):
+            if day in request.data and isinstance(request.data[day], dict):
+                data = request.data[day]
+                if "tracks" in data:
+                    for letter, segs in data["tracks"].items():
+                        validate_track_segments(letter, segs)
+                    setattr(layout, day, data)
+        layout.updated_by = request.user
+        layout.save()
+        return Response(serialize_layout(layout))
+
+
+class MapLayoutRepartitionOptionsView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminOrStaff]
+
+    def get(self, request):
+        day = request.query_params.get("day", "day1")
+        track = request.query_params.get("track")
+        labels_raw = request.query_params.get("labels", "")
+        labels = [x.strip() for x in labels_raw.split(",") if x.strip()]
+        if not track or not labels:
+            return Response(
+                {"detail": "track and labels are required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        layout = MapLayout.get_solo()
+        data = get_day_layout(layout, day)
+        resolved = find_track_for_labels(data, labels) or track
+        segments = data.get("tracks", {}).get(resolved)
+        if not segments:
+            return Response({"detail": "Unknown track"}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            options = repartition_options(
+                segments, labels, track_letter=resolved
+            )
+        except ValueError as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"options": options, "track": resolved})
+
+
+class MapLayoutRepartitionValidateView(APIView):
+    """Suggest + validate a custom partition (manual editor)."""
+
+    permission_classes = [IsAuthenticated, IsAdminOrStaff]
+
+    def post(self, request):
+        day = request.data.get("day", "day1")
+        track = request.data.get("track")
+        selected = request.data.get("selected_labels") or []
+        areas = [int(a) for a in (request.data.get("areas") or [])]
+        labels = request.data.get("labels") or []
+        if not selected:
+            return Response(
+                {"detail": "selected_labels are required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        layout = MapLayout.get_solo()
+        data = get_day_layout(layout, day)
+        resolved = find_track_for_labels(data, selected) or track
+        if not resolved:
+            return Response(
+                {"detail": "Nie znaleziono toru dla zaznaczenia"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        segments = data.get("tracks", {}).get(resolved)
+        if not segments:
+            return Response({"detail": "Unknown track"}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            suggested = (
+                suggest_labels_for_manual(
+                    segments, selected, areas, track_letter=resolved
+                )
+                if areas
+                else None
+            )
+            errors = (
+                validate_manual_partition(segments, selected, areas, labels)
+                if areas and labels
+                else []
+            )
+            seed_opt = seed_span_for_selection(resolved, segments, selected)
+        except ValueError as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        total = 0
+        idx = {s["label"]: i for i, s in enumerate(segments)}
+        if all(l in idx for l in selected):
+            positions = sorted(idx[l] for l in selected)
+            total = sum(int(segments[i]["area_m2"]) for i in positions)
+        return Response(
+            {
+                "total_m2": total,
+                "suggested_labels": suggested,
+                "errors": errors,
+                "valid": len(errors) == 0 and bool(areas) and bool(labels),
+                "track": resolved,
+                "seed_original": (
+                    {
+                        "areas": seed_opt["areas"],
+                        "labels": seed_opt["labels"],
+                        "description": seed_opt["description"],
+                    }
+                    if seed_opt
+                    else None
+                ),
+            }
+        )
+
+
+class MapLayoutRepartitionView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminOrStaff]
+
+    def post(self, request):
+        day = request.data.get("day", "day1")
+        track = request.data.get("track")
+        selected = request.data.get("selected_labels") or []
+        areas = request.data.get("areas") or []
+        labels = request.data.get("labels") or []
+        confirm = bool(request.data.get("confirm"))
+        variant_id = request.data.get("variant_id") or None
+        if not selected or not areas or not labels:
+            return Response(
+                {"detail": "selected_labels, areas, labels required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        layout_probe = MapLayout.get_solo()
+        day_data = get_day_layout(layout_probe, day)
+        resolved = find_track_for_labels(day_data, selected) or track
+        if not resolved:
+            return Response(
+                {"detail": "Nie znaleziono toru dla zaznaczenia"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            layout, warnings, applied = apply_repartition_to_layout(
+                day=day,
+                track=resolved,
+                selected_labels=selected,
+                areas=[int(a) for a in areas],
+                labels=labels,
+                confirm=confirm,
+                user=request.user,
+                variant_id=variant_id,
+            )
+        except ValueError as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        payload = serialize_layout(layout)
+        payload["warnings"] = warnings
+        payload["applied"] = applied
+        if warnings and not applied:
+            return Response(payload, status=status.HTTP_409_CONFLICT)
+        return Response(payload)
+
+
+class MapLayoutResetView(APIView):
+    permission_classes = [IsAuthenticated, IsAdmin]
+
+    def post(self, request):
+        if not request.data.get("confirm"):
+            return Response(
+                {
+                    "detail": "Potwierdź reset (confirm=true). Usunie układ niestandardowy i wszystkie przypisania stoisk.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        layout = reset_layout(request.user)
+        return Response(serialize_layout(layout))

@@ -307,6 +307,7 @@ export default function CompanyDetailPage() {
                   {companyId && (
                     <StandEditDialog
                       companyId={companyId}
+                      companyName={company.name}
                       day1Stand={company.day1_stand}
                       day2Stand={company.day2_stand}
                       onSuccess={() => mutateCompany()}
@@ -325,6 +326,7 @@ export default function CompanyDetailPage() {
                   {companyId && (
                     <StandEditDialog
                       companyId={companyId}
+                      companyName={company.name}
                       day1Stand={company.day1_stand}
                       day2Stand={company.day2_stand}
                       onSuccess={() => mutateCompany()}

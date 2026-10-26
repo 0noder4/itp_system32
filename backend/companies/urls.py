@@ -60,4 +60,23 @@ urlpatterns = [
     path('export/csv/', views.ExportCSVView.as_view(), name='export-csv'),
     path('export/logos/', views.ExportLogosView.as_view(), name='export-logos'),
     path('export/media/', views.ExportMediaFilesView.as_view(), name='export-media'),
+
+    # Hall map layout editor
+    path('map-layout/', views.MapLayoutView.as_view(), name='map-layout'),
+    path(
+        'map-layout/repartition-options/',
+        views.MapLayoutRepartitionOptionsView.as_view(),
+        name='map-layout-repartition-options',
+    ),
+    path(
+        'map-layout/repartition-validate/',
+        views.MapLayoutRepartitionValidateView.as_view(),
+        name='map-layout-repartition-validate',
+    ),
+    path(
+        'map-layout/repartition/',
+        views.MapLayoutRepartitionView.as_view(),
+        name='map-layout-repartition',
+    ),
+    path('map-layout/reset/', views.MapLayoutResetView.as_view(), name='map-layout-reset'),
 ]

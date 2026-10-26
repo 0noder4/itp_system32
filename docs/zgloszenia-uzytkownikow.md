@@ -1,8 +1,8 @@
 # Weryfikacja zgłoszeń użytkowników
 
-Data weryfikacji: `2026-06-02`. Ostatnia aktualizacja: `2026-10-11`.
+Data weryfikacji: `2026-06-02`. Ostatnia aktualizacja: `2026-10-26`.
 
-Dokument zawiera przegląd zgłoszeń od użytkowników wraz ze statusem w aktualnej wersji systemu. Uzupełniony o ustalenia ze spotkania wizyjnego (2026-08-13) i decyzji produktowych (w tym doprecyzowanie mapki 2026-10-06).
+Dokument zawiera przegląd zgłoszeń od użytkowników wraz ze statusem w aktualnej wersji systemu. Uzupełniony o ustalenia ze spotkania wizyjnego (2026-08-13) i decyzji produktowych (w tym doprecyzowanie mapki 2026-10-06; edytor layoutu 2026-10-26).
 
 ## Już wdrożone
 
@@ -26,22 +26,22 @@ Dokument zawiera przegląd zgłoszeń od użytkowników wraz ze statusem w aktua
 - Etap 2 / własna zabudowa: certyfikat niepalności opcjonalny przy przesłaniu; deadline i auto „wymaga poprawy” bez pliku (job `auto_reject_missing_fire_certs`).
 - Etap 2 / wyposażenie: kosz i wieszak w pakiecie (firma nie odznacza); wieszak ukryty przy własnej zabudowie; TV — wybór montażu (stojak / ściana) wg reguł typu stoiska.
 - Etap 4 / Jobwall: liczba darmowych ogłoszeń w `Settings` (`jobwall_free_count`, domyślnie 2); koszt tylko za kolejne; limity długości (opis katalogu 1700, ciało oferty 2000); linki do Katalog / Oferty Pracy na stronie targów.
+- Mapka stoisk (layout w bazie, bez statycznych SVG):
+  - kanoniczna numeracja wspólna dla dnia 1 i 2 (styl `A7a` / `A10b`, nie `A1.A`);
+  - staff: edytor podziału torów (łączenie / rozłączanie 4/6/8/12 m², warianty etykiet, sync dnia 2, ostrzeżenia przy zajętych, reset mapy dla admina);
+  - staff: dialog przypisania stoiska z mapą (zajęte miejsca innych firm, konflikt przy podwójnym numerze);
+  - firma: mapa z API — widzi tylko własne stoisko; jedno stoisko na konto / dzień.
 
 ## Częściowo wdrożone / wymaga doprecyzowania
 
 - Etap 2 / własna zabudowa: rdzeń jest (typ stoiska, certyfikat, wizualizacja); dalej brakuje m.in. podglądu mebli, wykładziny i doprecyzowań formularza (punkty poniżej).
-- Mapka stoisk: podgląd i przypisanie jednego stoiska na dzień działają; brak łączenia / rozłączania, podstoisk (A1.A), dużego dialogu wyboru i rezerwacji roboczej (WBS 4.5 + mapa poniżej).
+- Mapka stoisk: rdzeń edycji i przypisania jest; brak rezerwacji roboczej oraz arkuszy planowania / eksportu (WBS 4.5 + mapa poniżej).
 - Dzień wystawy + rozmiar stoiska (ew. pakiet): na razie uzupełnia FR (firma ma widzieć ustalone wartości, bez edycji); finalny model zbierania tych danych — do dalszego ustalenia.
 
 ## Braki do realizacji
 
-- **Mapka / plan hali** (doprecyzowanie 2026-10-06):
-  - łączenie mniejszych stanowisk w większe oraz rozłączanie większych z powrotem na mniejsze;
-  - tworzenie podstoisk typu `A1.A` / `A1.B` (np. przy rozbijaniu stoiska 8 m lub 12 m na mniejsze segmenty);
-  - FR wybiera stanowisko → mapka od razu się aktualizuje (widać zajęte miejsca);
-  - duży dialog z mapką przy ustawianiu miejsca przez staff (widoczne też inne już zajęte stoiska);
-  - wiele stoisk jednej firmy tego samego dnia; rezerwacja robocza vs ostateczne przypisanie;
-  - widoczność mapy: **staff / FR** — pełna mapa (w tym zajęte miejsca innych firm); **firma** — na mapie widzi tylko siebie;
+- **Mapka / plan hali** (pozostałości po edytorze 2026-10-26):
+  - rezerwacja robocza vs ostateczne przypisanie;
   - docelowo: arkusze planowania w systemie + eksport (zamiast równoległych Exceli).
 - **Firmy „tylko na mapkę”:** nowy typ wystawcy (okrojone konto, obok `basic` / `main` / `partner`) — firma widnieje na planie bez pełnego wypełniania etapów.
 - **Import Excela z Google Forms** (nie Forms bezpośrednio) do systemu — prefills / wczesne zgłoszenia; termin: przed oddaniem systemu (~1.11).
@@ -60,7 +60,7 @@ Dokument zawiera przegląd zgłoszeń od użytkowników wraz ze statusem w aktua
 ## Rekomendowany priorytet
 
 1. Import Excela z Forms (przed ~1.11) + dzień/rozmiar widoczne dla firmy (FR uzupełnia).
-2. Mapka: łączenie/rozłączanie + podstoiska (A1.A) + duży dialog wyboru (FR) + rezerwacja; potem arkusze w systemie → role.
+2. Mapka: najpierw rezerwacje robocze (miejsce „wzięte” bez finalnego przypisania) i arkusz planowania hali w panelu zamiast Excela; potem osobne role (np. logistyk); na końcu typ firmy „tylko na mapkę” (na planie bez pełnych etapów).
 3. Jobwall: eksport / integracja E-JobWall ze stroną.
 4. Etap 2: meble / wykładzina / doprecyzowanie formularza własnej zabudowy.
 5. Godzina przyjazdu; status „Firma rezygnuje” przy anulowaniu; nowy typ wystawcy (okrojone konto).

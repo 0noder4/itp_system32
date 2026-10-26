@@ -24,7 +24,11 @@ export function getFileUrl(fileUrl: string | undefined): string | null {
   // If path starts with / but not /media/, and looks like a media file path
   else if (!path.startsWith("/media/")) {
     // Check if it's a known media file pattern (logos, fire_certs, etc.)
-    if (path.startsWith("/logos/") || path.startsWith("/fire_certs/")) {
+    if (
+      path.startsWith("/logos/") ||
+      path.startsWith("/fire_certs/") ||
+      path.startsWith("/catalogue_logos/")
+    ) {
       path = `/media${path}`;
     }
     // Otherwise assume it needs /media/ prefix
