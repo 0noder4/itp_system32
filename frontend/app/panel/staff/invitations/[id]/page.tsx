@@ -45,6 +45,7 @@ export default function InvitationDetailPage() {
 
   const [copiedLink, setCopiedLink] = React.useState(false);
   const [showCancelDialog, setShowCancelDialog] = React.useState(false);
+  const [markAsResigned, setMarkAsResigned] = React.useState(false);
   const [isCancelling, setIsCancelling] = React.useState(false);
 
   const isLoading = isLoadingInvitation;
@@ -80,11 +81,21 @@ export default function InvitationDetailPage() {
     try {
       await apiClient.patch(`/api/invitation/${invitation.id}/`, {
         is_cancelled: true,
+        is_resigned: markAsResigned,
       });
-      toast.success(t("companies.invitations.cancel.success"), {
-        description: t("companies.invitations.cancel.successDescription"),
-      });
+      if (markAsResigned) {
+        toast.success(t("companies.invitations.cancel.successResigned"), {
+          description: t(
+            "companies.invitations.cancel.successResignedDescription"
+          ),
+        });
+      } else {
+        toast.success(t("companies.invitations.cancel.success"), {
+          description: t("companies.invitations.cancel.successDescription"),
+        });
+      }
       setShowCancelDialog(false);
+      setMarkAsResigned(false);
       mutateInvitation();
     } catch (error: any) {
       const errorMessage =
@@ -135,7 +146,8 @@ export default function InvitationDetailPage() {
   const isExpired = new Date(invitation.expires_at) < new Date();
   const canCancel =
     !invitation.is_accepted &&
-    invitation.invitation_status !== "cancelled";
+    invitation.invitation_status !== "cancelled" &&
+    invitation.invitation_status !== "resigned";
 
   return (
     <div className="flex h-screen flex-col overflow-hidden">
@@ -282,7 +294,13 @@ export default function InvitationDetailPage() {
         </Card>
 
         {/* Cancel Confirmation Dialog */}
-        <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+        <Dialog
+          open={showCancelDialog}
+          onOpenChange={(open) => {
+            setShowCancelDialog(open);
+            if (!open) setMarkAsResigned(false);
+          }}
+        >
           <DialogContent>
             <DialogHeader>
               <DialogTitle>
@@ -292,10 +310,30 @@ export default function InvitationDetailPage() {
                 {t("companies.invitations.cancel.confirmMessage")}
               </DialogDescription>
             </DialogHeader>
+            <label className="flex items-start gap-2 rounded-md border p-3 text-sm cursor-pointer">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={markAsResigned}
+                onChange={(e) => setMarkAsResigned(e.target.checked)}
+                disabled={isCancelling}
+              />
+              <span>
+                <span className="font-medium block">
+                  {t("companies.invitations.cancel.resignCheckbox")}
+                </span>
+                <span className="text-muted-foreground text-xs">
+                  {t("companies.invitations.cancel.resignCheckboxHint")}
+                </span>
+              </span>
+            </label>
             <DialogFooter>
               <Button
                 variant="outline"
-                onClick={() => setShowCancelDialog(false)}
+                onClick={() => {
+                  setShowCancelDialog(false);
+                  setMarkAsResigned(false);
+                }}
                 disabled={isCancelling}
               >
                 {t("common.cancel")}

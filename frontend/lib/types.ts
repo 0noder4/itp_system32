@@ -69,7 +69,12 @@ export interface CompanyInvitation {
   expires_at: string;
   is_accepted: boolean;
   language: "en" | "pl";
-  invitation_status: "accepted" | "expired" | "not accepted" | "cancelled";
+  invitation_status:
+    | "accepted"
+    | "expired"
+    | "not accepted"
+    | "cancelled"
+    | "resigned";
   invitation_link: string;
   fr_resp: number | null;
   fr_resp_name: string | null;
@@ -287,12 +292,13 @@ export interface FinalData {
   main_rep_surname?: string;
   main_rep_phone?: string;
   main_rep_attendance?: AttendanceOption | "";
+  /** HH:MM or HH:MM:SS from API */
+  arrival_time_day1?: string | null;
+  arrival_time_day2?: string | null;
   dl?: number | null;
 }
 
 export type DayOption = "day1" | "day2";
-
-export type DietOption = "meat" | "vegetarian" | "vegan";
 
 export type AttendanceOption = "both" | "day1" | "day2" | "none";
 
@@ -300,7 +306,8 @@ export interface Lunch {
   id?: number;
   day: DayOption;
   lunch_quantity: number;
-  diet_info: DietOption;
+  /** Legacy field; diet is chosen on-site — keep empty. */
+  diet_info?: string;
 }
 
 export interface PDI {

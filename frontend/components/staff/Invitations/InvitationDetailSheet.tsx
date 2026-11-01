@@ -47,6 +47,7 @@ export function InvitationDetailSheet({
   const { t, locale } = useTranslation();
   const [copiedLink, setCopiedLink] = React.useState(false);
   const [showCancelDialog, setShowCancelDialog] = React.useState(false);
+  const [markAsResigned, setMarkAsResigned] = React.useState(false);
   const [isCancelling, setIsCancelling] = React.useState(false);
 
   const handleCopyLink = async () => {
@@ -65,6 +66,7 @@ export function InvitationDetailSheet({
     if (!isOpen) {
       setCopiedLink(false);
       setShowCancelDialog(false);
+      setMarkAsResigned(false);
     }
     onOpenChange(isOpen);
   };
@@ -76,11 +78,21 @@ export function InvitationDetailSheet({
     try {
       await apiClient.patch(`/api/invitation/${invitation.id}/`, {
         is_cancelled: true,
+        is_resigned: markAsResigned,
       });
-      toast.success(t("companies.invitations.cancel.success"), {
-        description: t("companies.invitations.cancel.successDescription"),
-      });
+      if (markAsResigned) {
+        toast.success(t("companies.invitations.cancel.successResigned"), {
+          description: t(
+            "companies.invitations.cancel.successResignedDescription"
+          ),
+        });
+      } else {
+        toast.success(t("companies.invitations.cancel.success"), {
+          description: t("companies.invitations.cancel.successDescription"),
+        });
+      }
       setShowCancelDialog(false);
+      setMarkAsResigned(false);
       onOpenChange(false);
       if (onCancel) {
         onCancel();
@@ -102,7 +114,8 @@ export function InvitationDetailSheet({
   const isExpired = new Date(invitation.expires_at) < new Date();
   const canCancel =
     !invitation.is_accepted &&
-    invitation.invitation_status !== "cancelled";
+    invitation.invitation_status !== "cancelled" &&
+    invitation.invitation_status !== "resigned";
 
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
@@ -270,7 +283,13 @@ export function InvitationDetailSheet({
         </div>
 
         {/* Cancel Confirmation Dialog */}
-        <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+        <Dialog
+          open={showCancelDialog}
+          onOpenChange={(open) => {
+            setShowCancelDialog(open);
+            if (!open) setMarkAsResigned(false);
+          }}
+        >
           <DialogContent>
             <DialogHeader>
               <DialogTitle>
@@ -280,10 +299,30 @@ export function InvitationDetailSheet({
                 {t("companies.invitations.cancel.confirmMessage")}
               </DialogDescription>
             </DialogHeader>
+            <label className="flex items-start gap-2 rounded-md border p-3 text-sm cursor-pointer">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={markAsResigned}
+                onChange={(e) => setMarkAsResigned(e.target.checked)}
+                disabled={isCancelling}
+              />
+              <span>
+                <span className="font-medium block">
+                  {t("companies.invitations.cancel.resignCheckbox")}
+                </span>
+                <span className="text-muted-foreground text-xs">
+                  {t("companies.invitations.cancel.resignCheckboxHint")}
+                </span>
+              </span>
+            </label>
             <DialogFooter>
               <Button
                 variant="outline"
-                onClick={() => setShowCancelDialog(false)}
+                onClick={() => {
+                  setShowCancelDialog(false);
+                  setMarkAsResigned(false);
+                }}
                 disabled={isCancelling}
               >
                 {t("common.cancel")}

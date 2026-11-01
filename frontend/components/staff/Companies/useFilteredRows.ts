@@ -27,7 +27,13 @@ interface UseFilteredRowsParams {
   searchQuery: string;
   statusFilter: "all" | "main" | "partner" | "basic";
   frRespFilter: number | "all";
-  invitationStatusFilter: "all" | "accepted" | "expired" | "not accepted";
+  invitationStatusFilter:
+    | "all"
+    | "accepted"
+    | "expired"
+    | "not accepted"
+    | "cancelled"
+    | "resigned";
   completedStagesFilter: CompletedStageNumber[];
   showInvitations: boolean;
 }

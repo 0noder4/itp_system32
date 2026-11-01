@@ -247,7 +247,11 @@ class CompanyRegistrationSerializer(serializers.Serializer):
 
     def validate_token(self, value):
         try:
-            invitation = CompanyInvitation.objects.get(token=value, is_accepted=False)
+            invitation = CompanyInvitation.objects.get(
+                token=value,
+                is_accepted=False,
+                is_cancelled=False,
+            )
         except CompanyInvitation.DoesNotExist:
             raise serializers.ValidationError("Invalid or expired token")
         return invitation
@@ -661,17 +665,37 @@ class DescriptionSerializer(serializers.ModelSerializer):
 
 
 class FinalDataSerializer(serializers.ModelSerializer):
+    arrival_time_day1 = serializers.TimeField(required=False, allow_null=True)
+    arrival_time_day2 = serializers.TimeField(required=False, allow_null=True)
+
     class Meta:
         model = FinalData
         fields = '__all__'
 
+    def validate_arrival_time_day1(self, value):
+        return value or None
+
+    def validate_arrival_time_day2(self, value):
+        return value or None
+
+    def to_internal_value(self, data):
+        if hasattr(data, 'copy'):
+            data = data.copy()
+        else:
+            data = dict(data)
+        for field in ('arrival_time_day1', 'arrival_time_day2'):
+            if field in data and data[field] in ('', None):
+                data[field] = None
+        return super().to_internal_value(data)
+
 
 class LunchSerializer(serializers.ModelSerializer):
-    diet_info = serializers.ChoiceField(
-        choices=['meat', 'vegetarian', 'vegan'],
+    # Diet is chosen on-site at the lunch provider; keep blank for new submissions.
+    diet_info = serializers.CharField(
         required=False,
         allow_blank=True,
-        default='meat',
+        default='',
+        max_length=255,
     )
 
     class Meta:
@@ -679,12 +703,7 @@ class LunchSerializer(serializers.ModelSerializer):
         exclude = ('form',)
 
     def validate_diet_info(self, value):
-        if not value:
-            return 'meat'
-        valid = {'meat', 'vegetarian', 'vegan'}
-        if value not in valid:
-            raise serializers.ValidationError('Invalid diet selection.')
-        return value
+        return (value or '').strip()
 
 
 class PDISerializer(serializers.ModelSerializer):
@@ -1232,6 +1251,8 @@ class Stage5Serializer(serializers.Serializer):
                 'main_rep_surname': fd_instance.main_rep_surname,
                 'main_rep_phone': fd_instance.main_rep_phone,
                 'main_rep_attendance': fd_instance.main_rep_attendance,
+                'arrival_time_day1': fd_instance.arrival_time_day1,
+                'arrival_time_day2': fd_instance.arrival_time_day2,
             }
         if 'final_data' in data:
             final_data.update(data['final_data'])
@@ -1319,6 +1340,12 @@ class Stage5Serializer(serializers.Serializer):
 
         if main_rep_errors:
             errors['final_data'] = {**errors.get('final_data', {}), **main_rep_errors}
+
+        for arrival_field in ('arrival_time_day1', 'arrival_time_day2'):
+            if not final_data.get(arrival_field):
+                errors.setdefault('final_data', {})[arrival_field] = (
+                    'Arrival time is required.'
+                )
 
         if no_other_delegates:
             data['exhibitors'] = []

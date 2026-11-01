@@ -7,7 +7,13 @@ export type CompletedStageNumber = 1 | 2 | 3 | 4 | 5;
 export interface StaffDashboardFilters {
   searchQuery: string;
   statusFilter: "all" | "main" | "partner" | "basic";
-  invitationStatusFilter: "all" | "accepted" | "expired" | "not accepted";
+  invitationStatusFilter:
+    | "all"
+    | "accepted"
+    | "expired"
+    | "not accepted"
+    | "cancelled"
+    | "resigned";
   completedStagesFilter: CompletedStageNumber[];
   frRespFilter: number | "all";
   showInvitations: boolean;
@@ -57,7 +63,14 @@ function loadFiltersFromStorage(): StaffDashboardFilters {
             : defaultFilters.statusFilter,
         invitationStatusFilter:
           parsed.invitationStatusFilter &&
-          ["all", "accepted", "expired", "not accepted"].includes(parsed.invitationStatusFilter)
+          [
+            "all",
+            "accepted",
+            "expired",
+            "not accepted",
+            "cancelled",
+            "resigned",
+          ].includes(parsed.invitationStatusFilter)
             ? parsed.invitationStatusFilter
             : defaultFilters.invitationStatusFilter,
         completedStagesFilter: normalizeCompletedStagesFilter(
@@ -138,8 +151,15 @@ export function useStaffDashboardFilters() {
       [updateFilters]
     ),
     setInvitationStatusFilter: React.useCallback(
-      (status: "all" | "accepted" | "expired" | "not accepted") =>
-        updateFilters({ invitationStatusFilter: status }),
+      (
+        status:
+          | "all"
+          | "accepted"
+          | "expired"
+          | "not accepted"
+          | "cancelled"
+          | "resigned"
+      ) => updateFilters({ invitationStatusFilter: status }),
       [updateFilters]
     ),
     setCompletedStagesFilter: React.useCallback(

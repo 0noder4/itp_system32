@@ -152,6 +152,11 @@ class CompanyInvitation(models.Model):
     expires_at = models.DateTimeField(blank=True, default=get_expiry_time)
     is_accepted = models.BooleanField(default=False)
     is_cancelled = models.BooleanField(default=False)
+    is_resigned = models.BooleanField(
+        default=False,
+        verbose_name="firma rezygnuje",
+        help_text="Zaproszenie anulowane z powodu rezygnacji firmy (sygnał dla logistyki).",
+    )
     language = models.CharField(
         max_length=5,
         choices=LANGUAGE_CHOICES,
@@ -176,8 +181,20 @@ class CompanyInvitation(models.Model):
     def is_expired(self):
         return django.utils.timezone.now() > self.expires_at
 
+    def clean(self):
+        if self.is_resigned and not self.is_cancelled:
+            raise ValidationError({
+                "is_resigned": (
+                    "Oznaczenie rezygnacji wymaga anulowanego zaproszenia "
+                    "(is_cancelled)."
+                ),
+            })
+
     def get_invitation_status(self):
-        if self.is_cancelled:
+        # Resign is a logistics subtype of cancel — never without is_cancelled.
+        if self.is_cancelled and self.is_resigned:
+            return "resigned"
+        elif self.is_cancelled:
             return "cancelled"
         elif self.is_accepted:
             return "accepted"
@@ -468,6 +485,18 @@ class FinalData(models.Model):
         blank=True,
         default="",
         verbose_name="obecność głównego przedstawiciela",
+    )
+    arrival_time_day1 = models.TimeField(
+        null=True,
+        blank=True,
+        verbose_name="godzina przyjazdu — dzień 1",
+        help_text="Planowana godzina przyjazdu na montaż / rozładunek w dniu 1.",
+    )
+    arrival_time_day2 = models.TimeField(
+        null=True,
+        blank=True,
+        verbose_name="godzina przyjazdu — dzień 2",
+        help_text="Planowana godzina przyjazdu na montaż / rozładunek w dniu 2.",
     )
     dl = models.ForeignKey(Deadline, on_delete=models.SET_NULL, null=True)
 

@@ -36,19 +36,26 @@ export function CompanyStatusBadge({ status }: StatusBadgeProps) {
 }
 
 interface InvitationStatusBadgeProps {
-  status: "accepted" | "expired" | "not accepted" | "cancelled";
+  status:
+    | "accepted"
+    | "expired"
+    | "not accepted"
+    | "cancelled"
+    | "resigned";
 }
 
 export function InvitationStatusBadge({ status }: InvitationStatusBadgeProps) {
   const { t } = useTranslation();
 
-  const statusColors = {
+  const statusColors: Record<InvitationStatusBadgeProps["status"], string> = {
     accepted:
       "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
     expired: "bg-danger/10 text-danger dark:bg-danger/20 dark:text-danger-foreground",
     "not accepted":
       "bg-warning/10 text-warning dark:bg-warning/20 dark:text-warning-foreground",
     cancelled: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200",
+    resigned:
+      "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200",
   };
 
   // Map status value to translation key (status has space, key doesn't)

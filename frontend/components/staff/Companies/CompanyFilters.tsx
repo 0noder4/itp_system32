@@ -22,9 +22,21 @@ interface CompanyFiltersProps {
   onSearchChange: (query: string) => void;
   statusFilter: "all" | "main" | "partner" | "basic";
   onStatusFilterChange: (status: "all" | "main" | "partner" | "basic") => void;
-  invitationStatusFilter: "all" | "accepted" | "expired" | "not accepted";
+  invitationStatusFilter:
+    | "all"
+    | "accepted"
+    | "expired"
+    | "not accepted"
+    | "cancelled"
+    | "resigned";
   onInvitationStatusFilterChange: (
-    status: "all" | "accepted" | "expired" | "not accepted"
+    status:
+      | "all"
+      | "accepted"
+      | "expired"
+      | "not accepted"
+      | "cancelled"
+      | "resigned"
   ) => void;
   completedStagesFilter: CompletedStageNumber[];
   onCompletedStagesFilterChange: (stages: CompletedStageNumber[]) => void;
@@ -66,7 +78,13 @@ export function CompanyFilters({
   };
 
   const getInvitationStatusLabel = (
-    status: "all" | "accepted" | "expired" | "not accepted"
+    status:
+      | "all"
+      | "accepted"
+      | "expired"
+      | "not accepted"
+      | "cancelled"
+      | "resigned"
   ) => {
     if (status === "all") return t("common.all");
     // Map status value to translation key (status has space, key doesn't)
@@ -221,8 +239,16 @@ export function CompanyFilters({
             {t("companies.invitations.filterByStatus")}:
           </span>
           <div className="flex flex-wrap gap-2">
-            {(["all", "accepted", "expired", "not accepted"] as const).map(
-              (status) => {
+            {(
+              [
+                "all",
+                "accepted",
+                "expired",
+                "not accepted",
+                "cancelled",
+                "resigned",
+              ] as const
+            ).map((status) => {
                 const isActive = invitationStatusFilter === status;
                 return (
                   <Button

@@ -22,8 +22,8 @@ class CompanyAdmin(admin.ModelAdmin):
 
 @admin.register(CompanyInvitation)
 class CompanyInvitationAdmin(admin.ModelAdmin):
-    list_display = ('company_name', 'email', 'expires_at', 'is_accepted', 'is_cancelled', 'created_by')
-    list_filter = ('is_accepted', 'is_cancelled', 'language')
+    list_display = ('company_name', 'email', 'expires_at', 'is_accepted', 'is_cancelled', 'is_resigned', 'created_by')
+    list_filter = ('is_accepted', 'is_cancelled', 'is_resigned', 'language')
     search_fields = ('company_name', 'email')
 
     def save_model(self, request, obj, form, change):

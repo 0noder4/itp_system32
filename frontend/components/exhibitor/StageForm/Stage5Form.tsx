@@ -22,12 +22,16 @@ import { Loader2, Save, Plus, Trash2 } from "lucide-react";
 import { apiClient, LunchPriceResponse, fetcher } from "@/lib/api";
 import useSWR from "swr";
 import {
+  ARRIVAL_HOURS,
+  ARRIVAL_MINUTES,
   calculateLunchSummary,
   fetchDefaultMainRepContact,
   hasSavedMainRep,
+  joinArrivalTime,
   parseLunchPrice,
-  DIET_OPTIONS,
-  normalizeDietInfo,
+  splitArrivalTime,
+  toFixedLunchRows,
+  toTimeInputValue,
 } from "@/lib/stage5-utils";
 import { fetchInvoiceTotal } from "@/lib/invoice-cost-utils";
 import { StageDraftSaveButton } from "./StageDraftSaveButton";
@@ -50,6 +54,89 @@ interface Stage5FormProps {
 
 const selectClassName =
   "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed";
+
+/** Hour + minute selects; form value stays empty until both parts are chosen. */
+function ArrivalTimeSelectFields({
+  id,
+  value,
+  onChange,
+  onBlur,
+  disabled,
+  hourLabel,
+  minuteLabel,
+  hourPlaceholder,
+  minutePlaceholder,
+}: {
+  id: string;
+  value: string;
+  onChange: (next: string) => void;
+  onBlur: () => void;
+  disabled?: boolean;
+  hourLabel: string;
+  minuteLabel: string;
+  hourPlaceholder: string;
+  minutePlaceholder: string;
+}) {
+  const parsed = splitArrivalTime(value);
+  const [hour, setHour] = React.useState(parsed.hour);
+  const [minute, setMinute] = React.useState(parsed.minute);
+
+  React.useEffect(() => {
+    const next = splitArrivalTime(value);
+    setHour(next.hour);
+    setMinute(next.minute);
+  }, [value]);
+
+  const commit = (nextHour: string, nextMinute: string) => {
+    setHour(nextHour);
+    setMinute(nextMinute);
+    if (!nextHour || !nextMinute) {
+      onChange("");
+      return;
+    }
+    onChange(joinArrivalTime(nextHour, nextMinute));
+  };
+
+  return (
+    <div className="flex items-center gap-2">
+      <select
+        id={`${id}_hour`}
+        aria-label={hourLabel}
+        disabled={disabled}
+        className={selectClassName}
+        value={hour}
+        onChange={(e) => commit(e.target.value, minute)}
+        onBlur={onBlur}
+      >
+        <option value="">{hourPlaceholder}</option>
+        {ARRIVAL_HOURS.map((h) => (
+          <option key={h} value={h}>
+            {h}
+          </option>
+        ))}
+      </select>
+      <span className="text-muted-foreground font-medium" aria-hidden>
+        :
+      </span>
+      <select
+        id={`${id}_minute`}
+        aria-label={minuteLabel}
+        disabled={disabled}
+        className={selectClassName}
+        value={minute}
+        onChange={(e) => commit(hour, e.target.value)}
+        onBlur={onBlur}
+      >
+        <option value="">{minutePlaceholder}</option>
+        {ARRIVAL_MINUTES.map((m) => (
+          <option key={m} value={m}>
+            {m}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
 
 export function Stage5Form({
   companyId,
@@ -87,26 +174,22 @@ export function Stage5Form({
         main_rep_surname: initialData?.final_data?.main_rep_surname || "",
         main_rep_phone: initialData?.final_data?.main_rep_phone || "",
         main_rep_attendance: initialData?.final_data?.main_rep_attendance || "",
+        arrival_time_day1: toTimeInputValue(
+          initialData?.final_data?.arrival_time_day1
+        ),
+        arrival_time_day2: toTimeInputValue(
+          initialData?.final_data?.arrival_time_day2
+        ),
       },
-      lunches: (initialData?.lunches || []).map((lunch) => ({
-        ...lunch,
-        diet_info: normalizeDietInfo(lunch.diet_info),
-      })),
+      lunches: initialData?.final_data?.lunches_declined
+        ? []
+        : toFixedLunchRows(initialData?.lunches || []),
       pdi: initialData?.pdi || null,
       exhibitors: (initialData?.exhibitors || []).map((exhibitor) => ({
         ...exhibitor,
         attendance: exhibitor.attendance || "",
       })),
     },
-  });
-
-  const {
-    fields: lunchFields,
-    append: appendLunch,
-    remove: removeLunch,
-  } = useFieldArray({
-    control: form.control,
-    name: "lunches",
   });
 
   const {
@@ -117,6 +200,11 @@ export function Stage5Form({
     control: form.control,
     name: "exhibitors",
   });
+
+  const fixedLunchDays: { day: "day1" | "day2"; label: string }[] = [
+    { day: "day1", label: day1Label },
+    { day: "day2", label: day2Label },
+  ];
 
   React.useEffect(() => {
     if (disabled || hasSavedMainRep(initialData?.final_data)) return;
@@ -255,8 +343,30 @@ export function Stage5Form({
     }
   };
 
-  const handleValidSubmit = async (data: Stage5FormData) => {
+  const normalizeLunchesPayload = (data: Stage5FormData): Stage5FormData => {
     const normalized = { ...data, final_data: { ...data.final_data } };
+    if (normalized.final_data.lunches_declined) {
+      normalized.lunches = [];
+    } else {
+      const rows = normalized.lunches || [];
+      normalized.lunches = [
+        {
+          day: "day1" as const,
+          lunch_quantity: Number(rows[0]?.lunch_quantity) || 0,
+          diet_info: "",
+        },
+        {
+          day: "day2" as const,
+          lunch_quantity: Number(rows[1]?.lunch_quantity) || 0,
+          diet_info: "",
+        },
+      ];
+    }
+    return normalized;
+  };
+
+  const handleValidSubmit = async (data: Stage5FormData) => {
+    const normalized = normalizeLunchesPayload(data);
     if (normalized.final_data.el_low_power) {
       normalized.final_data.el_power = "≤100";
       if (!normalized.final_data.el_devices?.trim()) {
@@ -291,7 +401,9 @@ export function Stage5Form({
 
   const handleSaveDraft = async () => {
     try {
-      await onSubmit(form.getValues(), { draft: true });
+      await onSubmit(normalizeLunchesPayload(form.getValues()), {
+        draft: true,
+      });
     } catch (error: any) {
       if (error.response?.status === 400 && error.response?.data?.detail) {
         form.setError("root", {
@@ -326,6 +438,8 @@ export function Stage5Form({
     form.setValue("final_data.lunches_declined", checked);
     if (checked) {
       form.setValue("lunches", []);
+    } else {
+      form.setValue("lunches", toFixedLunchRows());
     }
   };
 
@@ -362,6 +476,29 @@ export function Stage5Form({
             </option>
           ))}
         </select>
+      )}
+    />
+  );
+
+  const renderArrivalTimeSelect = (
+    name: "final_data.arrival_time_day1" | "final_data.arrival_time_day2",
+    id: string
+  ) => (
+    <Controller
+      name={name}
+      control={form.control}
+      render={({ field }) => (
+        <ArrivalTimeSelectFields
+          id={id}
+          value={field.value || ""}
+          onChange={field.onChange}
+          onBlur={field.onBlur}
+          disabled={disabled}
+          hourLabel={t("exhibitor.form.arrivalHour")}
+          minuteLabel={t("exhibitor.form.arrivalMinute")}
+          hourPlaceholder={t("exhibitor.form.arrivalHourPlaceholder")}
+          minutePlaceholder={t("exhibitor.form.arrivalMinutePlaceholder")}
+        />
       )}
     />
   );
@@ -411,7 +548,10 @@ export function Stage5Form({
           {!elLowPower && (
             <>
               <FieldGroup>
-                <FieldLabel>{t("exhibitor.form.electricDevices")}</FieldLabel>
+                <FieldLabel>
+                  {t("exhibitor.form.electricDevices")}
+                  <span className="text-red-500">*</span>
+                </FieldLabel>
                 <Input
                   {...form.register("final_data.el_devices")}
                   disabled={disabled}
@@ -426,7 +566,10 @@ export function Stage5Form({
               </FieldGroup>
 
               <FieldGroup>
-                <FieldLabel>{t("exhibitor.form.electricPower")}</FieldLabel>
+                <FieldLabel>
+                  {t("exhibitor.form.electricPower")}
+                  <span className="text-red-500">*</span>
+                </FieldLabel>
                 <div className="flex items-center gap-2">
                   <Controller
                     name="final_data.el_power"
@@ -464,7 +607,10 @@ export function Stage5Form({
         </div>
 
         <div className="space-y-3">
-          <h3 className="font-medium">{t("exhibitor.form.lunches")}</h3>
+          <h3 className="font-medium">
+            {t("exhibitor.form.lunches")}
+            <span className="text-red-500 ml-1">*</span>
+          </h3>
           <p className="text-sm text-muted-foreground">
             {t("exhibitor.form.lunchesDescription")}
           </p>
@@ -517,97 +663,38 @@ export function Stage5Form({
 
           {!lunchesDeclined && (
             <>
-              <div className="flex justify-start">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() =>
-                    appendLunch({
-                      day: "day1",
-                      lunch_quantity: 1,
-                      diet_info: "meat",
-                    })
-                  }
-                  disabled={disabled || isLoadingSettings}
-                >
-                  <Plus className="mr-1 h-4 w-4" />
-                  {t("exhibitor.form.addLunch")}
-                </Button>
-              </div>
-
-              {lunchFields.map((field, index) => (
+              {fixedLunchDays.map(({ day, label }, index) => (
                 <div
-                  key={field.id}
+                  key={day}
                   className="flex flex-wrap items-end gap-4 rounded-md border p-4"
                 >
                   <FieldGroup className="flex-1 min-w-[140px]">
                     <FieldLabel>{t("exhibitor.form.day")}</FieldLabel>
-                    <Controller
-                      name={`lunches.${index}.day`}
-                      control={form.control}
-                      render={({ field: dayField }) => (
-                        <select
-                          {...dayField}
-                          disabled={disabled}
-                          className={selectClassName}
-                        >
-                          <option value="day1">{day1Label}</option>
-                          <option value="day2">{day2Label}</option>
-                        </select>
-                      )}
-                    />
+                    <p className="flex h-10 items-center text-sm font-medium">
+                      {label}
+                    </p>
                   </FieldGroup>
                   <FieldGroup className="flex-1 min-w-[100px]">
-                    <FieldLabel>{t("exhibitor.form.quantity")}</FieldLabel>
+                    <FieldLabel htmlFor={`lunch_quantity_${day}`}>
+                      {t("exhibitor.form.quantity")}
+                      <span className="text-red-500">*</span>
+                    </FieldLabel>
                     <Input
+                      id={`lunch_quantity_${day}`}
                       type="number"
                       min="0"
                       {...form.register(`lunches.${index}.lunch_quantity`, {
                         valueAsNumber: true,
                       })}
-                      disabled={disabled}
+                      disabled={disabled || isLoadingSettings}
                     />
-                  </FieldGroup>
-                  <FieldGroup className="flex-1 min-w-[160px]">
-                    <FieldLabel>{t("exhibitor.form.dietInfo")}</FieldLabel>
-                    <Controller
-                      name={`lunches.${index}.diet_info`}
-                      control={form.control}
-                      render={({ field: dietField }) => (
-                        <select
-                          {...dietField}
-                          disabled={disabled}
-                          className={selectClassName}
-                        >
-                          {DIET_OPTIONS.map((option) => (
-                            <option key={option} value={option}>
-                              {option === "meat"
-                                ? t("exhibitor.form.dietMeat")
-                                : option === "vegetarian"
-                                  ? t("exhibitor.form.dietVegetarian")
-                                  : t("exhibitor.form.dietVegan")}
-                            </option>
-                          ))}
-                        </select>
-                      )}
-                    />
-                    {form.formState.errors.lunches?.[index]?.diet_info && (
+                    {form.formState.errors.lunches?.[index]?.lunch_quantity && (
                       <FieldError>
-                        {form.formState.errors.lunches[index]?.diet_info
+                        {form.formState.errors.lunches[index]?.lunch_quantity
                           ?.message || t("exhibitor.form.required")}
                       </FieldError>
                     )}
                   </FieldGroup>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => removeLunch(index)}
-                    disabled={disabled}
-                  >
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
                 </div>
               ))}
 
@@ -662,13 +749,59 @@ export function Stage5Form({
         </div>
 
         <div className="space-y-3">
+          <h3 className="font-medium">
+            {t("exhibitor.form.arrivalTimesTitle")}
+          </h3>
+          <p className="text-sm text-muted-foreground">
+            {t("exhibitor.form.arrivalTimesDescription")}
+          </p>
+          <div className="grid gap-4 md:grid-cols-2 rounded-md border p-4">
+            <FieldGroup>
+              <FieldLabel htmlFor="arrival_time_day1_hour">
+                {t("exhibitor.form.arrivalTimeDay1", { date: day1Label })}
+                <span className="text-red-500">*</span>
+              </FieldLabel>
+              {renderArrivalTimeSelect(
+                "final_data.arrival_time_day1",
+                "arrival_time_day1"
+              )}
+              {form.formState.errors.final_data?.arrival_time_day1 && (
+                <FieldError>
+                  {form.formState.errors.final_data.arrival_time_day1.message ||
+                    t("exhibitor.form.required")}
+                </FieldError>
+              )}
+            </FieldGroup>
+            <FieldGroup>
+              <FieldLabel htmlFor="arrival_time_day2_hour">
+                {t("exhibitor.form.arrivalTimeDay2", { date: day2Label })}
+                <span className="text-red-500">*</span>
+              </FieldLabel>
+              {renderArrivalTimeSelect(
+                "final_data.arrival_time_day2",
+                "arrival_time_day2"
+              )}
+              {form.formState.errors.final_data?.arrival_time_day2 && (
+                <FieldError>
+                  {form.formState.errors.final_data.arrival_time_day2.message ||
+                    t("exhibitor.form.required")}
+                </FieldError>
+              )}
+            </FieldGroup>
+          </div>
+        </div>
+
+        <div className="space-y-3">
           <h3 className="font-medium">{t("exhibitor.form.mainRepTitle")}</h3>
           <p className="text-sm text-muted-foreground">
             {t("exhibitor.form.mainRepDescription")}
           </p>
           <div className="grid gap-4 md:grid-cols-2 rounded-md border p-4">
             <FieldGroup>
-              <FieldLabel>{t("exhibitor.form.firstName")}</FieldLabel>
+              <FieldLabel>
+                {t("exhibitor.form.firstName")}
+                <span className="text-red-500">*</span>
+              </FieldLabel>
               <Input
                 {...form.register("final_data.main_rep_name")}
                 disabled={disabled}
@@ -680,7 +813,10 @@ export function Stage5Form({
               )}
             </FieldGroup>
             <FieldGroup>
-              <FieldLabel>{t("exhibitor.form.lastName")}</FieldLabel>
+              <FieldLabel>
+                {t("exhibitor.form.lastName")}
+                <span className="text-red-500">*</span>
+              </FieldLabel>
               <Input
                 {...form.register("final_data.main_rep_surname")}
                 disabled={disabled}
@@ -692,7 +828,10 @@ export function Stage5Form({
               )}
             </FieldGroup>
             <FieldGroup>
-              <FieldLabel>{t("exhibitor.form.phone")}</FieldLabel>
+              <FieldLabel>
+                {t("exhibitor.form.phone")}
+                <span className="text-red-500">*</span>
+              </FieldLabel>
               <Input
                 {...form.register("final_data.main_rep_phone")}
                 disabled={disabled}
@@ -706,6 +845,7 @@ export function Stage5Form({
             <FieldGroup>
               <FieldLabel htmlFor="main_rep_attendance">
                 {t("exhibitor.form.attendanceLabel")}
+                <span className="text-red-500">*</span>
               </FieldLabel>
               {renderAttendanceSelect(
                 "final_data.main_rep_attendance",
@@ -776,7 +916,10 @@ export function Stage5Form({
                   className="grid gap-4 md:grid-cols-2 rounded-md border p-4"
                 >
                   <FieldGroup>
-                    <FieldLabel>{t("exhibitor.form.firstName")}</FieldLabel>
+                    <FieldLabel>
+                      {t("exhibitor.form.firstName")}
+                      <span className="text-red-500">*</span>
+                    </FieldLabel>
                     <Input
                       {...form.register(`exhibitors.${index}.name`)}
                       disabled={disabled}
@@ -788,7 +931,10 @@ export function Stage5Form({
                     )}
                   </FieldGroup>
                   <FieldGroup>
-                    <FieldLabel>{t("exhibitor.form.lastName")}</FieldLabel>
+                    <FieldLabel>
+                      {t("exhibitor.form.lastName")}
+                      <span className="text-red-500">*</span>
+                    </FieldLabel>
                     <Input
                       {...form.register(`exhibitors.${index}.surname`)}
                       disabled={disabled}
@@ -803,7 +949,10 @@ export function Stage5Form({
                     )}
                   </FieldGroup>
                   <FieldGroup>
-                    <FieldLabel>{t("exhibitor.form.phone")}</FieldLabel>
+                    <FieldLabel>
+                      {t("exhibitor.form.phone")}
+                      <span className="text-red-500">*</span>
+                    </FieldLabel>
                     <Input
                       {...form.register(`exhibitors.${index}.phone_number`)}
                       disabled={disabled}
@@ -820,6 +969,7 @@ export function Stage5Form({
                   <FieldGroup>
                     <FieldLabel htmlFor={`exhibitor_attendance_${index}`}>
                       {t("exhibitor.form.attendanceLabel")}
+                      <span className="text-red-500">*</span>
                     </FieldLabel>
                     <div className="flex gap-2 items-end">
                       <div className="flex-1">

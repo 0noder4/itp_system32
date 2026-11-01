@@ -5,7 +5,12 @@ import { useTranslation } from "@/lib/i18n";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Stage5Data, AttendanceOption } from "@/lib/types";
 import { LunchPriceResponse, fetcher } from "@/lib/api";
-import { calculateLunchSummary, parseLunchPrice, formatDietLabel } from "@/lib/stage5-utils";
+import {
+  calculateLunchSummary,
+  formatArrivalTime,
+  parseLunchPrice,
+  toFixedLunchRows,
+} from "@/lib/stage5-utils";
 import useSWR from "swr";
 
 interface Stage5ViewerProps {
@@ -85,8 +90,8 @@ export function Stage5Viewer({ data }: Stage5ViewerProps) {
             <p className="text-sm">{t("exhibitor.form.lunchesDeclinedStatus")}</p>
           ) : data.lunches && data.lunches.length > 0 ? (
             <div className="space-y-2">
-              {data.lunches.map((lunch, index) => (
-                <div key={index} className="border rounded p-3">
+              {toFixedLunchRows(data.lunches).map((lunch) => (
+                <div key={lunch.day} className="border rounded p-3">
                   <p className="text-sm">
                     <span className="font-medium">
                       {t("exhibitor.form.day")}:
@@ -99,14 +104,6 @@ export function Stage5Viewer({ data }: Stage5ViewerProps) {
                     </span>{" "}
                     {lunch.lunch_quantity}
                   </p>
-                  {lunch.diet_info && (
-                    <p className="text-sm">
-                      <span className="font-medium">
-                        {t("exhibitor.form.dietInfo")}:
-                      </span>{" "}
-                      {formatDietLabel(lunch.diet_info, t)}
-                    </p>
-                  )}
                 </div>
               ))}
               <div className="rounded-md bg-muted/50 p-3 text-sm space-y-1 mt-2">
@@ -126,6 +123,28 @@ export function Stage5Viewer({ data }: Stage5ViewerProps) {
             <p className="text-sm text-muted-foreground">—</p>
           )}
         </div>
+
+        {finalData && (
+          <div>
+            <h3 className="font-medium mb-3">
+              {t("exhibitor.form.arrivalTimesTitle")}
+            </h3>
+            <div className="border rounded p-3 space-y-1 text-sm">
+              <p>
+                <span className="font-medium">
+                  {t("exhibitor.form.arrivalTimeDay1", { date: day1Label })}:
+                </span>{" "}
+                {formatArrivalTime(finalData.arrival_time_day1)}
+              </p>
+              <p>
+                <span className="font-medium">
+                  {t("exhibitor.form.arrivalTimeDay2", { date: day2Label })}:
+                </span>{" "}
+                {formatArrivalTime(finalData.arrival_time_day2)}
+              </p>
+            </div>
+          </div>
+        )}
 
         {finalData && (
           <div>

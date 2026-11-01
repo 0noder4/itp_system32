@@ -293,15 +293,6 @@ class OrderSummaryPDFGenerator:
         }
         return labels.get(attendance, attendance or '—')
 
-    def _format_diet(self, diet):
-        """Format diet choice for PDF output."""
-        labels = {
-            'meat': self._t('Meat (standard)', 'Mięsna (zwykła)'),
-            'vegetarian': self._t('Vegetarian', 'Wegetariańska'),
-            'vegan': self._t('Vegan', 'Wegańska'),
-        }
-        return labels.get(diet, diet or '')
-        
     def generate(self):
         """Generate the complete PDF document."""
         # Header
@@ -877,30 +868,36 @@ class OrderSummaryPDFGenerator:
                     lunch_data.append([
                         Paragraph(self._t("Day", "Dzień"), header_style),
                         Paragraph(self._t("Quantity", "Ilość"), header_style),
-                        Paragraph(self._t("Diet Info", "Informacje o dietach"), header_style)
                     ])
-                    
+
+                    # Aggregate quantities per day (diet is chosen on-site).
+                    qty_by_day = {'day1': 0, 'day2': 0}
                     for lunch in lunches:
-                        if lunch.day == 'day1':
-                            day_display = self._t(
+                        if lunch.day in qty_by_day:
+                            qty_by_day[lunch.day] += lunch.lunch_quantity or 0
+
+                    for day_key, day_display in (
+                        (
+                            'day1',
+                            self._t(
                                 f"Day 1 ({system_settings.get_day1_display_en()})",
                                 f"Dzień 1 ({system_settings.get_day1_display_pl()})"
-                            )
-                        else:
-                            day_display = self._t(
+                            ),
+                        ),
+                        (
+                            'day2',
+                            self._t(
                                 f"Day 2 ({system_settings.get_day2_display_en()})",
                                 f"Dzień 2 ({system_settings.get_day2_display_pl()})"
-                            )
+                            ),
+                        ),
+                    ):
                         lunch_data.append([
                             Paragraph(day_display, self.normal_style),
-                            Paragraph(str(lunch.lunch_quantity), self.normal_style),
-                            Paragraph(
-                                self._format_diet(lunch.diet_info or ""),
-                                self.normal_style,
-                            )
+                            Paragraph(str(qty_by_day[day_key]), self.normal_style),
                         ])
                     
-                    lunch_table = Table(lunch_data, colWidths=[5*cm, 3*cm, 8*cm])
+                    lunch_table = Table(lunch_data, colWidths=[8*cm, 8*cm])
                     lunch_table.setStyle(TableStyle([
                         ('BACKGROUND', (0, 0), (-1, 0), ACCENT_COLOR),
                         ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
@@ -938,6 +935,30 @@ class OrderSummaryPDFGenerator:
                         )
                         self.story.append(Paragraph(pricing_text, self.normal_style))
                         self.story.append(Spacer(1, 0.2*cm))
+
+            # Arrival times
+            if final_data.arrival_time_day1 or final_data.arrival_time_day2:
+                self.story.append(Paragraph(
+                    self._t("Arrival times:", "Godziny przyjazdu:"),
+                    self.bold_heading_style
+                ))
+                self.story.append(Spacer(1, 0.2*cm))
+                day1_time = (
+                    final_data.arrival_time_day1.strftime('%H:%M')
+                    if final_data.arrival_time_day1 else '—'
+                )
+                day2_time = (
+                    final_data.arrival_time_day2.strftime('%H:%M')
+                    if final_data.arrival_time_day2 else '—'
+                )
+                arrival_text = self._t(
+                    f"Day 1 ({system_settings.get_day1_display_en()}): {day1_time}; "
+                    f"Day 2 ({system_settings.get_day2_display_en()}): {day2_time}",
+                    f"Dzień 1 ({system_settings.get_day1_display_pl()}): {day1_time}; "
+                    f"Dzień 2 ({system_settings.get_day2_display_pl()}): {day2_time}",
+                )
+                self.story.append(Paragraph(arrival_text, self.normal_style))
+                self.story.append(Spacer(1, 0.3*cm))
 
             # Main representative
             if final_data.main_rep_name or final_data.main_rep_surname:

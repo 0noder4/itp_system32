@@ -379,6 +379,8 @@ export const stage5Schema = z
       main_rep_surname: z.string(),
       main_rep_phone: z.string(),
       main_rep_attendance: z.enum(["both", "day1", "day2", "none", ""]),
+      arrival_time_day1: z.string(),
+      arrival_time_day2: z.string(),
     }),
     lunches: z.array(
       z.object({
@@ -388,9 +390,7 @@ export const stage5Schema = z
         lunch_quantity: z
           .number()
           .min(0, "Lunch quantity must be 0 or greater"),
-        diet_info: z.enum(["meat", "vegetarian", "vegan"], {
-          message: "Diet selection is required",
-        }),
+        diet_info: z.string().optional(),
       })
     ),
     pdi: z
@@ -509,6 +509,25 @@ export const stage5Schema = z
         message: "Attendance selection is required",
         path: ["final_data", "main_rep_attendance"],
       });
+    }
+
+    const timePattern = /^([01]\d|2[0-3]):[0-5]\d$/;
+    for (const field of ["arrival_time_day1", "arrival_time_day2"] as const) {
+      const raw = (data.final_data[field] || "").trim();
+      const normalized = raw.length >= 5 ? raw.slice(0, 5) : raw;
+      if (!normalized) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Arrival time is required",
+          path: ["final_data", field],
+        });
+      } else if (!timePattern.test(normalized)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Enter a valid time (HH:MM)",
+          path: ["final_data", field],
+        });
+      }
     }
 
     if (data.final_data.no_other_delegates) {

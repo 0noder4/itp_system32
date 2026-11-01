@@ -35,10 +35,6 @@ export default function PartnerLayout({
       title: t("exhibitor.navigation.forms"),
       url: "/panel/exhibitor/forms",
     },
-    {
-      title: t("exhibitor.navigation.faq"),
-      url: "/panel/exhibitor/faq",
-    },
     // Only show map if company has at least one stand assigned
     ...(hasStandAssigned
       ? [
@@ -48,6 +44,10 @@ export default function PartnerLayout({
           },
         ]
       : []),
+    {
+      title: t("exhibitor.navigation.faq"),
+      url: "/panel/exhibitor/faq",
+    },
   ];
 
   return (

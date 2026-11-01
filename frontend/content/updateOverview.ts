@@ -13,6 +13,22 @@ export type UpdateOverviewEntry = {
 
 export const updateOverviews: readonly UpdateOverviewEntry[] = [
   {
+    releaseDate: "2026-11-01",
+    highlights: [
+      "Etap 5: firma podaje planowaną godzinę przyjazdu na dzień 1 i 2 (montaż / rozładunek); widać to w podglądzie staff, PDF i eksporcie.",
+      "Obiady w etapie 5: stała ilość na każdy dzień targów — bez wyboru diety w systemie (dieta na miejscu w Chochelce).",
+      "Przy anulowaniu zaproszenia można oznaczyć „firma rezygnuje” (osobny status i filtr na liście firm / zaproszeń).",
+      "Mapa: przy synchronizacji obu dni nadal przełączysz zakładki dnia 1 i 2; dymek przy najechaniu na stoisko nie ucina się na krawędzi.",
+    ],
+    worthChecking: [
+      "Panel firmy → Etap 5 → godziny przyjazdu (obie listy) → obiady day1/day2 bez diety → prześlij / szkic.",
+      "Panel staff → firma → podgląd etapu 5 → godziny przyjazdu i ilości obiadów; eksport CSV / PDF.",
+      "Panel staff → zaproszenie → Anuluj → zaznacz „firma rezygnuje” → filtr statusu „Firma rezygnuje”.",
+      "Panel staff → Mapa → włącz sync → przełącz dzień 1/2 → najedź na stoisko (dymek w pełni widoczny).",
+      "Panel staff → po zalogowaniu → przegląd aktualizacji → data 01.11.2026.",
+    ],
+  },
+  {
     releaseDate: "2026-10-26",
     highlights: [
       "Mapa stoisk jest edytowalna w panelu staff: łączenie i rozłączanie stoisk (4/6/8/12 m²) w torach A–F, z wariantami etykiet (np. B1a + B1b + B2) oraz ręcznym podziałem.",

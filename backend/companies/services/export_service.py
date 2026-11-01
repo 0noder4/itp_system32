@@ -266,6 +266,7 @@ class ExportService:
             'Rezygnacja z obiadów',
             'Dzień 1 - obiady', 'Ilość obiadów - dzień 1',
             'Dzień 2 - obiady', 'Ilość obiadów - dzień 2',
+            'Godzina przyjazdu - dzień 1', 'Godzina przyjazdu - dzień 2',
             'Główny przedstawiciel', 'Obecność głównego przedstawiciela',
             'Brak innych delegatów',
             'Delegaci firmy', 'Obecność delegatów',
@@ -517,10 +518,15 @@ class ExportService:
         if has_stage_5 and hasattr(company, 'finaldata') and company.finaldata:
             try:
                 fd = company.finaldata
+                def _fmt_time(value):
+                    return value.strftime('%H:%M') if value else ''
+
                 base_data.update({
                     'Urządzenia elektryczne podczas targów': fd.el_devices or '',
                     'Łączna moc urządzeń': fd.el_power or '',
                     'Rezygnacja z obiadów': 'Tak' if fd.lunches_declined else 'Nie',
+                    'Godzina przyjazdu - dzień 1': _fmt_time(fd.arrival_time_day1),
+                    'Godzina przyjazdu - dzień 2': _fmt_time(fd.arrival_time_day2),
                     'Główny przedstawiciel': self._format_full_name(
                         fd.main_rep_name, fd.main_rep_surname
                     ) + (f" ({fd.main_rep_phone})" if fd.main_rep_phone else ''),

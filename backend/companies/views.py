@@ -571,13 +571,15 @@ class CompanyInvitationDetailView(APIView):
         if invitation.is_accepted:
             return Response({"detail": "Cannot cancel an already accepted invitation"}, status=status.HTTP_400_BAD_REQUEST)
         
-        # Check if invitation is already cancelled
+        # Check if invitation is already cancelled (also blocks clearing is_resigned)
         if invitation.is_cancelled:
             return Response({"detail": "Invitation is already cancelled"}, status=status.HTTP_400_BAD_REQUEST)
         
-        # Cancel the invitation
+        # Cancel the invitation; set resign flag explicitly from this request
+        # (False clears an orphaned admin-only is_resigned before cancel)
         invitation.is_cancelled = True
-        invitation.save()
+        invitation.is_resigned = request.data.get('is_resigned') is True
+        invitation.save(update_fields=['is_cancelled', 'is_resigned', 'updated_at'])
         
         serializer = CompanyInvitationSerializer(invitation)
         return Response(serializer.data, status=status.HTTP_200_OK)
