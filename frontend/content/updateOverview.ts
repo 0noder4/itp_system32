@@ -15,12 +15,17 @@ export const updateOverviews: readonly UpdateOverviewEntry[] = [
   {
     releaseDate: "2026-11-01",
     highlights: [
+      "Etap 2 (partner / partner główny): wybór bezpłatnej wykładziny RIPS/WELUR z katalogu kolorów albo rezygnacja — w formularzu firmy, podglądzie staff i eksporcie CSV.",
+      "Obraz katalogu wykładzin wgrywa się w ustawieniach systemu (Django Admin) — bez przebudowy frontendu.",
       "Etap 5: firma podaje planowaną godzinę przyjazdu na dzień 1 i 2 (montaż / rozładunek); widać to w podglądzie staff, PDF i eksporcie.",
       "Obiady w etapie 5: stała ilość na każdy dzień targów — bez wyboru diety w systemie (dieta na miejscu w Chochelce).",
       "Przy anulowaniu zaproszenia można oznaczyć „firma rezygnuje” (osobny status i filtr na liście firm / zaproszeń).",
       "Mapa: przy synchronizacji obu dni nadal przełączysz zakładki dnia 1 i 2; dymek przy najechaniu na stoisko nie ucina się na krawędzi.",
     ],
     worthChecking: [
+      "Panel firmy (partner) → Etap 2 → Wykładzina → katalog / typ / kolor albo rezygnacja → zapisz szkic i prześlij.",
+      "Panel staff → firma partnerska → podgląd etapu 2 → sekcja wykładziny → Pokaż katalog; eksport CSV (kolumny wykładziny).",
+      "Django Admin → Settings → Documents → katalog wykładzin (obraz) → odśwież dialog w etapie 2.",
       "Panel firmy → Etap 5 → godziny przyjazdu (obie listy) → obiady day1/day2 bez diety → prześlij / szkic.",
       "Panel staff → firma → podgląd etapu 5 → godziny przyjazdu i ilości obiadów; eksport CSV / PDF.",
       "Panel staff → zaproszenie → Anuluj → zaznacz „firma rezygnuje” → filtr statusu „Firma rezygnuje”.",

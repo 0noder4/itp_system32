@@ -23,9 +23,14 @@ import { Stage5Viewer } from "./Stage5Viewer";
 interface StageViewerProps {
   companyId: number;
   stageNumber: number;
+  companyStatus?: string | null;
 }
 
-export function StageViewer({ companyId, stageNumber }: StageViewerProps) {
+export function StageViewer({
+  companyId,
+  stageNumber,
+  companyStatus,
+}: StageViewerProps) {
   const { t } = useTranslation();
   const endpoint = `/api/company/${companyId}/form/stage-${stageNumber}/`;
 
@@ -57,7 +62,12 @@ export function StageViewer({ companyId, stageNumber }: StageViewerProps) {
   if (stageNumber === 1) {
     return <Stage1Viewer data={data as Stage1Data} />;
   } else if (stageNumber === 2) {
-    return <Stage2Viewer data={data as Stage2Data} />;
+    return (
+      <Stage2Viewer
+        data={data as Stage2Data}
+        companyStatus={companyStatus}
+      />
+    );
   } else if (stageNumber === 3) {
     return <Stage3Viewer data={data as Stage3Data} />;
   } else if (stageNumber === 4) {

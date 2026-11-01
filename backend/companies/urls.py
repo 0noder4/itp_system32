@@ -37,6 +37,9 @@ urlpatterns = [
 
     # Terms PDF (Stage 1 dialog)
     path('terms-pdf/', views.TermsPdfView.as_view(), name='terms-pdf'),
+
+    # Carpet catalog image (Stage 2 dialog for partners)
+    path('carpet-catalog/', views.CarpetCatalogView.as_view(), name='carpet-catalog'),
     
     # Lunch price
     path('lunch-price/', views.LunchPriceView.as_view(), name='lunch-price'),

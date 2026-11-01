@@ -7,8 +7,8 @@ import { toast } from "sonner";
 import { apiClient } from "@/lib/api";
 import { useTranslation } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
-import { Stage2Data, EquipmentItem } from "@/lib/types";
-import { stage2Schema, Stage2FormData } from "./schemas";
+import { Stage2Data, EquipmentItem, CarpetChoice } from "@/lib/types";
+import { createStage2Schema, Stage2FormData } from "./schemas";
 import { Button } from "@/components/ui/button";
 import { ACCENT_COLOR } from "@/lib/colors";
 import { Input } from "@/components/ui/input";
@@ -25,6 +25,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { StageDraftSaveButton } from "./StageDraftSaveButton";
+import { CarpetSelectionDialog } from "./CarpetSelectionDialog";
 import { fetchInvoiceTotal } from "@/lib/invoice-cost-utils";
 import { fetcher, LunchPriceResponse } from "@/lib/api";
 import useSWR from "swr";
@@ -32,6 +33,11 @@ import {
   nativeCheckboxClassName,
   nativeChoiceAppearanceStyle,
 } from "@/lib/native-choice-styles";
+import { useFormStatus } from "@/hooks/use-form-status";
+import {
+  carpetColorLabel,
+  isCarpetPartnerStatus,
+} from "@/lib/carpetCatalog";
 
 type ScDimensions = {
   length: string;
@@ -144,6 +150,11 @@ export function Stage2Form({
   isAccepted = false,
 }: Stage2FormProps) {
   const { t, locale } = useTranslation();
+  const { companyStatus } = useFormStatus();
+  const requiresCarpet = isCarpetPartnerStatus(companyStatus);
+  const requiresCarpetRef = React.useRef(requiresCarpet);
+  requiresCarpetRef.current = requiresCarpet;
+
   const { data: fairSettings } = useSWR<LunchPriceResponse>(
     "/api/lunch-price/",
     fetcher
@@ -161,6 +172,7 @@ export function Stage2Form({
   const [selectedVisualizationFileName, setSelectedVisualizationFileName] =
     React.useState<string | null>(null);
   const [showCostDialog, setShowCostDialog] = React.useState(false);
+  const [showCarpetDialog, setShowCarpetDialog] = React.useState(false);
   const [pendingFormData, setPendingFormData] =
     React.useState<Stage2FormData | null>(null);
   const [pendingAdditionalCost, setPendingAdditionalCost] = React.useState(0);
@@ -218,7 +230,10 @@ export function Stage2Form({
   };
 
   const form = useForm<Stage2FormData>({
-    resolver: zodResolver(stage2Schema),
+    resolver: async (values, context, options) =>
+      zodResolver(
+        createStage2Schema({ requiresCarpet: requiresCarpetRef.current })
+      )(values, context, options),
     defaultValues: {
       stand_details: {
         stand_type:
@@ -237,6 +252,8 @@ export function Stage2Form({
           initialData?.stand_details?.stand_visualization || undefined,
         brought_equipment:
           initialData?.stand_details?.brought_equipment || "",
+        carpet_choice: initialData?.stand_details?.carpet_choice ?? null,
+        carpet_color: initialData?.stand_details?.carpet_color || "",
       },
       equipment_selections:
         initialData?.equipment_selections?.map((sel) => ({
@@ -248,6 +265,8 @@ export function Stage2Form({
   });
 
   const watchStandType = form.watch("stand_details.stand_type");
+  const watchCarpetChoice = form.watch("stand_details.carpet_choice");
+  const watchCarpetColor = form.watch("stand_details.carpet_color") || "";
   const watchEquipmentSelections = form.watch("equipment_selections") || [];
 
   // Reset equipment quantities based on stand type
@@ -581,6 +600,17 @@ export function Stage2Form({
           data.stand_details?.brought_equipment ??
           currentFormValues.stand_details?.brought_equipment ??
           "",
+        carpet_choice:
+          data.stand_details?.carpet_choice ??
+          currentFormValues.stand_details?.carpet_choice ??
+          null,
+        carpet_color:
+          (data.stand_details?.carpet_choice ??
+            currentFormValues.stand_details?.carpet_choice) === "none"
+            ? ""
+            : data.stand_details?.carpet_color ??
+              currentFormValues.stand_details?.carpet_color ??
+              "",
       },
       equipment_selections:
         data.equipment_selections?.filter((sel) => sel.quantity > 0) || [],
@@ -1147,6 +1177,60 @@ export function Stage2Form({
         </div>
       )}
 
+      {/* Carpet — partners / main only, both stand types */}
+      {requiresCarpet && watchStandType && (
+        <div className="space-y-3">
+          <h3 className="font-medium">
+            {t("exhibitor.form.carpetSection")}{" "}
+            <span className="text-red-500">*</span>
+          </h3>
+          <p className="text-sm text-muted-foreground">
+            {t("exhibitor.form.carpetSectionHint")}
+          </p>
+          <div className="rounded-lg border border-input bg-muted/30 px-4 py-3">
+            <p className="text-sm">
+              {watchCarpetChoice === "none"
+                ? t("exhibitor.form.carpetSummaryNone")
+                : watchCarpetChoice === "rips" ||
+                    watchCarpetChoice === "welur"
+                  ? `${t(
+                      watchCarpetChoice === "rips"
+                        ? "exhibitor.form.carpetTypeRips"
+                        : "exhibitor.form.carpetTypeWelur"
+                    )}${
+                      watchCarpetColor
+                        ? ` — ${carpetColorLabel(
+                            watchCarpetChoice,
+                            watchCarpetColor,
+                            locale
+                          )}`
+                        : ""
+                    }`
+                  : t("exhibitor.form.carpetSummaryUnset")}
+            </p>
+          </div>
+          {!disabled && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowCarpetDialog(true)}
+            >
+              {watchCarpetChoice
+                ? t("exhibitor.form.carpetChangeButton")
+                : t("exhibitor.form.carpetSelectButton")}
+            </Button>
+          )}
+          {(form.formState.errors.stand_details?.carpet_choice ||
+            form.formState.errors.stand_details?.carpet_color) && (
+            <FieldError>
+              {form.formState.errors.stand_details?.carpet_choice?.message ||
+                form.formState.errors.stand_details?.carpet_color?.message ||
+                t("exhibitor.form.required")}
+            </FieldError>
+          )}
+        </div>
+      )}
+
       {/* Equipment Selection - Only show if stand type is selected */}
       {watchStandType && (
         <div className="space-y-4">
@@ -1371,6 +1455,30 @@ export function Stage2Form({
         </div>
       )}
     </form>
+
+      <CarpetSelectionDialog
+        open={showCarpetDialog}
+        onOpenChange={setShowCarpetDialog}
+        value={{
+          carpet_choice: (watchCarpetChoice as CarpetChoice | null) ?? null,
+          carpet_color: watchCarpetColor,
+        }}
+        onConfirm={({ carpet_choice, carpet_color }) => {
+          form.setValue("stand_details.carpet_choice", carpet_choice, {
+            shouldValidate: true,
+            shouldDirty: true,
+          });
+          form.setValue(
+            "stand_details.carpet_color",
+            carpet_choice === "none" ? "" : carpet_color,
+            { shouldValidate: true, shouldDirty: true }
+          );
+          form.clearErrors([
+            "stand_details.carpet_choice",
+            "stand_details.carpet_color",
+          ]);
+        }}
+      />
 
       <Dialog
         open={showCostDialog}

@@ -2184,6 +2184,32 @@ class TermsPdfView(APIView):
             )
 
 
+class CarpetCatalogView(APIView):
+    """
+    Get the current carpet catalog image URL from system settings (Stage 2 dialog).
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            system_settings = Settings.get_settings()
+            carpet_catalog_image_url = None
+            if system_settings.carpet_catalog_image:
+                carpet_catalog_image_url = request.build_absolute_uri(
+                    system_settings.carpet_catalog_image.url
+                )
+            return Response(
+                {'carpet_catalog_image_url': carpet_catalog_image_url},
+                status=status.HTTP_200_OK,
+            )
+        except Exception as e:
+            logger.error(f"Error in CarpetCatalogView.get: {e}", exc_info=True)
+            return Response(
+                {"detail": "An error occurred while retrieving carpet catalog"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
 class LunchPriceView(APIView):
     """
     Get the current lunch price from system settings.

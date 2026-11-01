@@ -86,6 +86,82 @@ STAND_TYPE_CHOICES = [
     ('self_construction', 'Self Construction'),
 ]
 
+CARPET_CHOICE_RIPS = 'rips'
+CARPET_CHOICE_WELUR = 'welur'
+CARPET_CHOICE_NONE = 'none'
+
+CARPET_CHOICE_CHOICES = [
+    (CARPET_CHOICE_RIPS, 'RIPS EXPO'),
+    (CARPET_CHOICE_WELUR, 'WELUR EXPO'),
+    (CARPET_CHOICE_NONE, 'Nie chcemy wykładziny'),
+]
+
+# Hardcoded IMAWEX palette (catalog image is separate in Settings).
+# Keep in sync with frontend/lib/carpetCatalog.ts (CARPET_COLORS_RIPS / WELUR).
+# FE cannot import this file; update both when the supplier catalog changes.
+CARPET_COLORS_RIPS = [
+    ('005', 'biały'),
+    ('035', 'żółty'),
+    ('033', 'pomarańcz'),
+    ('037', 'czerwony'),
+    ('313', 'bordo'),
+    ('042', 'różowy'),
+    ('029', 'fiolet'),
+    ('946', 'miodowy'),
+    ('912', 'beż'),
+    ('248', 'c.brąz'),
+    ('065', 'zielony'),
+    ('602', 'c. zielony'),
+    ('054', 'niebieski'),
+    ('055', 'c. niebieski'),
+    ('543', 'granat'),
+    ('022', 'j. szary'),
+    ('892', 'szary'),
+    ('940', 'grafit'),
+    ('890', 'antracyt'),
+    ('021', 'czarny'),
+]
+
+CARPET_COLORS_WELUR = [
+    ('V005', 'biały'),
+    ('V810', 'żółty'),
+    ('V800', 'pomarańcz'),
+    ('V372', 'czerwony'),
+    ('V320', 'bordo'),
+    ('V322', 'fuksja'),
+    ('V250', 'j. beż'),
+    ('V549', 'niebieski'),
+    ('V551', 'c. niebieski'),
+    ('V560', 'granat'),
+    ('V254', 'beż'),
+    ('V171', 'lemon'),
+    ('V650', 'zielony'),
+    ('V643', 'c. zielony'),
+    ('V228', 'j. szary'),
+    ('V202', 'szary'),
+    ('V234', 'grafit'),
+    ('V215', 'antracyt'),
+    ('V217', 'czarny'),
+]
+
+CARPET_COLOR_CODES_BY_CHOICE = {
+    CARPET_CHOICE_RIPS: {code for code, _ in CARPET_COLORS_RIPS},
+    CARPET_CHOICE_WELUR: {code for code, _ in CARPET_COLORS_WELUR},
+}
+
+
+def carpet_color_label(choice: str | None, color_code: str | None) -> str:
+    """Human-readable color label for export/UI, or empty string."""
+    if not choice or not color_code:
+        return ''
+    palette = CARPET_COLORS_RIPS if choice == CARPET_CHOICE_RIPS else (
+        CARPET_COLORS_WELUR if choice == CARPET_CHOICE_WELUR else []
+    )
+    for code, name in palette:
+        if code == color_code:
+            return f'{code} {name}'
+    return color_code
+
 TV_MOUNT_CHOICES = [
     ('stand', 'Na stojaku'),
     ('wall', 'Na ścianie'),
@@ -330,6 +406,20 @@ class StandDetails(models.Model):
         upload_to="stand_visualizations",
         blank=True,
         verbose_name="wizualizacja stoiska",
+    )
+    carpet_choice = models.CharField(
+        max_length=10,
+        choices=CARPET_CHOICE_CHOICES,
+        blank=True,
+        null=True,
+        verbose_name="wykładzina — wybór",
+        help_text="Tylko partner / partner główny. null = jeszcze nie wybrano.",
+    )
+    carpet_color = models.CharField(
+        max_length=10,
+        blank=True,
+        verbose_name="wykładzina — kolor",
+        help_text="Kod koloru z palety RIPS/WELUR (np. 005, V005). Puste przy rezygnacji.",
     )
     dl = models.ForeignKey(Deadline, on_delete=models.SET_NULL, null=True)
 
@@ -634,6 +724,16 @@ class Settings(models.Model):
         null=True,
         verbose_name="regulamin (PDF)",
         help_text="PDF regulaminu pokazywany firmom przy zapisie etapu 1. Podmiana w adminie bez redeployu frontendu.",
+    )
+    carpet_catalog_image = models.ImageField(
+        upload_to="carpet_catalog",
+        blank=True,
+        null=True,
+        verbose_name="katalog wykładzin (obraz)",
+        help_text=(
+            "Rozpiska RIPS/WELUR (JPG/PNG/WebP) pokazywana partnerom w dużym dialogu Etapu 2. "
+            "Podmiana w adminie bez redeployu frontendu."
+        ),
     )
     edition_number = models.PositiveSmallIntegerField(
         default=33,

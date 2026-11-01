@@ -145,10 +145,11 @@ class SettingsAdmin(admin.ModelAdmin):
             ),
         }),
         ('Documents', {
-            'fields': ('terms_pdf',),
+            'fields': ('terms_pdf', 'carpet_catalog_image'),
             'description': (
-                'Upload the exhibitor terms PDF shown after Stage 1 save. '
-                'Replace the file here to update the link for companies without a frontend redeploy. '
+                'Upload the exhibitor terms PDF shown after Stage 1 save, '
+                'and the carpet catalog image (RIPS/WELUR swatch sheet) for Stage 2 partners. '
+                'Replace files here to update links without a frontend redeploy. '
                 'Old files on disk may remain until cleaned manually.'
             ),
         }),

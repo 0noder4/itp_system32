@@ -21,7 +21,13 @@ from .models import (
     Lunch,
     PDI,
     PDIAttendee,
-    Exhibitor
+    Exhibitor,
+    STATUS_MAIN,
+    STATUS_PARTENER,
+    CARPET_CHOICE_NONE,
+    CARPET_CHOICE_RIPS,
+    CARPET_CHOICE_WELUR,
+    CARPET_COLOR_CODES_BY_CHOICE,
 )
 from users.models import User
 from django.contrib.auth.password_validation import validate_password
@@ -323,6 +329,8 @@ class StandDetailsSerializer(serializers.ModelSerializer):
             'fire_cert': {'required': False, 'allow_null': True},
             'stand_visualization': {'required': False, 'allow_null': True},
             'brought_equipment': {'required': False, 'allow_blank': True},
+            'carpet_choice': {'required': False, 'allow_null': True},
+            'carpet_color': {'required': False, 'allow_blank': True},
         }
 
 
@@ -863,14 +871,22 @@ class Stage2Serializer(serializers.Serializer):
                     field.allow_null = True
 
     def validate(self, data):
+        stand = data.get('stand_details') or {}
+        if not isinstance(stand, dict):
+            stand = {}
+            data['stand_details'] = stand
+
+        choice = stand.get('carpet_choice')
+        if choice == '':
+            stand['carpet_choice'] = None
+            choice = None
+        if choice == CARPET_CHOICE_NONE:
+            stand['carpet_color'] = ''
+
         if self.context.get('draft'):
             return data
-        stand = data.get('stand_details') or {}
-        acknowledged = (
-            stand.get('el_power_acknowledged')
-            if isinstance(stand, dict)
-            else getattr(stand, 'el_power_acknowledged', False)
-        )
+
+        acknowledged = stand.get('el_power_acknowledged', False)
         if not acknowledged:
             raise serializers.ValidationError({
                 'stand_details': {
@@ -879,6 +895,39 @@ class Stage2Serializer(serializers.Serializer):
                     )
                 }
             })
+
+        company = self.context.get('company')
+        needs_carpet = bool(
+            company is not None
+            and company.status in (STATUS_MAIN, STATUS_PARTENER)
+        )
+        if needs_carpet:
+            color = (stand.get('carpet_color') or '').strip()
+            carpet_errors = {}
+            if choice not in (
+                CARPET_CHOICE_RIPS,
+                CARPET_CHOICE_WELUR,
+                CARPET_CHOICE_NONE,
+            ):
+                carpet_errors['carpet_choice'] = (
+                    'Carpet selection is required for partners.'
+                )
+            elif choice == CARPET_CHOICE_NONE:
+                stand['carpet_color'] = ''
+            else:
+                allowed = CARPET_COLOR_CODES_BY_CHOICE.get(choice, set())
+                if not color:
+                    carpet_errors['carpet_color'] = (
+                        'Carpet color is required when a carpet type is selected.'
+                    )
+                elif color not in allowed:
+                    carpet_errors['carpet_color'] = (
+                        'Invalid carpet color for the selected type.'
+                    )
+                else:
+                    stand['carpet_color'] = color
+            if carpet_errors:
+                raise serializers.ValidationError({'stand_details': carpet_errors})
         return data
 
     def create(self, validated_data):
@@ -893,6 +942,11 @@ class Stage2Serializer(serializers.Serializer):
         company = self.context.get('company')
         if company is not None and 'company' not in stand_details_data:
             stand_details_data['company'] = company
+
+        if stand_details_data.get('carpet_choice') == '':
+            stand_details_data['carpet_choice'] = None
+        if stand_details_data.get('carpet_choice') == CARPET_CHOICE_NONE:
+            stand_details_data['carpet_color'] = ''
 
         stand_details_obj = StandDetails.objects.create(**stand_details_data)
 
@@ -982,6 +1036,11 @@ class Stage2Serializer(serializers.Serializer):
                         # Only update if a new file is provided (not None/empty)
                         if file_value is not None and file_value != '':
                             setattr(stand_details_obj, field, file_value)
+
+                if stand_details_data.get('carpet_choice') == '':
+                    stand_details_data['carpet_choice'] = None
+                if stand_details_data.get('carpet_choice') == CARPET_CHOICE_NONE:
+                    stand_details_data['carpet_color'] = ''
                 
                 # Handle other fields - update all provided fields
                 for key, value in stand_details_data.items():

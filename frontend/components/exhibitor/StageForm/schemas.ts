@@ -1,4 +1,7 @@
 import * as z from "zod";
+import {
+  CARPET_COLOR_CODE_SETS,
+} from "@/lib/carpetCatalog";
 
 export const stage1Schema = z.object({
   basic_data: z.object({
@@ -16,86 +19,118 @@ export const stage1Schema = z.object({
   terms_accepted: z.boolean().optional(),
 });
 
-export const stage2Schema = z.object({
-  stand_details: z
-    .object({
-      stand_type: z.enum(["provided_stand", "self_construction"], {
-        message: "Stand type is required",
-      }),
-      el_power_acknowledged: z.boolean().refine((val) => val === true, {
-        message: "Acknowledgement of electrical power in stage 5 is required",
-      }),
-      sc_details: z.string().max(255, "Description must be 255 characters or less").optional(),
-      name_sign_text: z.string().max(255, "Name sign text must be 255 characters or less").optional(),
-      logo_sign_file: z.any().optional(), // File upload
-      fire_cert: z.any().optional(), // File upload
-      stand_visualization: z.any().optional(), // File upload
-      brought_equipment: z.string().max(2000).optional(),
-    })
-    .superRefine((data, ctx) => {
-      // If provided_stand is selected, name_sign_text and logo_sign_file are required
-      if (data.stand_type === "provided_stand") {
-        if (
-          !data.name_sign_text ||
-          (typeof data.name_sign_text === "string" &&
-            data.name_sign_text.trim() === "")
-        ) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: "Name sign text is required for provided stand",
-            path: ["name_sign_text"],
-          });
-        }
-        // Logo file is required - either a new File or existing file URL
-        const hasLogoFile =
-          data.logo_sign_file &&
-          (data.logo_sign_file instanceof File ||
-            typeof data.logo_sign_file === "string");
-        if (!hasLogoFile) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: "Logo file is required for provided stand",
-            path: ["logo_sign_file"],
-          });
-        }
-      }
-      // If self_construction is selected, dimensions and stand_visualization are required
-      // (fire_cert is optional at submit — deadline enforced separately)
-      if (data.stand_type === "self_construction") {
-        const sc = typeof data.sc_details === "string" ? data.sc_details.trim() : "";
-        const dimsMatch = sc.match(
-          /^([\d]+(?:[.,]\d+)?)x([\d]+(?:[.,]\d+)?)x([\d]+(?:[.,]\d+)?)m$/i
-        );
-        if (!dimsMatch || !dimsMatch[1] || !dimsMatch[2] || !dimsMatch[3]) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: "Construction dimensions are required for self construction",
-            path: ["sc_details"],
-          });
-        }
-        const hasVisualization =
-          data.stand_visualization &&
-          (data.stand_visualization instanceof File ||
-            typeof data.stand_visualization === "string");
-        if (!hasVisualization) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: "Stand visualization is required for self construction",
-            path: ["stand_visualization"],
-          });
-        }
-      }
-    }),
-  equipment_selections: z
-    .array(
-      z.object({
-        equipment_item: z.number(),
-        quantity: z.number().min(0, "Quantity must be 0 or greater"),
-        mount_type: z.enum(["stand", "wall"]).nullable().optional(),
+export function createStage2Schema(options?: { requiresCarpet?: boolean }) {
+  const requiresCarpet = options?.requiresCarpet ?? false;
+
+  return z.object({
+    stand_details: z
+      .object({
+        stand_type: z.enum(["provided_stand", "self_construction"], {
+          message: "Stand type is required",
+        }),
+        el_power_acknowledged: z.boolean().refine((val) => val === true, {
+          message: "Acknowledgement of electrical power in stage 5 is required",
+        }),
+        sc_details: z.string().max(255, "Description must be 255 characters or less").optional(),
+        name_sign_text: z.string().max(255, "Name sign text must be 255 characters or less").optional(),
+        logo_sign_file: z.any().optional(), // File upload
+        fire_cert: z.any().optional(), // File upload
+        stand_visualization: z.any().optional(), // File upload
+        brought_equipment: z.string().max(2000).optional(),
+        carpet_choice: z
+          .enum(["rips", "welur", "none"])
+          .nullable()
+          .optional(),
+        carpet_color: z.string().max(10).optional(),
       })
-    )
-    .optional(),
-});
+      .superRefine((data, ctx) => {
+        // If provided_stand is selected, name_sign_text and logo_sign_file are required
+        if (data.stand_type === "provided_stand") {
+          if (
+            !data.name_sign_text ||
+            (typeof data.name_sign_text === "string" &&
+              data.name_sign_text.trim() === "")
+          ) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: "Name sign text is required for provided stand",
+              path: ["name_sign_text"],
+            });
+          }
+          // Logo file is required - either a new File or existing file URL
+          const hasLogoFile =
+            data.logo_sign_file &&
+            (data.logo_sign_file instanceof File ||
+              typeof data.logo_sign_file === "string");
+          if (!hasLogoFile) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: "Logo file is required for provided stand",
+              path: ["logo_sign_file"],
+            });
+          }
+        }
+        // If self_construction is selected, dimensions and stand_visualization are required
+        // (fire_cert is optional at submit — deadline enforced separately)
+        if (data.stand_type === "self_construction") {
+          const sc = typeof data.sc_details === "string" ? data.sc_details.trim() : "";
+          const dimsMatch = sc.match(
+            /^([\d]+(?:[.,]\d+)?)x([\d]+(?:[.,]\d+)?)x([\d]+(?:[.,]\d+)?)m$/i
+          );
+          if (!dimsMatch || !dimsMatch[1] || !dimsMatch[2] || !dimsMatch[3]) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: "Construction dimensions are required for self construction",
+              path: ["sc_details"],
+            });
+          }
+          const hasVisualization =
+            data.stand_visualization &&
+            (data.stand_visualization instanceof File ||
+              typeof data.stand_visualization === "string");
+          if (!hasVisualization) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: "Stand visualization is required for self construction",
+              path: ["stand_visualization"],
+            });
+          }
+        }
+
+        if (requiresCarpet) {
+          const choice = data.carpet_choice;
+          const color = (data.carpet_color || "").trim();
+          if (choice !== "rips" && choice !== "welur" && choice !== "none") {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: "Carpet selection is required",
+              path: ["carpet_choice"],
+            });
+          } else if (choice === "rips" || choice === "welur") {
+            const allowed = CARPET_COLOR_CODE_SETS[choice];
+            if (!color || !allowed.has(color)) {
+              ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: "Carpet color is required",
+                path: ["carpet_color"],
+              });
+            }
+          }
+        }
+      }),
+    equipment_selections: z
+      .array(
+        z.object({
+          equipment_item: z.number(),
+          quantity: z.number().min(0, "Quantity must be 0 or greater"),
+          mount_type: z.enum(["stand", "wall"]).nullable().optional(),
+        })
+      )
+      .optional(),
+  });
+}
+
+export const stage2Schema = createStage2Schema();
 
 export const stage3Schema = z
   .object({

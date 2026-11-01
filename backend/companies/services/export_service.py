@@ -7,6 +7,8 @@ from companies.models import (
     StandDetails, EquipmentItem, EquipmentSelection,
     FinalData, Lunch, Workshop, Exhibitor, Settings,
     COMPANY_STATUS_CHOICES, STAND_TYPE_CHOICES, DAY_OPT, ATTENDANCE_OPT, DIET_OPT,
+    STATUS_MAIN, STATUS_PARTENER,
+    CARPET_CHOICE_CHOICES, carpet_color_label,
 )
 from companies.utils.csv_generator import CSVGenerator
 from typing import Dict, List, Any
@@ -29,6 +31,7 @@ class ExportService:
     CHOICE_MAPPINGS = {
         'status': dict(COMPANY_STATUS_CHOICES),
         'stand_type': dict(STAND_TYPE_CHOICES),
+        'carpet_choice': dict(CARPET_CHOICE_CHOICES),
     }
 
     def __init__(self, user, filters: Dict[str, Any]):
@@ -240,6 +243,7 @@ class ExportService:
             # Stand Details (Stage 2)
             'Typ stanowiska', 'Szczegóły zabudowy', 'Tekst na fryzie',
             'Wizualizacja zabudowy', 'Przywóz własnego sprzętu',
+            'Wykładzina - wybór', 'Wykładzina - kolor',
         ]
         
         # Add dynamically generated equipment headers
@@ -387,6 +391,21 @@ class ExportService:
                         'Szczegóły zabudowy': '',
                     })
 
+                if company.status in (STATUS_MAIN, STATUS_PARTENER):
+                    carpet_choice = getattr(sd, 'carpet_choice', None)
+                    carpet_color = getattr(sd, 'carpet_color', None) or ''
+                    base_data.update({
+                        'Wykładzina - wybór': self.CHOICE_MAPPINGS['carpet_choice'].get(
+                            carpet_choice, carpet_choice or ''
+                        ),
+                        'Wykładzina - kolor': carpet_color_label(carpet_choice, carpet_color),
+                    })
+                else:
+                    base_data.update({
+                        'Wykładzina - wybór': '',
+                        'Wykładzina - kolor': '',
+                    })
+
                 tv_mount_display = ''
                 # Equipment selections - selection.quantity is already the total quantity
                 equipment_selections = list(sd.equipment_selections.all())
@@ -423,6 +442,8 @@ class ExportService:
                 'Tekst na fryzie': '',
                 'Wizualizacja zabudowy': '',
                 'Przywóz własnego sprzętu': '',
+                'Wykładzina - wybór': '',
+                'Wykładzina - kolor': '',
                 'Montaż TV': '',
             })
         
@@ -430,6 +451,10 @@ class ExportService:
         base_data.update(equipment_totals)
         if 'Montaż TV' not in base_data:
             base_data['Montaż TV'] = ''
+        if 'Wykładzina - wybór' not in base_data:
+            base_data['Wykładzina - wybór'] = ''
+        if 'Wykładzina - kolor' not in base_data:
+            base_data['Wykładzina - kolor'] = ''
 
         # Workshops (Stage 3)
         if has_stage_3 and hasattr(company, 'workshops') and company.workshops:

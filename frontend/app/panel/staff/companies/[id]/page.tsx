@@ -459,6 +459,7 @@ export default function CompanyDetailPage() {
                         <StageViewer
                           companyId={companyId!}
                           stageNumber={stage.stageNumber}
+                          companyStatus={company?.status}
                         />
                       )}
 

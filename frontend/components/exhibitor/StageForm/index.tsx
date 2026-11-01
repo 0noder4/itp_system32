@@ -243,6 +243,23 @@ export function StageForm({
               data.stand_details.brought_equipment
             );
           }
+          // Always send carpet fields when present on the payload so draft PATCH
+          // can clear a previous choice (empty string → null on backend).
+          if (
+            Object.prototype.hasOwnProperty.call(
+              data.stand_details,
+              "carpet_choice"
+            )
+          ) {
+            const carpetChoice = data.stand_details.carpet_choice || "";
+            formData.append("stand_details[carpet_choice]", carpetChoice);
+            formData.append(
+              "stand_details[carpet_color]",
+              carpetChoice === "none" || !carpetChoice
+                ? ""
+                : data.stand_details.carpet_color || ""
+            );
+          }
           // Handle file uploads - only send new File instances, not existing URLs
           const logoFile = data.stand_details.logo_sign_file;
           const fireCertFile = data.stand_details.fire_cert;

@@ -3,20 +3,32 @@
 import React from "react";
 import { useTranslation } from "@/lib/i18n";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { ExternalLink } from "lucide-react";
-import { Stage2Data } from "@/lib/types";
+import { CarpetChoice, Stage2Data } from "@/lib/types";
 import { getFileUrl } from "./utils";
+import {
+  carpetColorLabel,
+  isCarpetPartnerStatus,
+} from "@/lib/carpetCatalog";
+import { CarpetSelectionDialog } from "@/components/exhibitor/StageForm/CarpetSelectionDialog";
 
 interface Stage2ViewerProps {
   data: Stage2Data;
+  companyStatus?: string | null;
 }
 
-export function Stage2Viewer({ data }: Stage2ViewerProps) {
-  const { t } = useTranslation();
+export function Stage2Viewer({ data, companyStatus }: Stage2ViewerProps) {
+  const { t, locale } = useTranslation();
+  const [showCarpetDialog, setShowCarpetDialog] = React.useState(false);
 
   const standType = data.stand_details?.stand_type;
   const isProvidedStand = standType === "provided_stand";
   const isSelfConstruction = standType === "self_construction";
+  const showCarpet = isCarpetPartnerStatus(companyStatus);
+  const carpetChoice = (data.stand_details?.carpet_choice ??
+    null) as CarpetChoice | null;
+  const carpetColor = data.stand_details?.carpet_color || "";
 
   // Group equipment by category
   const groupedEquipment = React.useMemo(() => {
@@ -54,6 +66,22 @@ export function Stage2Viewer({ data }: Stage2ViewerProps) {
       return total;
     }, 0);
   }, [data.equipment_selections]);
+
+  const carpetSummary = (() => {
+    if (carpetChoice === "none") {
+      return t("exhibitor.form.carpetSummaryNone");
+    }
+    if (carpetChoice === "rips" || carpetChoice === "welur") {
+      const typeLabel = t(
+        carpetChoice === "rips"
+          ? "exhibitor.form.carpetTypeRips"
+          : "exhibitor.form.carpetTypeWelur"
+      );
+      const colorLabel = carpetColorLabel(carpetChoice, carpetColor, locale);
+      return colorLabel ? `${typeLabel} — ${colorLabel}` : typeLabel;
+    }
+    return t("exhibitor.form.carpetSummaryUnset");
+  })();
 
   return (
     <Card>
@@ -102,14 +130,14 @@ export function Stage2Viewer({ data }: Stage2ViewerProps) {
 
             {data.stand_details?.logo_sign_file && (
               <div>
-                <p className="text-sm font-medium text-muted-foreground">
+                <p className="text-sm font-medium text-muted-foreground mb-1">
                   {t("exhibitor.form.uploadLogo")}
                 </p>
                 <a
                   href={getFileUrl(data.stand_details.logo_sign_file) || "#"}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="mt-1 inline-flex items-center gap-2 text-primary hover:underline"
+                  className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
                 >
                   <span>View file</span>
                   <ExternalLink className="h-4 w-4" />
@@ -139,14 +167,14 @@ export function Stage2Viewer({ data }: Stage2ViewerProps) {
 
             {data.stand_details?.fire_cert && (
               <div>
-                <p className="text-sm font-medium text-muted-foreground">
+                <p className="text-sm font-medium text-muted-foreground mb-1">
                   {t("exhibitor.form.uploadFireCert")}
                 </p>
                 <a
                   href={getFileUrl(data.stand_details.fire_cert) || "#"}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="mt-1 inline-flex items-center gap-2 text-primary hover:underline"
+                  className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
                 >
                   <span>View file</span>
                   <ExternalLink className="h-4 w-4" />
@@ -156,7 +184,7 @@ export function Stage2Viewer({ data }: Stage2ViewerProps) {
 
             {data.stand_details?.stand_visualization && (
               <div>
-                <p className="text-sm font-medium text-muted-foreground">
+                <p className="text-sm font-medium text-muted-foreground mb-1">
                   {t("exhibitor.form.uploadStandVisualization")}
                 </p>
                 <a
@@ -165,7 +193,7 @@ export function Stage2Viewer({ data }: Stage2ViewerProps) {
                   }
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="mt-1 inline-flex items-center gap-2 text-primary hover:underline"
+                  className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
                 >
                   <span>View file</span>
                   <ExternalLink className="h-4 w-4" />
@@ -183,6 +211,35 @@ export function Stage2Viewer({ data }: Stage2ViewerProps) {
                 </p>
               </div>
             )}
+          </div>
+        )}
+
+        {showCarpet && (
+          <div className="space-y-3">
+            <h3 className="font-medium">{t("exhibitor.form.carpetSection")}</h3>
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">
+                {t("exhibitor.form.carpetType")}
+              </p>
+              <p className="mt-1 text-base">{carpetSummary}</p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setShowCarpetDialog(true)}
+            >
+              {t("exhibitor.form.carpetViewCatalog")}
+            </Button>
+            <CarpetSelectionDialog
+              open={showCarpetDialog}
+              onOpenChange={setShowCarpetDialog}
+              value={{
+                carpet_choice: carpetChoice,
+                carpet_color: carpetColor,
+              }}
+              readOnly
+            />
           </div>
         )}
 

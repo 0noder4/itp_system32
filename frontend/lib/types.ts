@@ -173,6 +173,8 @@ export interface Stage1Data {
 }
 
 // === Stage 2: Stand Details ===
+export type CarpetChoice = "rips" | "welur" | "none";
+
 export interface StandDetails {
   id?: number;
   company: number;
@@ -184,6 +186,9 @@ export interface StandDetails {
   fire_cert?: string;
   stand_visualization?: string;
   brought_equipment?: string;
+  /** Partner / main only; null = not chosen yet */
+  carpet_choice?: CarpetChoice | null;
+  carpet_color?: string;
   dl?: number | null;
 }
 
