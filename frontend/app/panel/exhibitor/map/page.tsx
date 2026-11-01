@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { useTranslation } from "@/lib/i18n";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertCircle } from "lucide-react";
@@ -119,10 +119,7 @@ export default function MapPage() {
         </div>
 
         <Card>
-          <CardHeader>
-            <CardTitle>{t("exhibitor.map.title")}</CardTitle>
-          </CardHeader>
-          <CardContent>
+          <CardContent className="pt-6">
             <Tabs
               value={selectedDay}
               onValueChange={(v) => setSelectedDay(v as "day1" | "day2")}

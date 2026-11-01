@@ -54,14 +54,16 @@ export function Header({ navigationItems }: HeaderProps) {
             href={getUserRoute(userInfo?.type || null)}
             className="flex items-center"
           >
-            <Image
-              src="/images/ITP_LOGO_horizontal_black.png"
-              alt="ITP Logo"
-              width={200}
-              height={60}
-              className="h-auto w-auto max-h-10 object-contain"
-              priority
-            />
+            <div className="rounded-md px-3 py-1.5 dark:bg-white">
+              <Image
+                src="/images/ITP_LOGO_horizontal_black.png"
+                alt="ITP Logo"
+                width={200}
+                height={60}
+                className="h-auto w-auto max-h-10 object-contain"
+                priority
+              />
+            </div>
           </Link>
 
           {/* Navigation - only shown if navigationItems are provided */}
