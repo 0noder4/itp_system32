@@ -408,14 +408,6 @@ export default function StaffMapPage() {
     return () => window.clearTimeout(t);
   }, [manualOpen, manualRows, refreshManualValidation]);
 
-  // sync_days: day2 mirrors day1 — keep UI on day1 (same as StandEditDialog)
-  React.useEffect(() => {
-    if (layout?.sync_days && selectedDay === "day2") {
-      setSelectedDay("day1");
-      setSelectedLabels([]);
-    }
-  }, [layout?.sync_days, selectedDay]);
-
   const toggleSync = async (value: boolean) => {
     setBusy(true);
     try {
@@ -425,10 +417,6 @@ export default function StaffMapPage() {
         { sync_days: value }
       );
       await mutateLayout(data, false);
-      if (value) {
-        setSelectedDay("day1");
-        setSelectedLabels([]);
-      }
       toast.success(
         value
           ? "Synchronizacja obu dni włączona."
@@ -580,7 +568,7 @@ export default function StaffMapPage() {
                       disabled={busy}
                       onChange={(e) => toggleSync(e.target.checked)}
                     />
-                    Synchronizuj dzień 2 z dniem 1
+                    Synchronizuj oba dni
                   </label>
                   <span className="text-sm text-muted-foreground">
                     Zaznaczone: {selectedLabels.join(", ") || "—"}
@@ -610,16 +598,13 @@ export default function StaffMapPage() {
               <Tabs
                 value={selectedDay}
                 onValueChange={(v) => {
-                  if (layout?.sync_days && v === "day2") return;
                   setSelectedDay(v as "day1" | "day2");
                   setSelectedLabels([]);
                 }}
               >
                 <TabsList className="mb-4">
                   <TabsTrigger value="day1">{t("staff.map.day1")}</TabsTrigger>
-                  <TabsTrigger value="day2" disabled={!!layout?.sync_days}>
-                    {t("staff.map.day2")}
-                  </TabsTrigger>
+                  <TabsTrigger value="day2">{t("staff.map.day2")}</TabsTrigger>
                 </TabsList>
                 <TabsContent value={selectedDay} className="mt-0">
                   <MapCanvas

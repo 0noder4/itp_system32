@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useMemo, useRef, useState } from "react";
+import React, { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ACCENT_COLOR } from "@/lib/colors";
 import type { MapSegment } from "@/lib/mapLayout";
 
@@ -75,10 +76,17 @@ export function MapCanvas({
   editable = false,
 }: MapCanvasProps) {
   const svgRef = useRef<SVGSVGElement>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
   const [hoveredLabel, setHoveredLabel] = useState<string | null>(null);
-  const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(
-    null
-  );
+  /** Stand center in viewport (client) coordinates. */
+  const [tooltipAnchor, setTooltipAnchor] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
+  const [tooltipStyle, setTooltipStyle] = useState<{
+    left: number;
+    top: number;
+  } | null>(null);
 
   const standMap = useMemo(() => {
     const m = new Map<string, CanvasCompanyStand>();
@@ -121,10 +129,69 @@ export function MapCanvas({
     const rect = svg.getBoundingClientRect();
     const scaleX = rect.width / vb.width;
     const scaleY = rect.height / vb.height;
-    setTooltipPos({ x: c.x * scaleX, y: c.y * scaleY });
+    setTooltipAnchor({
+      x: rect.left + c.x * scaleX,
+      y: rect.top + c.y * scaleY,
+    });
   };
 
   const hoveredStand = hoveredLabel ? standMap.get(hoveredLabel) : undefined;
+
+  useLayoutEffect(() => {
+    if (!hoveredStand || !tooltipAnchor || !tooltipRef.current) {
+      setTooltipStyle(null);
+      return;
+    }
+    const el = tooltipRef.current;
+    const tw = el.offsetWidth;
+    const th = el.offsetHeight;
+    const pad = 8;
+    const gap = 8;
+    let left = tooltipAnchor.x - tw / 2;
+    let top = tooltipAnchor.y - th - gap;
+    if (top < pad) {
+      top = tooltipAnchor.y + gap;
+    }
+    left = Math.min(Math.max(pad, left), window.innerWidth - tw - pad);
+    top = Math.min(Math.max(pad, top), window.innerHeight - th - pad);
+    setTooltipStyle({ left, top });
+  }, [hoveredStand, tooltipAnchor]);
+
+  const tooltip =
+    hoveredStand && tooltipAnchor
+      ? createPortal(
+          <div
+            ref={tooltipRef}
+            className="pointer-events-none fixed z-50 w-56 rounded-md border bg-popover p-3 text-popover-foreground shadow-md"
+            style={{
+              left: tooltipStyle?.left ?? -9999,
+              top: tooltipStyle?.top ?? -9999,
+              visibility: tooltipStyle ? "visible" : "hidden",
+            }}
+          >
+            <div className="space-y-1">
+              <p className="text-sm font-medium">{hoveredStand.companyName}</p>
+              <p className="text-xs text-muted-foreground">
+                Stoisko {hoveredStand.standNumber}
+              </p>
+              {hoveredStand.frRespName ? (
+                <p className="text-xs text-muted-foreground">
+                  Opiekun: {hoveredStand.frRespName}
+                </p>
+              ) : null}
+              {hoveredStand.logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={hoveredStand.logoUrl}
+                  alt=""
+                  className="mt-2 max-h-16 object-contain"
+                />
+              ) : null}
+            </div>
+          </div>,
+          document.body
+        )
+      : null;
 
   return (
     <div className="relative w-full overflow-auto rounded-md border bg-slate-50">
@@ -188,7 +255,8 @@ export function MapCanvas({
                   setHoveredLabel((cur) =>
                     cur === seg.label ? null : cur
                   );
-                  setTooltipPos(null);
+                  setTooltipAnchor(null);
+                  setTooltipStyle(null);
                 }
               : undefined,
           };
@@ -214,36 +282,7 @@ export function MapCanvas({
           );
         })}
       </svg>
-
-      {hoveredStand && tooltipPos ? (
-        <div
-          className="pointer-events-none absolute z-20 w-56 -translate-x-1/2 -translate-y-full rounded-md border bg-popover p-3 text-popover-foreground shadow-md"
-          style={{
-            left: tooltipPos.x,
-            top: Math.max(8, tooltipPos.y - 8),
-          }}
-        >
-          <div className="space-y-1">
-            <p className="text-sm font-medium">{hoveredStand.companyName}</p>
-            <p className="text-xs text-muted-foreground">
-              Stoisko {hoveredStand.standNumber}
-            </p>
-            {hoveredStand.frRespName ? (
-              <p className="text-xs text-muted-foreground">
-                Opiekun: {hoveredStand.frRespName}
-              </p>
-            ) : null}
-            {hoveredStand.logoUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={hoveredStand.logoUrl}
-                alt=""
-                className="mt-2 max-h-16 object-contain"
-              />
-            ) : null}
-          </div>
-        </div>
-      ) : null}
+      {tooltip}
     </div>
   );
 }

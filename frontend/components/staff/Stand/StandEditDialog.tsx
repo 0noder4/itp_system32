@@ -241,7 +241,7 @@ export function StandEditDialog({
                   }
                 }}
               />
-              Ten sam wybór na dzień 1 i 2
+              Synchronizuj oba dni
             </label>
             <span className="text-muted-foreground">
               D1: {summary("day1")} · D2: {summary("day2")}
@@ -262,9 +262,7 @@ export function StandEditDialog({
           >
             <TabsList>
               <TabsTrigger value="day1">{t("companies.stand.day1")}</TabsTrigger>
-              <TabsTrigger value="day2" disabled={syncDays}>
-                {t("companies.stand.day2")}
-              </TabsTrigger>
+              <TabsTrigger value="day2">{t("companies.stand.day2")}</TabsTrigger>
             </TabsList>
             <TabsContent value={activeDay} className="mt-3">
               {loadingLayout || !layout ? (
