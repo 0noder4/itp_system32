@@ -45,7 +45,8 @@ Dokument zawiera przegląd zgłoszeń od użytkowników wraz ze statusem w aktua
   - docelowo: arkusze planowania w systemie + eksport (zamiast równoległych Exceli).
 - **Firmy „tylko na mapkę”:** nowy typ wystawcy (okrojone konto, obok `basic` / `main` / `partner`) — firma widnieje na planie bez pełnego wypełniania etapów.
 - **Import Excela z Google Forms** (nie Forms bezpośrednio) do systemu — prefills / wczesne zgłoszenia; termin: przed oddaniem systemu (~1.11).
-- **Jobwall / E-JobWall:** dedykowany eksport / skrypt i integracja ze stroną WWW (WBS 4.6) — darmowe ogłoszenia w panelu już są.
+- **Katalog na stronę WWW:** eksport draftów firm (opis, logo, stoiska + mapa hali) do Strapi z panelu staff — wdrożone; publikacja nadal ręcznie w Strapi.
+- **Jobwall / E-JobWall:** dedykowany eksport / skrypt i integracja ze stroną WWW (WBS 4.6) — darmowe ogłoszenia w panelu już są; eksport ofert na stronę jeszcze nie.
 - **Etap 2 / wyposażenie:** podgląd wizualny mebli (np. hover); kolor wykładziny z paletą (głównie partnerzy); wyjaśnienie własna vs standardowa zabudowa; wymiary własnej zabudowy osobnymi polami (nie free text); pole „co przywiozą”.
 - **Etap 5:** godzina przyjazdu (WBS 2.5).
 - **Anulowanie zaproszenia:** w dialogu opcja ustawienia statusu „Firma rezygnuje” (sygnał dla logistyki / Excela).

@@ -881,3 +881,28 @@ class InvitationExpiryReminderSent(models.Model):
         return f"{self.invitation.company_name} reminder {self.days_before}d ({self.recipient})"
 
 
+class WebsitePublication(models.Model):
+    """Tracks Strapi (targus) catalogue draft sync for a company."""
+
+    company = models.OneToOneField(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="website_publication",
+    )
+    strapi_document_id = models.CharField(max_length=64, blank=True, default="")
+    strapi_logo_id = models.PositiveIntegerField(null=True, blank=True)
+    strapi_logo_sha256 = models.CharField(max_length=64, blank=True, default="")
+    # {"<Jobwall.id>": {"documentId": "...", "title": "..."}} for job offers pushed to the website.
+    strapi_jobs = models.JSONField(default=dict, blank=True)
+    payload_hash = models.CharField(max_length=64, blank=True, default="")
+    last_exported_at = models.DateTimeField(null=True, blank=True)
+    last_error = models.TextField(blank=True, default="")
+
+    class Meta:
+        verbose_name = "Website publication"
+        verbose_name_plural = "Website publications"
+
+    def __str__(self):
+        return f"WebsitePublication({self.company_id}, {self.strapi_document_id or '—'})"
+
+

@@ -811,5 +811,52 @@
     "description": "Sorry, we couldn't find the page you're looking for.",
     "goHome": "Go to Home",
     "backButton": "Go Back"
+  },
+  "websiteExport": {
+    "sendButton": "Export to website",
+    "tooltip": "Sends the description, logo, stands and job offers of the selected companies to the fair website catalogue.",
+    "dialogTitle": "Export catalogue to website",
+    "dialogDescription": "Check how the companies will look in the fair website catalogue and send them.",
+    "afterAcceptTitle": "Send catalogue to the website?",
+    "afterAcceptDescription": "Stage 4 was accepted. You can send this company to the fair website catalogue now.",
+    "afterAcceptLaterHint": "You can also do this later from the main staff panel with Export to website.",
+    "catalogueLinkBefore": "Live catalogue:",
+    "catalogueLinkLabel": "catalogue",
+    "catalogueLinkAfter": ".",
+    "loadingPreview": "Loading preview…",
+    "previewError": "Could not load export preview.",
+    "noPreviewPayload": "No preview data for this company.",
+    "notNow": "Not now",
+    "continueButton": "Continue ({count})",
+    "confirmTitle": "Send to the website?",
+    "confirmDescription": "Send {count} company(ies) to the fair website catalogue?",
+    "confirmSend": "Send",
+    "progress": "Sent {done} / {total}…",
+    "success": "Export finished",
+    "successDescription": "OK: {ok}, failed: {failed}, skipped: {skipped}",
+    "error": "Export failed",
+    "errorDescription": "Could not send the catalogue. Try again; if it keeps failing, report it to the system administrator.",
+    "configError": "Export to the website is not configured yet. Report it to the system administrator.",
+    "noneExported": "Nothing exported",
+    "noneExportedDescription": "Skipped {skipped} company(ies) (unchanged or not eligible).",
+    "hallMapWarning": "Companies sent, but the hall map could not be updated. Try sending again.",
+    "previewFrameLabel": "Company card as it will appear in the website catalogue (click a job offer to open it):",
+    "previewFrameJobLabel": "Job offer as it will appear on the website:",
+    "backToCompany": "Back to company card",
+    "jobsRemovedWarning": "These offers no longer exist in the system, so they will be removed from the website: {titles}.",
+    "jobContactWarning": "Offer “{title}”: application link “{value}” is not an e-mail and does not start with https:// — the Apply button will not work on the website.",
+    "status": {
+      "ready": "Ready",
+      "unchanged": "Unchanged",
+      "skipped": "Skipped",
+      "missing": "Missing"
+    },
+    "skipReason": {
+      "stage_4_not_accepted": "stage 4 not accepted",
+      "missing_catalogue_logo": "missing catalogue logo",
+      "missing_catalogue_description": "missing catalogue description",
+      "company_not_found": "company not found",
+      "unchanged": "unchanged since last export"
+    }
   }
 }

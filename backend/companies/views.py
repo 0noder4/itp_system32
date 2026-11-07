@@ -3266,3 +3266,67 @@ class MapLayoutResetView(APIView):
             )
         layout = reset_layout(request.user)
         return Response(serialize_layout(layout))
+
+
+class WebsiteCataloguePreviewView(APIView):
+    """Preview catalogue payload that would be pushed to Strapi (staff only)."""
+
+    permission_classes = [IsAuthenticated, IsAdminOrStaff]
+
+    def get(self, request):
+        raw_ids = request.query_params.getlist("company_ids")
+        if len(raw_ids) == 1 and "," in raw_ids[0]:
+            raw_ids = [p.strip() for p in raw_ids[0].split(",") if p.strip()]
+        try:
+            company_ids = [int(x) for x in raw_ids]
+        except (TypeError, ValueError):
+            return Response(
+                {"detail": "company_ids must be a list of integers."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not company_ids:
+            return Response(
+                {"detail": "Provide at least one company_ids value."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        from companies.services.catalogue_export_service import CatalogueExportService
+
+        return Response(CatalogueExportService().preview(company_ids))
+
+
+class WebsiteCatalogueExportView(APIView):
+    """Push catalogue drafts to Strapi for selected companies (staff only)."""
+
+    permission_classes = [IsAuthenticated, IsAdminOrStaff]
+
+    def post(self, request):
+        raw_ids = request.data.get("company_ids") or []
+        if not isinstance(raw_ids, list):
+            return Response(
+                {"detail": "company_ids must be a list."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            company_ids = [int(x) for x in raw_ids]
+        except (TypeError, ValueError):
+            return Response(
+                {"detail": "company_ids must be integers."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not company_ids:
+            return Response(
+                {"detail": "Provide at least one company id."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from companies.services.catalogue_export_service import CatalogueExportService
+        from companies.services.strapi_client import StrapiConfigError
+
+        service = CatalogueExportService()
+        try:
+            payload = service.export(company_ids)
+        except StrapiConfigError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(payload)

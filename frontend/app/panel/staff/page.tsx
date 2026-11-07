@@ -26,6 +26,7 @@ import {
 import { useFilteredRows } from "@/components/staff/Companies/useFilteredRows";
 import { useStaffDashboardFilters } from "@/hooks/useStaffDashboardFilters";
 import { ReminderDialog } from "@/components/staff/Reminders/ReminderDialog";
+import { WebsiteExportDialog } from "@/components/staff/WebsiteExport/WebsiteExportDialog";
 import {
   UpdateOverviewDialog,
   markUpdateOverviewShown,
@@ -89,6 +90,7 @@ export default function Index() {
     () => new Set()
   );
   const [reminderDialogOpen, setReminderDialogOpen] = React.useState(false);
+  const [websiteExportOpen, setWebsiteExportOpen] = React.useState(false);
   const [updateOverviewOpen, setUpdateOverviewOpen] = React.useState(false);
 
   React.useEffect(() => {
@@ -280,6 +282,8 @@ export default function Index() {
                 totalCount={totalCount}
                 onSendReminders={() => setReminderDialogOpen(true)}
                 sendRemindersDisabled={selectedKeys.size === 0}
+                onExportToWebsite={() => setWebsiteExportOpen(true)}
+                exportToWebsiteDisabled={selectedCompanyIds.length === 0}
               />
             )}
 
@@ -318,6 +322,13 @@ export default function Index() {
         open={reminderDialogOpen}
         onOpenChange={setReminderDialogOpen}
         selectedRows={selectedRows}
+        onSuccess={() => setSelectedKeys(new Set())}
+      />
+      <WebsiteExportDialog
+        open={websiteExportOpen}
+        onOpenChange={setWebsiteExportOpen}
+        companyIds={selectedCompanyIds}
+        mode="panel"
         onSuccess={() => setSelectedKeys(new Set())}
       />
       <UpdateOverviewDialog

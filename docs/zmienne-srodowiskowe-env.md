@@ -221,6 +221,24 @@ NOTIFICATIONS_MINUTE=0
 - **Gdzie**: `scheduler`.
 - **Po co**: minuta w tej godzinie. Domyślnie `0`.
 
+## 7) Eksport katalogu → Strapi (strona targów)
+
+### `STRAPI_URL`
+- **Gdzie**: `backend`.
+- **Po co**: bazowy URL API Strapi (Targus), bez końcowego `/`. Produkcja: `https://api.targipracy.org.pl`. Lokalnie z kontenera system32: `http://host.docker.internal:1337`.
+- **Puste**: endpointy eksportu zwracają 503.
+
+### `STRAPI_API_TOKEN`
+- **Gdzie**: `backend` (tylko serwer — nigdy we froncie).
+- **Po co**: token API Strapi (typ Custom) z uprawnieniami: `company` find/findOne/create/update, `job` find/findOne/create/update/delete, `work-model` / `employment-type` / `contract` find, `hall-map` find/update, Upload `upload` + `destroy`.
+- Token trzymaj tylko w `.env` na VPS; nie commituj.
+
+### `STRAPI_CONNECT_TIMEOUT` / `STRAPI_READ_TIMEOUT`
+- Opcjonalne (domyślnie 10 s / 60 s).
+
+### `WEBSITE_EXPORT_BATCH_MAX`
+- Opcjonalne (domyślnie 10 firm na jedno żądanie POST).
+
 ## Uwaga praktyczna
 
 W `backend/backend/settings.py` backend odczytuje nazwę użytkownika DB jako `DATABASE_USERNAME`, a w `.env.example` występuje `DATABASE_USER`. Mapowanie między tymi nazwami robi Docker Compose (`DATABASE_USERNAME: ${DATABASE_USER}`), więc konfiguracja jest poprawna.

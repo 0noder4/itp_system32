@@ -13,6 +13,20 @@ export type UpdateOverviewEntry = {
 
 export const updateOverviews: readonly UpdateOverviewEntry[] = [
   {
+    releaseDate: "2026-11-06",
+    highlights: [
+      "Eksport katalogu na stronę targów: przycisk „Eksportuj na stronę” pod przypomnieniami — wysyła opis, logo, stoiska i oferty pracy z etapu 4.",
+      "Podgląd eksportu wygląda jak karta firmy w katalogu na stronie (te same fonty, kolory, mapki bez numerów). Oferty pracy można kliknąć i zobaczyć jak na stronie ofert.",
+      "Podgląd ostrzega, gdy link aplikacji w ofercie nie zadziała na stronie (nie jest e-mailem ani linkiem https://) oraz gdy oferta usunięta w systemie zniknie ze strony.",
+      "Po akceptacji etapu 4 pojawia się ten sam dialog (można odłożyć i wysłać później z listy firm).",
+    ],
+    worthChecking: [
+      "Panel staff → zaznacz firmę z zaakceptowanym etapem 4 → Eksportuj na stronę → porównaj podgląd z katalogiem na stronie → Wyślij.",
+      "Podgląd eksportu → kliknij ofertę pracy → sprawdź treść i przycisk Aplikuj → Wróć do karty firmy.",
+      "Panel staff → firma → akceptacja etapu 4 → dialog eksportu → Nie teraz / wyślij.",
+    ],
+  },
+  {
     releaseDate: "2026-11-01",
     highlights: [
       "Etap 2 (partner / partner główny): wybór bezpłatnej wykładziny RIPS/WELUR z katalogu kolorów albo rezygnacja — w formularzu firmy, podglądzie staff i eksporcie CSV.",

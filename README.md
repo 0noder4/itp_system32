@@ -38,6 +38,7 @@ Szczegółowa dokumentacja znajduje się w katalogu `docs`:
 - [Architektura systemu](./docs/architektura-systemu.md) - kontenery, porty i przeznaczenie usług.
 - [Instrukcja uruchomienia środowiska testowego](./docs/srodowisko-testowe.md) - konfiguracja i uruchomienie środowiska lokalnego.
 - [Zmienne środowiskowe `.env`](./docs/zmienne-srodowiskowe-env.md) - pełna lista zmiennych, miejsca użycia i przeznaczenie.
+- [Eksport katalogu → Strapi](./docs/eksport-katalogu-strapi.md) - drafty firm i mapy hali na stronę targów.
 - [Wdrożenie produkcyjne](./docs/wdrozenie-produkcyjne.md) - informacje o VPS (`home.pl`), dostępie SSH i aktualizacji usług.
 - [Rodzaje kont i ich tworzenie](./docs/rodzaje-kont-i-tworzenie.md) - role (`admin`, `staff`, `company`) oraz proces zakładania kont.
 - [Zgłoszenia użytkowników](./docs/zgloszenia-uzytkownikow.md) - zweryfikowana lista zgłoszeń z podziałem na wdrożone elementy i braki.

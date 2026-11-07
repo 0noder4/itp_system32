@@ -9,6 +9,7 @@ from .models import (
     EquipmentSelection,
     Settings,
     InvitationExpiryReminderSent,
+    WebsitePublication,
     compute_invitation_expires_at,
 )
 
@@ -32,6 +33,18 @@ class CompanyInvitationAdmin(admin.ModelAdmin):
             if not obj.created_by:
                 obj.created_by = request.user
         super().save_model(request, obj, form, change)
+
+
+@admin.register(WebsitePublication)
+class WebsitePublicationAdmin(admin.ModelAdmin):
+    list_display = (
+        'company',
+        'strapi_document_id',
+        'last_exported_at',
+        'strapi_logo_id',
+    )
+    search_fields = ('company__name', 'strapi_document_id')
+    readonly_fields = ('payload_hash', 'last_exported_at', 'last_error')
 
 
 @admin.register(InvitationExpiryReminderSent)

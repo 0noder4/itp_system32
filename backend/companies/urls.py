@@ -82,4 +82,16 @@ urlpatterns = [
         name='map-layout-repartition',
     ),
     path('map-layout/reset/', views.MapLayoutResetView.as_view(), name='map-layout-reset'),
+
+    # Catalogue export → Strapi (targus website)
+    path(
+        'website-export/catalogue/preview/',
+        views.WebsiteCataloguePreviewView.as_view(),
+        name='website-catalogue-preview',
+    ),
+    path(
+        'website-export/catalogue/',
+        views.WebsiteCatalogueExportView.as_view(),
+        name='website-catalogue-export',
+    ),
 ]

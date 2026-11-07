@@ -24,9 +24,10 @@ import {
   FieldGroup,
   FieldLabel,
 } from "@/components/ui/field";
-import { Loader2 } from "lucide-react";
+import { Globe, Loader2 } from "lucide-react";
 import { Stage2Data, StageFeedback } from "@/lib/types";
 import { STAFF_ACCENT_COLOR } from "@/lib/colors";
+import { WebsiteExportDialog } from "@/components/staff/WebsiteExport/WebsiteExportDialog";
 
 const REJECT_COLOR = "#DC2626";
 const REJECT_HOVER_COLOR = "#B91C1C";
@@ -56,6 +57,9 @@ export function StageFeedbackForm({
   const { t } = useTranslation();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [showRejectDialog, setShowRejectDialog] = React.useState(false);
+  const [websiteExportMode, setWebsiteExportMode] = React.useState<
+    "panel" | "afterAccept" | null
+  >(null);
 
   const needsFireCertWarning = stageNumber === 2;
   const { data: stage2Data } = useSWR<Stage2Data>(
@@ -105,6 +109,9 @@ export function StageFeedbackForm({
       );
       toast.success(t("staff.companyDetail.feedbackSuccess"));
       onSuccess?.();
+      if (stageNumber === 4) {
+        setWebsiteExportMode("afterAccept");
+      }
     } catch (error: any) {
       const errorMessage =
         error.response?.data?.detail ||
@@ -214,6 +221,22 @@ export function StageFeedbackForm({
             >
               {t("staff.companyDetail.reject")}
             </Button>
+            {stageNumber === 4 && (
+              <Button
+                type="button"
+                onClick={() => setWebsiteExportMode("panel")}
+                disabled={isSubmitting}
+                variant="outline"
+                className="flex-1"
+                style={{
+                  borderColor: STAFF_ACCENT_COLOR,
+                  color: STAFF_ACCENT_COLOR,
+                }}
+              >
+                <Globe className="mr-2 h-4 w-4" />
+                {t("websiteExport.sendButton")}
+              </Button>
+            )}
           </div>
         )}
       </div>
@@ -307,6 +330,17 @@ export function StageFeedbackForm({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {stageNumber === 4 && (
+        <WebsiteExportDialog
+          open={websiteExportMode !== null}
+          onOpenChange={(open) => {
+            if (!open) setWebsiteExportMode(null);
+          }}
+          companyIds={[companyId]}
+          mode={websiteExportMode ?? "panel"}
+        />
+      )}
     </>
   );
 }

@@ -811,5 +811,52 @@
     "description": "Przepraszamy, nie możemy znaleźć strony, której szukasz.",
     "goHome": "Przejdź do strony głównej",
     "backButton": "Wróć"
+  },
+  "websiteExport": {
+    "sendButton": "Eksportuj na stronę",
+    "tooltip": "Wysyła opis, logo, stoiska i oferty pracy zaznaczonych firm do katalogu na stronie targów.",
+    "dialogTitle": "Eksport katalogu na stronę",
+    "dialogDescription": "Sprawdź, jak firmy będą wyglądać w katalogu na stronie targów, i wyślij je.",
+    "afterAcceptTitle": "Wysłać katalog na stronę?",
+    "afterAcceptDescription": "Etap 4 został zaakceptowany. Możesz od razu wysłać tę firmę do katalogu na stronie targów.",
+    "afterAcceptLaterHint": "Możesz to zrobić później z głównego panelu staff przyciskiem „Eksportuj na stronę”.",
+    "catalogueLinkBefore": "Podgląd katalogu na stronie:",
+    "catalogueLinkLabel": "katalog",
+    "catalogueLinkAfter": ".",
+    "loadingPreview": "Ładowanie podglądu…",
+    "previewError": "Nie udało się wczytać podglądu eksportu.",
+    "noPreviewPayload": "Brak danych do podglądu dla tej firmy.",
+    "notNow": "Nie teraz",
+    "continueButton": "Dalej ({count})",
+    "confirmTitle": "Wysłać na stronę?",
+    "confirmDescription": "Wysłać {count} firm(y) do katalogu na stronie targów?",
+    "confirmSend": "Wyślij",
+    "progress": "Wysłano {done} / {total}…",
+    "success": "Eksport zakończony",
+    "successDescription": "OK: {ok}, błędy: {failed}, pominięte: {skipped}",
+    "error": "Eksport nieudany",
+    "errorDescription": "Nie udało się wysłać katalogu. Spróbuj ponownie; jeśli błąd się powtarza, zgłoś go administratorowi systemu.",
+    "configError": "Eksport na stronę nie jest jeszcze skonfigurowany. Zgłoś to administratorowi systemu.",
+    "noneExported": "Nic nie wysłano",
+    "noneExportedDescription": "Pominięto {skipped} firm(y) (bez zmian lub niespełnione warunki).",
+    "hallMapWarning": "Firmy wysłane, ale nie udało się zaktualizować mapy hali. Spróbuj wysłać ponownie.",
+    "previewFrameLabel": "Podgląd karty firmy tak, jak wyświetli się w katalogu na stronie (kliknij ofertę, żeby ją otworzyć):",
+    "previewFrameJobLabel": "Podgląd oferty tak, jak wyświetli się na stronie:",
+    "backToCompany": "Wróć do karty firmy",
+    "jobsRemovedWarning": "Tych ofert nie ma już w systemie, więc zostaną usunięte ze strony: {titles}.",
+    "jobContactWarning": "Oferta „{title}”: link aplikacji „{value}” nie jest adresem e-mail i nie zaczyna się od https:// — na stronie przycisk Aplikuj nie zadziała.",
+    "status": {
+      "ready": "Gotowa",
+      "unchanged": "Bez zmian",
+      "skipped": "Pominięta",
+      "missing": "Brak firmy"
+    },
+    "skipReason": {
+      "stage_4_not_accepted": "etap 4 niezaakceptowany",
+      "missing_catalogue_logo": "brak logo katalogowego",
+      "missing_catalogue_description": "brak opisu katalogowego",
+      "company_not_found": "nie znaleziono firmy",
+      "unchanged": "bez zmian od ostatniego eksportu"
+    }
   }
 }

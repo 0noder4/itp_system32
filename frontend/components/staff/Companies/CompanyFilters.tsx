@@ -7,6 +7,11 @@ import { useTranslation } from "@/lib/i18n";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { STAFF_ACCENT_COLOR } from "@/lib/colors";
 import {
   nativeCheckboxClassName,
@@ -49,6 +54,8 @@ interface CompanyFiltersProps {
   totalCount: number;
   onSendReminders?: () => void;
   sendRemindersDisabled?: boolean;
+  onExportToWebsite?: () => void;
+  exportToWebsiteDisabled?: boolean;
 }
 
 export function CompanyFilters({
@@ -69,6 +76,8 @@ export function CompanyFilters({
   totalCount,
   onSendReminders,
   sendRemindersDisabled = false,
+  onExportToWebsite,
+  exportToWebsiteDisabled = false,
 }: CompanyFiltersProps) {
   const { t } = useTranslation();
 
@@ -159,32 +168,70 @@ export function CompanyFilters({
             {t("companies.invitations.showInvitations")}
           </Label>
         </div>
-        {onSendReminders && (
-          <Button
-            type="button"
-            className="text-xs sm:text-sm whitespace-nowrap self-start sm:self-auto"
-            size="sm"
-            disabled={sendRemindersDisabled}
-            style={{
-              backgroundColor: sendRemindersDisabled
-                ? undefined
-                : STAFF_ACCENT_COLOR,
-            }}
-            onMouseEnter={(e) => {
-              if (!sendRemindersDisabled) {
-                e.currentTarget.style.backgroundColor = "#C84FA8";
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (!sendRemindersDisabled) {
-                e.currentTarget.style.backgroundColor = STAFF_ACCENT_COLOR;
-              }
-            }}
-            onClick={onSendReminders}
-          >
-            {t("reminders.sendButton")}
-          </Button>
-        )}
+        <div className="flex flex-col gap-2 self-start sm:self-auto">
+          {onSendReminders && (
+            <Button
+              type="button"
+              className="text-xs sm:text-sm whitespace-nowrap"
+              size="sm"
+              disabled={sendRemindersDisabled}
+              style={{
+                backgroundColor: sendRemindersDisabled
+                  ? undefined
+                  : STAFF_ACCENT_COLOR,
+              }}
+              onMouseEnter={(e) => {
+                if (!sendRemindersDisabled) {
+                  e.currentTarget.style.backgroundColor = "#C84FA8";
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!sendRemindersDisabled) {
+                  e.currentTarget.style.backgroundColor = STAFF_ACCENT_COLOR;
+                }
+              }}
+              onClick={onSendReminders}
+            >
+              {t("reminders.sendButton")}
+            </Button>
+          )}
+          {onExportToWebsite && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex">
+                  <Button
+                    type="button"
+                    className="text-xs sm:text-sm whitespace-nowrap w-full"
+                    size="sm"
+                    disabled={exportToWebsiteDisabled}
+                    style={{
+                      backgroundColor: exportToWebsiteDisabled
+                        ? undefined
+                        : STAFF_ACCENT_COLOR,
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!exportToWebsiteDisabled) {
+                        e.currentTarget.style.backgroundColor = "#C84FA8";
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!exportToWebsiteDisabled) {
+                        e.currentTarget.style.backgroundColor =
+                          STAFF_ACCENT_COLOR;
+                      }
+                    }}
+                    onClick={onExportToWebsite}
+                  >
+                    {t("websiteExport.sendButton")}
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="left" className="max-w-xs">
+                {t("websiteExport.tooltip")}
+              </TooltipContent>
+            </Tooltip>
+          )}
+        </div>
       </div>
 
       {/* Company Status Filter */}

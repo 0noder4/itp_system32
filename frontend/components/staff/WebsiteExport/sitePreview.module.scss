@@ -1,0 +1,389 @@
+// Mirror of the fair website (targus) catalogue + job page styles.
+// Values are copied from targus/frontend/styles/scss and the CompanyDetails / JobDetails
+// modules; keep them in sync when the website design changes.
+
+@font-face {
+  font-family: "ITPSite-Montserrat-Medium";
+  src: url("/fonts/website/Montserrat-Medium.ttf");
+}
+
+@font-face {
+  font-family: "ITPSite-RobotoMono-Regular";
+  src: url("/fonts/website/Roboto_Mono-Regular.ttf");
+}
+
+@font-face {
+  font-family: "ITPSite-RobotoMono-Bold";
+  src: url("/fonts/website/Roboto_Mono-Bold.ttf");
+}
+
+$black: #000000;
+$dark: #201e1e;
+$light: #ffffff;
+$accent: #f55718;
+
+$font-title: "ITPSite-Montserrat-Medium";
+$font-content: "ITPSite-RobotoMono-Regular";
+$font-content-bold: "ITPSite-RobotoMono-Bold";
+
+$font-size-s: 12px;
+$font-size-m: 16px;
+$font-size-l: 20px;
+$font-size-xl: 28px;
+$font-size-display-s: 32px;
+$font-size-display-m: 48px;
+
+$spacing-l: 3rem;
+$spacing-m: 2rem;
+$spacing-s: 1rem;
+$spacing-xs: 0.5rem;
+
+$bp-tablet: 768px;
+$bp-tablet-lg: 1024px;
+$bp-desktop: 1025px;
+$bp-desktop-lg: 1600px;
+$bp-catalogue-mobile: 1200px;
+
+@mixin border-dark {
+  border: 1px solid $dark;
+  border-radius: 2px;
+}
+
+@mixin text-content {
+  font-family: $font-content;
+  font-size: $font-size-m;
+}
+
+@mixin text-content-bold {
+  font-family: $font-content-bold;
+  font-size: $font-size-m;
+}
+
+@mixin title-l {
+  font-family: $font-title;
+  font-size: $font-size-display-m;
+  text-transform: uppercase;
+
+  @media (max-width: $bp-desktop-lg) {
+    font-size: $font-size-display-s;
+  }
+
+  @media (max-width: $bp-tablet-lg) {
+    font-size: $font-size-xl;
+  }
+}
+
+@mixin title-m {
+  font-family: $font-title;
+  font-size: $font-size-xl;
+  text-transform: uppercase;
+
+  @media (max-width: $bp-tablet-lg) {
+    font-size: $font-size-m;
+  }
+}
+
+@mixin title-s {
+  font-family: $font-title;
+  font-size: $font-size-l;
+  text-transform: uppercase;
+
+  @media (max-width: $bp-tablet-lg) {
+    font-size: $font-size-m;
+  }
+}
+
+@mixin paragraph {
+  @include text-content;
+
+  ul {
+    margin-top: 1em;
+    margin-left: 2em;
+    list-style: circle;
+  }
+
+  ol {
+    margin-top: 1em;
+    margin-left: 2em;
+    list-style: decimal;
+  }
+
+  p {
+    margin-top: 1em;
+    text-align: justify;
+  }
+
+  p:first-child {
+    text-indent: 2em;
+  }
+
+  a {
+    text-decoration: underline;
+  }
+}
+
+// Website global reset (targus styles/css/index.css), scoped to the preview.
+// :where() keeps element-level specificity, like the global stylesheet on the website.
+.site {
+  background-color: $light;
+  color: $black;
+  color-scheme: light;
+}
+
+:where(.site) * {
+  padding: 0;
+  margin: 0;
+  box-sizing: border-box;
+}
+
+:where(.site) a {
+  text-decoration: none;
+  color: inherit;
+}
+
+:where(.site) ul {
+  list-style: none;
+}
+
+:where(.site) :is(h1, h2, h3, h4, h5, h6) {
+  font: inherit;
+}
+
+:where(.site) strong {
+  font-weight: bold;
+}
+
+:where(.site) em {
+  font-style: italic;
+}
+
+:where(.site) button {
+  border: none;
+  cursor: pointer;
+}
+
+// CompanyDetails.module.scss
+.company {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-m;
+  overflow-y: auto;
+  background-color: $light;
+  height: 100%;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  gap: $spacing-l;
+  flex-wrap: wrap;
+}
+
+.companyName {
+  @include title-l;
+  color: $accent;
+}
+
+.companyStatus {
+  @include title-m;
+  color: $black;
+}
+
+.image {
+  position: relative;
+  flex-shrink: 0;
+  width: 14rem;
+  height: 8rem;
+  padding: $spacing-s;
+
+  img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+}
+
+.companyDescription {
+  @include paragraph;
+
+  p:first-child {
+    text-indent: 0;
+  }
+}
+
+.companyJobs {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-s;
+
+  h3 {
+    @include title-m;
+    color: $black;
+  }
+}
+
+.maps {
+  margin-top: auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: $spacing-s;
+
+  @media (max-width: $bp-catalogue-mobile) {
+    display: flex;
+    flex-direction: column;
+  }
+}
+
+// Job.module.scss
+.jobEntry {
+  @include border-dark;
+  @include text-content;
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  padding: $spacing-s;
+  transition: all 0.2s ease-in-out;
+
+  &:hover {
+    background-color: $accent;
+    color: $light;
+  }
+}
+
+// Map.module.scss
+.mapContainer {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+  @include text-content;
+}
+
+.mapLabel {
+  display: flex;
+  justify-content: space-between;
+}
+
+.map {
+  @include border-dark;
+  padding: $spacing-s;
+  height: 100%;
+}
+
+.day_1 {
+  grid-column: 1;
+}
+
+.day_2 {
+  grid-column: 2;
+}
+
+.hallSvg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+// JobDetails.module.scss
+.job {
+  padding: $spacing-l;
+  padding-top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-m;
+  max-width: fit-content;
+
+  @media (max-width: $bp-desktop) {
+    padding: $spacing-m;
+    padding-top: 0;
+  }
+
+  @media (max-width: $bp-tablet) {
+    padding: $spacing-s;
+    padding-top: 0;
+  }
+}
+
+.jobTitle {
+  @include title-l;
+  color: $accent;
+}
+
+.jobSubtitle {
+  @include title-m;
+}
+
+.apply {
+  margin-top: $spacing-m;
+  @include border-dark;
+  padding: $spacing-s;
+  display: flex;
+  flex-direction: column;
+
+  label {
+    @include text-content;
+    font-size: $font-size-s;
+  }
+}
+
+// Section.module.scss
+.section {
+  display: flex;
+  flex-direction: column;
+}
+
+.sectionTitle {
+  @include title-s;
+}
+
+.sectionContent {
+  @include paragraph;
+  margin-top: 0.5em;
+  gap: $spacing-s;
+  display: flex;
+
+  p:first-child {
+    text-indent: 0 !important;
+  }
+}
+
+// Tag.module.scss
+.tag {
+  @include border-dark;
+  @include text-content-bold;
+  padding: $spacing-xs;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+// Button.module.scss (LinkButton variant="orange")
+.linkButtonContainer {
+  display: flex;
+  width: 100%;
+}
+
+.button {
+  display: flex;
+  width: 100%;
+  height: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 1rem;
+  font-family: $font-content-bold;
+  text-transform: uppercase;
+  border-radius: 2px;
+  transition: all 0.2s ease;
+}
+
+.orange {
+  background-color: $accent;
+  color: $light;
+
+  &:hover {
+    @include border-dark;
+    background-color: $light;
+    color: $dark;
+  }
+}

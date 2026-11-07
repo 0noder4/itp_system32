@@ -80,7 +80,8 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install development Python packages
-RUN pip install --no-cache-dir \
+# -c requirements.txt: unpinned dev tools must not upgrade Django (6.x needs MySQL 8.4+, db is 8.0)
+RUN pip install --no-cache-dir -c requirements.txt \
     ipdb \
     django-debug-toolbar \
     django-extensions
