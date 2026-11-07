@@ -177,7 +177,18 @@ class CompanyListView(APIView):
     permission_classes = [IsAuthenticated]
     
     def get(self, request):
-        companies = Company.objects.select_related('form').all()
+        companies = (
+            Company.objects.select_related(
+                'form',
+                'basic_data',
+                'stand_details',
+                'workshops',
+                'description',
+                'finaldata',
+            )
+            .prefetch_related('feedback', 'jobwalls')
+            .all()
+        )
         serializer = CompanySerializer(companies, many=True)
         return Response(serializer.data)
     
@@ -3294,8 +3305,65 @@ class WebsiteCataloguePreviewView(APIView):
         return Response(CatalogueExportService().preview(company_ids))
 
 
+def _parse_request_bool(raw, default: bool = True) -> bool:
+    if raw is None:
+        return default
+    if isinstance(raw, str):
+        return raw.strip().lower() in ("1", "true", "yes", "on")
+    return bool(raw)
+
+
 class WebsiteCatalogueExportView(APIView):
-    """Push catalogue drafts to Strapi for selected companies (staff only)."""
+    """Push catalogue company/jobs to Strapi for selected companies (staff only)."""
+
+    permission_classes = [IsAuthenticated, IsAdminOrStaff]
+
+    def post(self, request):
+        raw_ids = request.data.get("company_ids") or []
+        if not isinstance(raw_ids, list):
+            return Response(
+                {"detail": "company_ids must be a list."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            company_ids = [int(x) for x in raw_ids]
+        except (TypeError, ValueError):
+            return Response(
+                {"detail": "company_ids must be integers."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not company_ids:
+            return Response(
+                {"detail": "Provide at least one company id."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from companies.services.catalogue_export_service import CatalogueExportService
+        from companies.services.strapi_client import StrapiConfigError
+
+        publish_hall_map = _parse_request_bool(
+            request.data.get("publish_hall_map", True), default=True
+        )
+        publish_content = _parse_request_bool(
+            request.data.get("publish_content", True), default=True
+        )
+
+        service = CatalogueExportService()
+        try:
+            payload = service.export(
+                company_ids,
+                publish_hall_map=publish_hall_map,
+                publish_content=publish_content,
+            )
+        except StrapiConfigError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(payload)
+
+
+class WebsiteCatalogueRemoveView(APIView):
+    """Delete selected companies (+ jobs) from Strapi / public catalogue (staff only)."""
 
     permission_classes = [IsAuthenticated, IsAdminOrStaff]
 
@@ -3324,7 +3392,7 @@ class WebsiteCatalogueExportView(APIView):
 
         service = CatalogueExportService()
         try:
-            payload = service.export(company_ids)
+            payload = service.remove(company_ids)
         except StrapiConfigError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         except ValueError as exc:

@@ -28,6 +28,7 @@ from .models import (
     CARPET_CHOICE_RIPS,
     CARPET_CHOICE_WELUR,
     CARPET_COLOR_CODES_BY_CHOICE,
+    company_can_access_stage3,
 )
 from users.models import User
 from django.contrib.auth.password_validation import validate_password
@@ -79,10 +80,11 @@ class CompanySerializer(serializers.ModelSerializer):
     stage_3_completed = serializers.SerializerMethodField()
     stage_4_completed = serializers.SerializerMethodField()
     stage_5_completed = serializers.SerializerMethodField()
+    stage_statuses = serializers.SerializerMethodField()
     
     class Meta:
         model = Company
-        fields = ("id", "name", "status", "email", "representative", "representative_name", "representative_surname", "representative_phone_number", "representative_username", "fr_resp", "fr_resp_name", "fr_resp_surname", "fr_resp_email", "fr_resp_phone_number", "fr_resp_username", "day1_stand", "day2_stand", "completed_stages_count", "stage_1_completed", "stage_2_completed", "stage_3_completed", "stage_4_completed", "stage_5_completed", "created_at", "updated_at")
+        fields = ("id", "name", "status", "email", "representative", "representative_name", "representative_surname", "representative_phone_number", "representative_username", "fr_resp", "fr_resp_name", "fr_resp_surname", "fr_resp_email", "fr_resp_phone_number", "fr_resp_username", "day1_stand", "day2_stand", "completed_stages_count", "stage_1_completed", "stage_2_completed", "stage_3_completed", "stage_4_completed", "stage_5_completed", "stage_statuses", "created_at", "updated_at")
     
     def get_representative_name(self, obj):
         if obj.representative:
@@ -188,6 +190,50 @@ class CompanySerializer(serializers.ModelSerializer):
 
     def get_stage_5_completed(self, obj):
         return self._get_stage_completed(obj, 'stage_5_completed')
+
+    def get_stage_statuses(self, obj):
+        """
+        Per-stage status as shown in the staff company view
+        (not_started / in_progress / pending_approval / accepted / rejected / unavailable).
+        """
+        latest_feedback = {}
+        for feedback in obj.feedback.all():
+            current = latest_feedback.get(feedback.form)
+            if current is None or feedback.id > current.id:
+                latest_feedback[feedback.form] = feedback
+
+        data_exists = {
+            1: hasattr(obj, 'basic_data'),
+            2: hasattr(obj, 'stand_details'),
+            3: hasattr(obj, 'workshops'),
+            4: bool(obj.jobwalls.all()) or hasattr(obj, 'description'),
+            5: hasattr(obj, 'finaldata'),
+        }
+        feedback_to_status = {
+            'accepted': 'accepted',
+            'rejected': 'rejected',
+            'pending': 'pending_approval',
+        }
+        stage3_available = company_can_access_stage3(obj)
+
+        statuses = {}
+        for i in range(1, 6):
+            key = f'stage_{i}'
+            if i == 3 and not stage3_available:
+                statuses[key] = 'unavailable'
+                continue
+            completed = self._get_stage_completed(obj, f'stage_{i}_completed')
+            feedback = latest_feedback.get(key)
+            if completed or data_exists[i]:
+                if feedback:
+                    statuses[key] = feedback_to_status.get(feedback.status, 'pending_approval')
+                elif completed:
+                    statuses[key] = 'pending_approval'
+                else:
+                    statuses[key] = 'in_progress'
+            else:
+                statuses[key] = 'not_started'
+        return statuses
 
 class CompanyInvitationSerializer(serializers.ModelSerializer):
     invitation_status = serializers.SerializerMethodField()

@@ -63,14 +63,16 @@ export default function Index() {
       searchQuery,
       statusFilter,
       invitationStatusFilter,
-      completedStagesFilter,
+      stageStatusFilter,
+      stageStatusScope,
       frRespFilter,
       showInvitations,
     },
     setSearchQuery,
     setStatusFilter,
     setInvitationStatusFilter,
-    setCompletedStagesFilter,
+    setStageStatusFilter,
+    setStageStatusScope,
     setFrRespFilter,
     setShowInvitations,
   } = useStaffDashboardFilters();
@@ -82,7 +84,8 @@ export default function Index() {
     statusFilter,
     frRespFilter,
     invitationStatusFilter,
-    completedStagesFilter,
+    stageStatusFilter,
+    stageStatusScope,
     showInvitations,
   });
 
@@ -271,8 +274,10 @@ export default function Index() {
                 onStatusFilterChange={setStatusFilter}
                 invitationStatusFilter={invitationStatusFilter}
                 onInvitationStatusFilterChange={setInvitationStatusFilter}
-                completedStagesFilter={completedStagesFilter}
-                onCompletedStagesFilterChange={setCompletedStagesFilter}
+                stageStatusFilter={stageStatusFilter}
+                onStageStatusFilterChange={setStageStatusFilter}
+                stageStatusScope={stageStatusScope}
+                onStageStatusScopeChange={setStageStatusScope}
                 frRespFilter={frRespFilter}
                 onFrRespFilterChange={setFrRespFilter}
                 showInvitations={showInvitations}

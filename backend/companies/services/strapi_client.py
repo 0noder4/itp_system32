@@ -112,18 +112,23 @@ class StrapiClient:
         return response.json()
 
     def find_company_by_internal_name(self, internal_name: str) -> Optional[dict]:
-        data = self._request(
-            "GET",
-            "/api/companies",
-            params={
-                "status": "draft",
-                "filters[internalName][$eq]": internal_name,
-                "pagination[pageSize]": 1,
-            },
-            action="find company",
-        )
-        rows = (data or {}).get("data") or []
-        return rows[0] if rows else None
+        # Prefer draft (usual export target); fall back to published so a lost
+        # WebsitePublication does not create a duplicate under the same internalName.
+        for doc_status in ("draft", "published"):
+            data = self._request(
+                "GET",
+                "/api/companies",
+                params={
+                    "status": doc_status,
+                    "filters[internalName][$eq]": internal_name,
+                    "pagination[pageSize]": 1,
+                },
+                action=f"find company ({doc_status})",
+            )
+            rows = (data or {}).get("data") or []
+            if rows:
+                return rows[0]
+        return None
 
     def get_company(self, document_id: str, status: str = "draft") -> Optional[dict]:
         try:
@@ -145,6 +150,7 @@ class StrapiClient:
         page = 1
         while True:
             params: dict[str, Any] = {
+                "status": "published",
                 "pagination[page]": page,
                 "pagination[pageSize]": 100,
             }
@@ -159,25 +165,39 @@ class StrapiClient:
                 return rows
             page += 1
 
-    def create_document_draft(self, collection: str, data: dict) -> dict:
+    def create_document(self, collection: str, data: dict, *, publish: bool = False) -> dict:
+        """Create a document. Draft when publish=False; omit status to publish (Strapi REST default)."""
+        params = None if publish else {"status": "draft"}
+        action = f"create {collection} published" if publish else f"create {collection} draft"
         result = self._request(
             "POST",
             f"/api/{collection}",
-            params={"status": "draft"},
+            params=params,
             json_body={"data": data},
-            action=f"create {collection} draft",
+            action=action,
         )
         return result["data"]
 
-    def update_document_draft(self, collection: str, document_id: str, data: dict) -> dict:
+    def update_document(
+        self, collection: str, document_id: str, data: dict, *, publish: bool = False
+    ) -> dict:
+        """Update a document. Draft when publish=False; omit status to publish."""
+        params = None if publish else {"status": "draft"}
+        action = f"update {collection} published" if publish else f"update {collection} draft"
         result = self._request(
             "PUT",
             f"/api/{collection}/{document_id}",
-            params={"status": "draft"},
+            params=params,
             json_body={"data": data},
-            action=f"update {collection} draft",
+            action=action,
         )
         return result["data"]
+
+    def create_document_draft(self, collection: str, data: dict) -> dict:
+        return self.create_document(collection, data, publish=False)
+
+    def update_document_draft(self, collection: str, document_id: str, data: dict) -> dict:
+        return self.update_document(collection, document_id, data, publish=False)
 
     def delete_document(self, collection: str, document_id: str) -> None:
         try:
@@ -192,19 +212,28 @@ class StrapiClient:
                 return
             raise
 
+    def create_company(self, data: dict, *, publish: bool = False) -> dict:
+        return self.create_document("companies", data, publish=publish)
+
+    def update_company(self, document_id: str, data: dict, *, publish: bool = False) -> dict:
+        return self.update_document("companies", document_id, data, publish=publish)
+
     def create_company_draft(self, data: dict) -> dict:
-        return self.create_document_draft("companies", data)
+        return self.create_company(data, publish=False)
 
     def update_company_draft(self, document_id: str, data: dict) -> dict:
-        return self.update_document_draft("companies", document_id, data)
+        return self.update_company(document_id, data, publish=False)
 
-    def upsert_hall_map_draft(self, day1: dict, day2: dict) -> dict:
+    def upsert_hall_map_draft(self, day1: dict, day2: dict, *, publish: bool = False) -> dict:
+        """Write hall-map JSON. Draft by default; omit status to publish (Strapi REST default)."""
+        params = None if publish else {"status": "draft"}
+        action = "upsert hall-map published" if publish else "upsert hall-map draft"
         result = self._request(
             "PUT",
             "/api/hall-map",
-            params={"status": "draft"},
+            params=params,
             json_body={"data": {"day1": day1, "day2": day2}},
-            action="upsert hall-map draft",
+            action=action,
         )
         return (result or {}).get("data") or {}
 

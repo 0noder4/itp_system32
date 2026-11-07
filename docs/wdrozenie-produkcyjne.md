@@ -102,7 +102,8 @@ docker push "${DOCKER_REGISTRY}/itp_system32_frontend:${FRONTEND_VERSION}"
 
 ```bash
 docker compose -f compose.prod.yml pull backend frontend
-docker compose -f compose.prod.yml up -d backend frontend
+# scheduler używa tego samego obrazu co backend — recreate razem z API
+docker compose -f compose.prod.yml up -d --force-recreate backend scheduler frontend
 ```
 
 Możesz też zaktualizować cały stack: `docker compose -f compose.prod.yml pull` oraz `up -d`.
@@ -112,6 +113,7 @@ Możesz też zaktualizować cały stack: `docker compose -f compose.prod.yml pul
 - Przed buildem frontendu upewnij się, że `API_URL` w `.env` na maszynie buildującej wskazuje **produkcyjny** adres API (wartość jest „wypiekana” w obrazie Next.js).
 - Po każdej zmianie wersji obrazu zwiększ tag (`BACKEND_VERSION` / `FRONTEND_VERSION`) lub nadpisz istniejący tag świadomie — na VPS musi być ten sam tag co w rejestrze.
 - Obrazy `db` i `backup` na produkcji są budowane lokalnie na VPS lub z publicznych obrazów bazowych; do rejestru projektu trafiają głównie `backend` i `frontend`.
+- Usługa `scheduler` (przypomnienia e-mail) bierze obraz **backendu**. Po podmianie obrazu API zawsze rób też recreate `scheduler`, inaczej zostaje na starym digescie.
 
 ## Podstawowe kroki wdrożenia
 

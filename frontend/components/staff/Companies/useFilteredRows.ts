@@ -1,25 +1,18 @@
 import React from "react";
-import { Company, CompanyInvitation } from "@/lib/types";
-import { CompletedStageNumber } from "@/hooks/useStaffDashboardFilters";
+import { Company, CompanyInvitation, StageKey } from "@/lib/types";
+import {
+  StageStatusFilterValue,
+  StageStatusScope,
+} from "@/hooks/useStaffDashboardFilters";
 import { TableRow } from "./StatusBadges";
 
-const STAGE_COMPLETED_KEY: Record<
-  CompletedStageNumber,
-  keyof Pick<
-    Company,
-    | "stage_1_completed"
-    | "stage_2_completed"
-    | "stage_3_completed"
-    | "stage_4_completed"
-    | "stage_5_completed"
-  >
-> = {
-  1: "stage_1_completed",
-  2: "stage_2_completed",
-  3: "stage_3_completed",
-  4: "stage_4_completed",
-  5: "stage_5_completed",
-};
+const ALL_STAGE_KEYS: StageKey[] = [
+  "stage_1",
+  "stage_2",
+  "stage_3",
+  "stage_4",
+  "stage_5",
+];
 
 interface UseFilteredRowsParams {
   companies?: Company[];
@@ -34,20 +27,30 @@ interface UseFilteredRowsParams {
     | "not accepted"
     | "cancelled"
     | "resigned";
-  completedStagesFilter: CompletedStageNumber[];
+  stageStatusFilter: StageStatusFilterValue[];
+  stageStatusScope: StageStatusScope;
   showInvitations: boolean;
 }
 
-function companyMatchesCompletedStages(
+function companyMatchesStageStatus(
   company: Company,
-  completedStagesFilter: CompletedStageNumber[]
+  stageStatusFilter: StageStatusFilterValue[],
+  stageStatusScope: StageStatusScope
 ): boolean {
-  if (completedStagesFilter.length === 0) {
+  if (stageStatusFilter.length === 0) {
     return true;
   }
-  return completedStagesFilter.every(
-    (stage) => company[STAGE_COMPLETED_KEY[stage]] === true
-  );
+  const stageKeys =
+    stageStatusScope === "any"
+      ? ALL_STAGE_KEYS
+      : [`stage_${stageStatusScope}` as StageKey];
+  return stageKeys.some((key) => {
+    const status = company.stage_statuses?.[key];
+    return (
+      status !== undefined &&
+      (stageStatusFilter as readonly string[]).includes(status)
+    );
+  });
 }
 
 export function useFilteredRows({
@@ -57,7 +60,8 @@ export function useFilteredRows({
   statusFilter,
   frRespFilter,
   invitationStatusFilter,
-  completedStagesFilter,
+  stageStatusFilter,
+  stageStatusScope,
   showInvitations,
 }: UseFilteredRowsParams) {
   const filteredRows = React.useMemo(() => {
@@ -94,8 +98,9 @@ export function useFilteredRows({
           }
         }
 
-        // Completed stages filter (AND)
-        if (!companyMatchesCompletedStages(company, completedStagesFilter)) {
+        if (
+          !companyMatchesStageStatus(company, stageStatusFilter, stageStatusScope)
+        ) {
           return;
         }
 
@@ -116,8 +121,12 @@ export function useFilteredRows({
     }
 
     // Add invitations (only if showInvitations is true)
-    // Invitations have no stages — hide them when stage filter is active
-    if (showInvitations && invitations && completedStagesFilter.length === 0) {
+    // Invitations have no stages — hide them when any stage filter is active
+    if (
+      showInvitations &&
+      invitations &&
+      stageStatusFilter.length === 0
+    ) {
       invitations.forEach((invitation) => {
         // Skip accepted invitations if company exists (avoid duplicates)
         if (
@@ -179,7 +188,8 @@ export function useFilteredRows({
     statusFilter,
     frRespFilter,
     invitationStatusFilter,
-    completedStagesFilter,
+    stageStatusFilter,
+    stageStatusScope,
     showInvitations,
   ]);
 

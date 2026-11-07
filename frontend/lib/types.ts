@@ -23,9 +23,12 @@ export interface Company {
   stage_3_completed: boolean;
   stage_4_completed: boolean;
   stage_5_completed: boolean;
+  stage_statuses: Record<StageKey, StageStatus>;
   created_at: string;
   updated_at: string;
 }
+
+export type StageKey = "stage_1" | "stage_2" | "stage_3" | "stage_4" | "stage_5";
 
 // Staff user type
 export interface StaffUser {

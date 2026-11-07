@@ -4,6 +4,18 @@ const STORAGE_KEY = "staff_dashboard_filters";
 
 export type CompletedStageNumber = 1 | 2 | 3 | 4 | 5;
 
+export const STAGE_STATUS_FILTER_OPTIONS = [
+  "not_started",
+  "in_progress",
+  "pending_approval",
+  "rejected",
+  "accepted",
+] as const;
+
+export type StageStatusFilterValue = (typeof STAGE_STATUS_FILTER_OPTIONS)[number];
+
+export type StageStatusScope = CompletedStageNumber | "any";
+
 export interface StaffDashboardFilters {
   searchQuery: string;
   statusFilter: "all" | "main" | "partner" | "basic";
@@ -14,7 +26,8 @@ export interface StaffDashboardFilters {
     | "not accepted"
     | "cancelled"
     | "resigned";
-  completedStagesFilter: CompletedStageNumber[];
+  stageStatusFilter: StageStatusFilterValue[];
+  stageStatusScope: StageStatusScope;
   frRespFilter: number | "all";
   showInvitations: boolean;
 }
@@ -23,24 +36,25 @@ const defaultFilters: StaffDashboardFilters = {
   searchQuery: "",
   statusFilter: "all",
   invitationStatusFilter: "all",
-  completedStagesFilter: [],
+  stageStatusFilter: [],
+  stageStatusScope: "any",
   frRespFilter: "all",
   showInvitations: true,
 };
 
-function normalizeCompletedStagesFilter(value: unknown): CompletedStageNumber[] {
+function normalizeStageStatusFilter(value: unknown): StageStatusFilterValue[] {
   if (!Array.isArray(value)) {
-    return defaultFilters.completedStagesFilter;
+    return defaultFilters.stageStatusFilter;
   }
-  const allowed = new Set([1, 2, 3, 4, 5]);
-  const unique: CompletedStageNumber[] = [];
-  for (const item of value) {
-    const n = typeof item === "number" ? item : Number(item);
-    if (allowed.has(n) && !unique.includes(n as CompletedStageNumber)) {
-      unique.push(n as CompletedStageNumber);
-    }
-  }
-  return unique.sort((a, b) => a - b);
+  return STAGE_STATUS_FILTER_OPTIONS.filter((option) => value.includes(option));
+}
+
+function normalizeStageStatusScope(value: unknown): StageStatusScope {
+  if (value === "any") return "any";
+  const n = typeof value === "number" ? value : Number(value);
+  return [1, 2, 3, 4, 5].includes(n)
+    ? (n as CompletedStageNumber)
+    : defaultFilters.stageStatusScope;
 }
 
 function loadFiltersFromStorage(): StaffDashboardFilters {
@@ -52,6 +66,8 @@ function loadFiltersFromStorage(): StaffDashboardFilters {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       const parsed = JSON.parse(stored);
+      // Drop the removed "completed stages" filter if an older browser saved it.
+      delete parsed.completedStagesFilter;
       // Validate and merge with defaults to handle schema changes
       return {
         ...defaultFilters,
@@ -73,9 +89,8 @@ function loadFiltersFromStorage(): StaffDashboardFilters {
           ].includes(parsed.invitationStatusFilter)
             ? parsed.invitationStatusFilter
             : defaultFilters.invitationStatusFilter,
-        completedStagesFilter: normalizeCompletedStagesFilter(
-          parsed.completedStagesFilter
-        ),
+        stageStatusFilter: normalizeStageStatusFilter(parsed.stageStatusFilter),
+        stageStatusScope: normalizeStageStatusScope(parsed.stageStatusScope),
         frRespFilter:
           parsed.frRespFilter === "all" || typeof parsed.frRespFilter === "number"
             ? parsed.frRespFilter
@@ -162,11 +177,15 @@ export function useStaffDashboardFilters() {
       ) => updateFilters({ invitationStatusFilter: status }),
       [updateFilters]
     ),
-    setCompletedStagesFilter: React.useCallback(
-      (stages: CompletedStageNumber[]) =>
+    setStageStatusFilter: React.useCallback(
+      (statuses: StageStatusFilterValue[]) =>
         updateFilters({
-          completedStagesFilter: normalizeCompletedStagesFilter(stages),
+          stageStatusFilter: normalizeStageStatusFilter(statuses),
         }),
+      [updateFilters]
+    ),
+    setStageStatusScope: React.useCallback(
+      (scope: StageStatusScope) => updateFilters({ stageStatusScope: scope }),
       [updateFilters]
     ),
     setFrRespFilter: React.useCallback(

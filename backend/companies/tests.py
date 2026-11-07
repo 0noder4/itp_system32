@@ -942,3 +942,27 @@ class ExportCSVApiTests(TestCase):
         company = next(c for c in response.data if c["id"] == self.company_a.id)
         self.assertTrue(company["stage_1_completed"])
         self.assertFalse(company["stage_2_completed"])
+
+    def test_companies_list_includes_stage_statuses(self):
+        Form.objects.create(company=self.company_a)
+        BasicData.objects.create(
+            company=self.company_a,
+            full_name="Alpha Export Co Sp. z o.o.",
+            nip="1234567890",
+        )
+        Feedback.objects.create(company=self.company_a, form="stage_1", status="pending")
+        Feedback.objects.create(company=self.company_a, form="stage_1", status="rejected")
+        self.client.force_authenticate(self.staff)
+        response = self.client.get("/api/companies/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        company = next(c for c in response.data if c["id"] == self.company_a.id)
+        self.assertEqual(
+            company["stage_statuses"],
+            {
+                "stage_1": "rejected",
+                "stage_2": "not_started",
+                "stage_3": "unavailable",
+                "stage_4": "not_started",
+                "stage_5": "not_started",
+            },
+        )

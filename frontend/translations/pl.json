@@ -136,8 +136,17 @@
     "title": "Panel FR",
     "description": "Zarządzaj firmami i ustawieniami systemu.",
     "searchPlaceholder": "Szukaj po nazwie, e-mailu lub ID...",
-    "filterByStatus": "Filtruj według statusu:",
-    "filterByCompletedStages": "Filtruj według wypełnionych etapów",
+    "filterByStatus": "Status firmy",
+    "filterByStageStatus": "Status etapu",
+    "filterByStageStatusHint": "Pokazuje firmy, które mają co najmniej jeden etap w zaznaczonym statusie. Możesz zaznaczyć kilka statusów.",
+    "stageStatusScope": "Którego etapu dotyczy status",
+    "stageStatusScopeAny": "Dowolny etap",
+    "filters": {
+      "editButton": "Edytuj filtry",
+      "dialogTitle": "Filtry listy firm",
+      "dialogDescription": "Lista firm zmienia się od razu po kliknięciu. Wybrane filtry są zapamiętywane w tej przeglądarce.",
+      "done": "Gotowe"
+    },
     "stageFilterLabel": "Etap {stage}",
     "showingResults": "Wyświetlanie {filtered} z {total} firm",
     "noCompaniesMatch": "Żadne firmy nie pasują do kryteriów wyszukiwania.",
@@ -155,7 +164,7 @@
       "completedStages": "Ukończone etapy",
       "createdAt": "Data wejścia do systemu"
     },
-    "filterByFrResp": "Filtruj według FR-owca",
+    "filterByFrResp": "Opiekun FR",
     "status": {
       "main": "Główny Partner",
       "partner": "Partner",
@@ -197,7 +206,7 @@
     "invitations": {
       "title": "Zaproszenia do firm",
       "showInvitations": "Pokaż zaproszenia",
-      "filterByStatus": "Filtruj według statusu zaproszenia",
+      "filterByStatus": "Status zaproszenia",
       "showingResults": "Wyświetlanie {filtered} z {total} zaproszeń",
       "noInvitationsMatch": "Żadne zaproszenia nie pasują do kryteriów wyszukiwania.",
       "noInvitationsFound": "Nie znaleziono zaproszeń.",
@@ -830,6 +839,10 @@
     "continueButton": "Dalej ({count})",
     "confirmTitle": "Wysłać na stronę?",
     "confirmDescription": "Wysłać {count} firm(y) do katalogu na stronie targów?",
+    "publishContentLabel": "Opublikuj firmę i oferty od razu na stronie",
+    "publishContentHint": "Karta firmy i oferty pracy od razu trafiają na katalog publiczny. Odznacz tylko gdy chcesz zostawić je jako szkic w panelu strony.",
+    "publishHallMapLabel": "Opublikuj też mapę hali na stronie",
+    "publishHallMapHint": "Mapa ze stoiskami od razu trafia na katalog publiczny. Odznacz tylko gdy chcesz zostawić mapę jako szkic w panelu strony.",
     "confirmSend": "Wyślij",
     "progress": "Wysłano {done} / {total}…",
     "success": "Eksport zakończony",
@@ -840,11 +853,30 @@
     "noneExported": "Nic nie wysłano",
     "noneExportedDescription": "Pominięto {skipped} firm(y) (bez zmian lub niespełnione warunki).",
     "hallMapWarning": "Firmy wysłane, ale nie udało się zaktualizować mapy hali. Spróbuj wysłać ponownie.",
+    "removeButton": "Usuń ze strony ({count})",
+    "removeConfirmTitle": "Usunąć ze strony?",
+    "removeConfirmDescription": "Usunąć {count} firm(y) i ich oferty z katalogu na stronie? Znikną z katalogu publicznego (także wersje robocze w panelu strony).",
+    "removeConfirmSend": "Usuń ze strony",
+    "removeProgress": "Usunięto {done} / {total}…",
+    "removeSuccess": "Usunięto ze strony",
+    "removeSuccessDescription": "OK: {ok}, błędy: {failed}, pominięte: {skipped}",
+    "removeError": "Usuwanie nieudane",
+    "removeErrorDescription": "Nie udało się usunąć firm ze strony. Spróbuj ponownie; jeśli błąd się powtarza, zgłoś go administratorowi systemu.",
+    "removeNone": "Nic nie usunięto",
+    "removeNoneDescription": "Pominięto {skipped} firm(y) (nie były wcześniej wysłane na stronę).",
     "previewFrameLabel": "Podgląd karty firmy tak, jak wyświetli się w katalogu na stronie (kliknij ofertę, żeby ją otworzyć):",
     "previewFrameJobLabel": "Podgląd oferty tak, jak wyświetli się na stronie:",
     "backToCompany": "Wróć do karty firmy",
     "jobsRemovedWarning": "Tych ofert nie ma już w systemie, więc zostaną usunięte ze strony: {titles}.",
     "jobContactWarning": "Oferta „{title}”: link aplikacji „{value}” nie jest adresem e-mail i nie zaczyna się od https:// — na stronie przycisk Aplikuj nie zadziała.",
+    "help": {
+      "toggle": "Potrzebujesz pomocy? Coś się nie zgadza w podglądzie?",
+      "contentTitle": "Błąd w treści (opis, nazwa, logo, oferty pracy)",
+      "contentSource": "Wszystko, co widzisz w podglądzie, pochodzi z formularza wypełnionego przez firmę. Jeśli coś jest nie tak — literówka, nieaktualny opis, złe logo, błędny link w ofercie — skontaktuj się z firmą i poproś, żeby poprawiła to w swoim formularzu (etap 4). FR nie edytuje treści za firmę. Po poprawce zaakceptuj etap 4 ponownie i wyślij eksport jeszcze raz.",
+      "contentFallback": "Jeśli sprawa jest pilna albo firma nie odpowiada, możesz wysłać kartę w obecnej wersji i zgłosić IT targów, co dokładnie trzeba zmienić (nazwa firmy, co jest źle i jak ma być). IT może edytować wszystko i przegląda każdą kartę opublikowaną na stronie.",
+      "technicalTitle": "Nieprawidłowy format",
+      "technicalBody": "Jeśli format czegoś jest nieprawidłowy — na przykład link w ofercie nie jest adresem e-mail i nie zaczyna się od https://, więc przycisk na stronie nie zadziała — napisz do firmy i poproś, żeby poprawiła to w swoim formularzu. FR nie zmienia tego za firmę. Gdy problemu nie da się poprawić w formularzu (eksport się nie udaje albo pojawia się błąd systemu), napisz do IT targów: której firmy dotyczy, co kliknięto i co się stało. Zrzut ekranu bardzo pomaga."
+    },
     "status": {
       "ready": "Gotowa",
       "unchanged": "Bez zmian",
@@ -856,6 +888,7 @@
       "missing_catalogue_logo": "brak logo katalogowego",
       "missing_catalogue_description": "brak opisu katalogowego",
       "company_not_found": "nie znaleziono firmy",
+      "not_exported": "nie wysłano wcześniej na stronę",
       "unchanged": "bez zmian od ostatniego eksportu"
     }
   }

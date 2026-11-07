@@ -136,8 +136,17 @@
     "title": "FR Dashboard",
     "description": "Manage companies and system settings.",
     "searchPlaceholder": "Search by name, email, or ID...",
-    "filterByStatus": "Filter by status:",
-    "filterByCompletedStages": "Filter by completed stages",
+    "filterByStatus": "Company status",
+    "filterByStageStatus": "Stage status",
+    "filterByStageStatusHint": "Shows companies with at least one stage in a selected status. You can select several statuses.",
+    "stageStatusScope": "Which stage the status applies to",
+    "stageStatusScopeAny": "Any stage",
+    "filters": {
+      "editButton": "Edit filters",
+      "dialogTitle": "Company list filters",
+      "dialogDescription": "The company list updates as soon as you click. Selected filters are remembered in this browser.",
+      "done": "Done"
+    },
     "stageFilterLabel": "Stage {stage}",
     "showingResults": "Showing {filtered} of {total} companies",
     "noCompaniesMatch": "No companies match your search criteria.",
@@ -155,7 +164,7 @@
       "completedStages": "Completed Stages",
       "createdAt": "System Entry Date"
     },
-    "filterByFrResp": "Filter by FR Person",
+    "filterByFrResp": "FR supervisor",
     "status": {
       "main": "Main Partner",
       "partner": "Partner",
@@ -197,7 +206,7 @@
     "invitations": {
       "title": "Company Invitations",
       "showInvitations": "Show invitations",
-      "filterByStatus": "Filter by invitation status",
+      "filterByStatus": "Invitation status",
       "showingResults": "Showing {filtered} of {total} invitations",
       "noInvitationsMatch": "No invitations match your search criteria.",
       "noInvitationsFound": "No invitations found.",
@@ -830,6 +839,10 @@
     "continueButton": "Continue ({count})",
     "confirmTitle": "Send to the website?",
     "confirmDescription": "Send {count} company(ies) to the fair website catalogue?",
+    "publishContentLabel": "Publish company and job offers on the website right away",
+    "publishContentHint": "The company card and job offers go live on the public catalogue immediately. Uncheck only if you want to leave them as drafts in the website admin panel.",
+    "publishHallMapLabel": "Also publish the hall map on the website",
+    "publishHallMapHint": "The stand map goes live on the public catalogue right away. Uncheck only if you want to leave the map as a draft in the website admin panel.",
     "confirmSend": "Send",
     "progress": "Sent {done} / {total}…",
     "success": "Export finished",
@@ -840,11 +853,30 @@
     "noneExported": "Nothing exported",
     "noneExportedDescription": "Skipped {skipped} company(ies) (unchanged or not eligible).",
     "hallMapWarning": "Companies sent, but the hall map could not be updated. Try sending again.",
+    "removeButton": "Remove from website ({count})",
+    "removeConfirmTitle": "Remove from the website?",
+    "removeConfirmDescription": "Remove {count} company(ies) and their job offers from the website catalogue? They will disappear from the public catalogue (including drafts in the website admin panel).",
+    "removeConfirmSend": "Remove from website",
+    "removeProgress": "Removed {done} / {total}…",
+    "removeSuccess": "Removed from website",
+    "removeSuccessDescription": "OK: {ok}, failed: {failed}, skipped: {skipped}",
+    "removeError": "Removal failed",
+    "removeErrorDescription": "Could not remove companies from the website. Try again; if it keeps failing, report it to the system administrator.",
+    "removeNone": "Nothing removed",
+    "removeNoneDescription": "Skipped {skipped} company(ies) (not previously sent to the website).",
     "previewFrameLabel": "Company card as it will appear in the website catalogue (click a job offer to open it):",
     "previewFrameJobLabel": "Job offer as it will appear on the website:",
     "backToCompany": "Back to company card",
     "jobsRemovedWarning": "These offers no longer exist in the system, so they will be removed from the website: {titles}.",
     "jobContactWarning": "Offer “{title}”: application link “{value}” is not an e-mail and does not start with https:// — the Apply button will not work on the website.",
+    "help": {
+      "toggle": "Need help? Something wrong in the preview?",
+      "contentTitle": "Content mistake (description, name, logo, job offers)",
+      "contentSource": "Everything in the preview comes from the form filled in by the company. If something is wrong — a typo, an outdated description, a wrong logo, a broken link in an offer — contact the company and ask them to fix it in their form (stage 4). FR does not edit content on the company's behalf. After the fix, accept stage 4 again and send the export once more.",
+      "contentFallback": "If it is urgent or the company does not respond, you can send the card as it is and tell the fair IT team exactly what needs to change (company name, what is wrong and what it should be). IT can edit everything and reviews every card on the website anyway.",
+      "technicalTitle": "Wrong format",
+      "technicalBody": "If something has the wrong format — for example an application link that is not an e-mail and does not start with https://, so the button on the website will not work — write to the company and ask them to fix it in their form. FR does not change this for the company. If it cannot be fixed in the form (the export fails or a system error appears), contact the fair IT team: which company, what was clicked and what happened. A screenshot helps a lot."
+    },
     "status": {
       "ready": "Ready",
       "unchanged": "Unchanged",
@@ -856,6 +888,7 @@
       "missing_catalogue_logo": "missing catalogue logo",
       "missing_catalogue_description": "missing catalogue description",
       "company_not_found": "company not found",
+      "not_exported": "not previously sent to the website",
       "unchanged": "unchanged since last export"
     }
   }

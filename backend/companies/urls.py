@@ -90,6 +90,11 @@ urlpatterns = [
         name='website-catalogue-preview',
     ),
     path(
+        'website-export/catalogue/remove/',
+        views.WebsiteCatalogueRemoveView.as_view(),
+        name='website-catalogue-remove',
+    ),
+    path(
         'website-export/catalogue/',
         views.WebsiteCatalogueExportView.as_view(),
         name='website-catalogue-export',

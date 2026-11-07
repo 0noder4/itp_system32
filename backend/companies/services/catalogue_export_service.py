@@ -35,6 +35,7 @@ logger = logging.getLogger(__name__)
 SKIP_NOT_ACCEPTED = "stage_4_not_accepted"
 SKIP_NO_LOGO = "missing_catalogue_logo"
 SKIP_NO_DESCRIPTION = "missing_catalogue_description"
+SKIP_NOT_EXPORTED = "not_exported"
 
 
 def partnership_type_for_strapi(company_status: str) -> str:
@@ -74,8 +75,31 @@ def payload_hash(payload: dict) -> str:
     return hashlib.sha256(_canonical_json(payload).encode("utf-8")).hexdigest()
 
 
-def export_hash(company_payload: dict, hall_map: dict) -> str:
-    return payload_hash({"company": company_payload, "hall_map": hall_map})
+def export_hash(
+    company_payload: dict,
+    hall_map: dict,
+    *,
+    logo_sha256: str = "",
+) -> str:
+    # Include file content digest so replacing a logo at the same storage path
+    # still counts as a change (path alone is not enough).
+    return payload_hash(
+        {
+            "company": company_payload,
+            "hall_map": hall_map,
+            "logo_sha256": logo_sha256 or "",
+        }
+    )
+
+
+def logo_file_sha256(company: Company) -> str:
+    description = getattr(company, "description", None)
+    if not description or not description.logo_file:
+        return ""
+    try:
+        return file_sha256(description.logo_file.path)
+    except OSError:
+        return ""
 
 
 # Job taxonomy entries that already exist in the website CMS (read from production):
@@ -130,7 +154,7 @@ class CataloguePayloadBuilder:
         stands = {s.day: s for s in company.stand_all.all()}
         day1 = stand_label(stands.get("day1"))
         day2 = stand_label(stands.get("day2"))
-        descr_text = (description.descr if description else "") or ""
+        descr_text = ((description.descr if description else "") or "").strip()
         logo_path = ""
         if description and description.logo_file:
             logo_path = description.logo_file.name
@@ -183,7 +207,7 @@ class CataloguePayloadBuilder:
     def skip_reason(self, company: Company, payload: dict) -> Optional[str]:
         if not self.stage4_accepted(company):
             return SKIP_NOT_ACCEPTED
-        if not payload.get("description"):
+        if not (payload.get("description") or "").strip():
             return SKIP_NO_DESCRIPTION
         if not payload.get("logo_media_path"):
             return SKIP_NO_LOGO
@@ -233,6 +257,7 @@ class CatalogueExportService:
                         "status": "missing",
                         "skip_reason": "company_not_found",
                         "changed_since_export": False,
+                        "can_remove": False,
                         "payload": None,
                     }
                 )
@@ -246,11 +271,20 @@ class CatalogueExportService:
                 for key, info in ((pub.strapi_jobs if pub else None) or {}).items()
                 if key not in current_job_keys
             ]
-            digest = export_hash(payload, hall_map)
+            digest = export_hash(
+                payload, hall_map, logo_sha256=logo_file_sha256(company)
+            )
             changed = True
             if pub and pub.payload_hash and not pub.last_error:
                 changed = pub.payload_hash != digest
             status = "skipped" if skip else ("unchanged" if not changed else "ready")
+            can_remove = bool(
+                pub
+                and (
+                    (pub.strapi_document_id or "").strip()
+                    or (pub.strapi_jobs or {})
+                )
+            )
             companies_out.append(
                 {
                     "company_id": company.id,
@@ -263,6 +297,7 @@ class CatalogueExportService:
                     else None,
                     "last_error": (pub.last_error if pub else "") or "",
                     "jobs_removed": jobs_removed,
+                    "can_remove": can_remove,
                     "payload": payload,
                 }
             )
@@ -272,7 +307,13 @@ class CatalogueExportService:
             "catalogue_url": "https://targipracy.org.pl/catalogue",
         }
 
-    def export(self, company_ids: list[int]) -> dict:
+    def export(
+        self,
+        company_ids: list[int],
+        *,
+        publish_hall_map: bool = True,
+        publish_content: bool = True,
+    ) -> dict:
         max_batch = getattr(settings, "WEBSITE_EXPORT_BATCH_MAX", self.MAX_BATCH)
         ordered_ids = list(dict.fromkeys(company_ids))
         if len(ordered_ids) > max_batch:
@@ -316,7 +357,13 @@ class CatalogueExportService:
                 continue
 
             try:
-                doc_id = self._export_one(cid, item["payload"], hall_map, client)
+                doc_id = self._export_one(
+                    cid,
+                    item["payload"],
+                    hall_map,
+                    client,
+                    publish_content=publish_content,
+                )
                 results.append(
                     {
                         "company_id": cid,
@@ -347,19 +394,144 @@ class CatalogueExportService:
 
         hall_map_ok = False
         hall_map_error = None
-        # Also when every company is unchanged: the hall map draft should follow MapLayout.
+        hall_map_published = False
+        # Also when every company is unchanged: the hall map should follow MapLayout.
         if any(r.get("ok") for r in results):
             try:
-                client.upsert_hall_map_draft(hall_map["day1"], hall_map["day2"])
+                client.upsert_hall_map_draft(
+                    hall_map["day1"],
+                    hall_map["day2"],
+                    publish=publish_hall_map,
+                )
                 hall_map_ok = True
+                hall_map_published = bool(publish_hall_map)
             except StrapiAPIError as exc:
                 hall_map_error = str(exc)
-                logger.exception("Hall map draft upsert failed")
+                logger.exception(
+                    "Hall map upsert failed (publish=%s)", publish_hall_map
+                )
 
         return {
             "results": results,
-            "hall_map": {"ok": hall_map_ok, "error": hall_map_error},
+            "hall_map": {
+                "ok": hall_map_ok,
+                "error": hall_map_error,
+                "published": hall_map_published,
+            },
         }
+
+    def remove(self, company_ids: list[int]) -> dict:
+        """Delete company + jobs from Strapi and clear local WebsitePublication tracking."""
+        max_batch = getattr(settings, "WEBSITE_EXPORT_BATCH_MAX", self.MAX_BATCH)
+        ordered_ids = list(dict.fromkeys(company_ids))
+        if len(ordered_ids) > max_batch:
+            raise ValueError(f"At most {max_batch} companies per request.")
+
+        try:
+            client = self.client
+        except StrapiConfigError as exc:
+            raise StrapiConfigError(str(exc)) from exc
+
+        by_id = {c.id: c for c in self._companies_qs(ordered_ids)}
+        results = []
+        for cid in ordered_ids:
+            company = by_id.get(cid)
+            if not company:
+                results.append(
+                    {
+                        "company_id": cid,
+                        "name": None,
+                        "ok": False,
+                        "skipped": True,
+                        "reason": "company_not_found",
+                    }
+                )
+                continue
+            pub = getattr(company, "website_publication", None)
+            has_tracking = bool(
+                pub
+                and (
+                    (pub.strapi_document_id or "").strip()
+                    or (pub.strapi_jobs or {})
+                )
+            )
+            if not has_tracking:
+                results.append(
+                    {
+                        "company_id": cid,
+                        "name": company.name,
+                        "ok": False,
+                        "skipped": True,
+                        "reason": SKIP_NOT_EXPORTED,
+                    }
+                )
+                continue
+            try:
+                self._remove_one(company, pub, client)
+                results.append(
+                    {
+                        "company_id": cid,
+                        "name": company.name,
+                        "ok": True,
+                        "skipped": False,
+                        "reason": None,
+                    }
+                )
+            except (StrapiAPIError, ValueError) as exc:
+                logger.exception("Catalogue remove failed for company %s", cid)
+                pub.last_error = str(exc)[:2000]
+                pub.save(update_fields=["last_error"])
+                results.append(
+                    {
+                        "company_id": cid,
+                        "name": company.name,
+                        "ok": False,
+                        "skipped": False,
+                        "reason": str(exc),
+                    }
+                )
+        return {"results": results}
+
+    def _remove_one(
+        self,
+        company: Company,
+        pub: WebsitePublication,
+        client: StrapiClient,
+    ) -> None:
+        # Delete remotely first; only clear local tracking after all Strapi
+        # deletes succeed so a mid-flight failure stays retryable (404s are OK).
+        jobs = dict(pub.strapi_jobs or {})
+        for info in jobs.values():
+            document_id = (info or {}).get("documentId") or ""
+            if document_id:
+                client.delete_document("jobs", document_id)
+
+        document_id = (pub.strapi_document_id or "").strip()
+        if document_id:
+            client.delete_document("companies", document_id)
+
+        logo_id = pub.strapi_logo_id
+        if logo_id:
+            self._safe_delete_media(client, logo_id, company.id)
+
+        pub.strapi_document_id = ""
+        pub.strapi_logo_id = None
+        pub.strapi_logo_sha256 = ""
+        pub.strapi_jobs = {}
+        pub.payload_hash = ""
+        pub.last_exported_at = None
+        pub.last_error = ""
+        pub.save(
+            update_fields=[
+                "strapi_document_id",
+                "strapi_logo_id",
+                "strapi_logo_sha256",
+                "strapi_jobs",
+                "payload_hash",
+                "last_exported_at",
+                "last_error",
+            ]
+        )
 
     def _export_one(
         self,
@@ -367,6 +539,8 @@ class CatalogueExportService:
         payload: dict,
         hall_map: dict,
         client: StrapiClient,
+        *,
+        publish_content: bool = True,
     ) -> str:
         company = (
             Company.objects.select_related("description", "website_publication")
@@ -392,8 +566,8 @@ class CatalogueExportService:
             uploaded_now = True
 
         try:
-            document_id = self._upsert_company_draft(
-                pub, payload, new_logo_id, client
+            document_id = self._upsert_company(
+                pub, payload, new_logo_id, client, publish=publish_content
             )
         except Exception:
             if uploaded_now:
@@ -411,9 +585,15 @@ class CatalogueExportService:
         pub.strapi_logo_sha256 = logo_digest
         pub.save(update_fields=["strapi_document_id", "strapi_logo_id", "strapi_logo_sha256"])
 
-        self._sync_jobs(pub, document_id, payload.get("jobs") or [], client)
+        self._sync_jobs(
+            pub,
+            document_id,
+            payload.get("jobs") or [],
+            client,
+            publish=publish_content,
+        )
 
-        pub.payload_hash = export_hash(payload, hall_map)
+        pub.payload_hash = export_hash(payload, hall_map, logo_sha256=logo_digest)
         pub.last_exported_at = timezone.now()
         pub.last_error = ""
         pub.save(update_fields=["payload_hash", "last_exported_at", "last_error"])
@@ -460,6 +640,8 @@ class CatalogueExportService:
         company_document_id: str,
         jobs: list[dict],
         client: StrapiClient,
+        *,
+        publish: bool = True,
     ) -> None:
         synced: dict[str, dict] = dict(pub.strapi_jobs or {})
 
@@ -476,13 +658,15 @@ class CatalogueExportService:
                 document_id = (synced.get(key) or {}).get("documentId") or ""
                 if document_id:
                     try:
-                        client.update_document_draft("jobs", document_id, data)
+                        client.update_document(
+                            "jobs", document_id, data, publish=publish
+                        )
                     except StrapiAPIError as exc:
                         if exc.status_code != 404:
                             raise
                         document_id = ""
                 if not document_id:
-                    created = client.create_document_draft("jobs", data)
+                    created = client.create_document("jobs", data, publish=publish)
                     document_id = created.get("documentId") or ""
                     if not document_id:
                         raise StrapiAPIError("Strapi did not return job documentId")
@@ -491,19 +675,23 @@ class CatalogueExportService:
 
             for key in [k for k in synced if k not in current_keys]:
                 # Offer removed in the system: removing the document also takes it off the live site.
-                client.delete_document("jobs", synced[key]["documentId"])
-                synced.pop(key)
+                document_id = (synced.get(key) or {}).get("documentId") or ""
+                if document_id:
+                    client.delete_document("jobs", document_id)
+                synced.pop(key, None)
                 persist()
         except Exception:
             persist()
             raise
 
-    def _upsert_company_draft(
+    def _upsert_company(
         self,
         pub: WebsitePublication,
         payload: dict,
         logo_id: int,
         client: StrapiClient,
+        *,
+        publish: bool = True,
     ) -> str:
         strapi_data = {
             "internalName": payload["internalName"],
@@ -525,18 +713,18 @@ class CatalogueExportService:
 
         if document_id:
             try:
-                client.update_company_draft(document_id, strapi_data)
+                client.update_company(document_id, strapi_data, publish=publish)
             except StrapiAPIError as exc:
                 if exc.status_code != 404:
                     raise
                 logger.warning(
-                    "Strapi company %s missing (deleted in CMS?) — creating new draft",
+                    "Strapi company %s missing (deleted in CMS?) — creating new entry",
                     document_id,
                 )
                 document_id = ""
 
         if not document_id:
-            result = client.create_company_draft(strapi_data)
+            result = client.create_company(strapi_data, publish=publish)
             document_id = result.get("documentId") or ""
 
         if not document_id:

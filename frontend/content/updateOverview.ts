@@ -13,6 +13,24 @@ export type UpdateOverviewEntry = {
 
 export const updateOverviews: readonly UpdateOverviewEntry[] = [
   {
+    releaseDate: "2026-11-08",
+    highlights: [
+      "Filtry listy firm są teraz w osobnym oknie pod przyciskiem „Edytuj filtry” — lista firm ma więcej miejsca. Przycisk pokazuje, ile filtrów jest włączonych.",
+      "Nowy filtr „Status etapu”: np. pokaż firmy z etapem „Wymaga poprawy” albo „Oczekuje na akceptację” — w dowolnym etapie albo w wybranym.",
+      "W podglądzie eksportu na stronę statusy firm mają kolory (Gotowa — zielony, Pominięta — czerwony, Bez zmian — szary).",
+      "W podglądzie eksportu jest sekcja „Potrzebujesz pomocy?”: przy błędzie w treści albo złym formacie (np. link oferty) FR prosi firmę o poprawkę w formularzu; do IT tylko gdy formularz tego nie naprawi.",
+      "Przy wysyłce na stronę: przełącznik „Opublikuj firmę i oferty od razu” oraz „Opublikuj też mapę hali” (oba domyślnie włączone) — karta, oferty i mapa od razu w katalogu publicznym.",
+      "Z listy firm można „Usunąć ze strony” wcześniej wysłane firmy i ich oferty (znikają z katalogu publicznego).",
+    ],
+    worthChecking: [
+      "Panel FR → Edytuj filtry → Status etapu → „Wymaga poprawy” → sprawdź, czy lista pokazuje właściwe firmy; zmień zakres na konkretny etap.",
+      "Panel FR → Edytuj filtry → Wyczyść filtry → licznik na przycisku znika.",
+      "Panel FR → zaznacz kilka firm → Eksportuj na stronę → kolory statusów → rozwiń „Potrzebujesz pomocy?”.",
+      "Panel staff → Eksportuj na stronę → Dalej → oba przełączniki publikacji zaznaczone → Wyślij → karta, oferty i mapa widoczne w katalogu na stronie.",
+      "Panel staff → zaznacz firmę już wysłaną → Usuń ze strony → potwierdź → sprawdź, że zniknęła z katalogu publicznego.",
+    ],
+  },
+  {
     releaseDate: "2026-11-06",
     highlights: [
       "Eksport katalogu na stronę targów: przycisk „Eksportuj na stronę” pod przypomnieniami — wysyła opis, logo, stoiska i oferty pracy z etapu 4.",

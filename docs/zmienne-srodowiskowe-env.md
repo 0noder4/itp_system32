@@ -230,8 +230,8 @@ NOTIFICATIONS_MINUTE=0
 
 ### `STRAPI_API_TOKEN`
 - **Gdzie**: `backend` (tylko serwer — nigdy we froncie).
-- **Po co**: token API Strapi (typ Custom) z uprawnieniami: `company` find/findOne/create/update, `job` find/findOne/create/update/delete, `work-model` / `employment-type` / `contract` find, `hall-map` find/update, Upload `upload` + `destroy`.
-- Token trzymaj tylko w `.env` na VPS; nie commituj.
+- **Po co**: token API Strapi (typ Custom) z uprawnieniami: `company` find/findOne/create/update/**delete**, `job` find/findOne/create/update/delete, `work-model` / `employment-type` / `contract` find, `hall-map` find/update, Upload `upload` + `destroy`.
+- Token trzymaj tylko w `.env` na VPS; nie commituj. Po dodaniu usuwania katalogu wystarczy dopisać `company` **delete** na tym samym tokenie (bez nowej wartości w `.env`). W Custom API Token **nie ma** checkboxa `publish` — publikacja idzie przez create/update bez `status=draft`.
 
 ### `STRAPI_CONNECT_TIMEOUT` / `STRAPI_READ_TIMEOUT`
 - Opcjonalne (domyślnie 10 s / 60 s).
