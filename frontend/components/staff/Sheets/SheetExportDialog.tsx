@@ -130,7 +130,7 @@ type TabCombine = "merge" | "separate";
 async function downloadXlsxBlob(
   sheetKey: string,
   tabKey: string,
-  body: Record<string, unknown>,
+  body: object,
   date: string
 ) {
   const response = await apiClient.post(`/api/sheets/${sheetKey}/${tabKey}/xlsx/`, body, {
