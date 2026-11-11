@@ -21,6 +21,16 @@ interface HeaderProps {
   navigationItems?: NavigationItem[];
 }
 
+/** Longest matching prefix wins so /panel/staff/sheets/lg keeps Arkusze active, not Panel FR. */
+function isNavItemActive(pathname: string, itemUrl: string, allUrls: string[]) {
+  const matches = allUrls.filter(
+    (url) => pathname === url || pathname.startsWith(`${url}/`)
+  );
+  if (matches.length === 0) return false;
+  const best = matches.reduce((a, b) => (a.length >= b.length ? a : b));
+  return best === itemUrl;
+}
+
 export function Header({ navigationItems }: HeaderProps) {
   const { t } = useTranslation();
   const router = useRouter();
@@ -40,6 +50,7 @@ export function Header({ navigationItems }: HeaderProps) {
   // Use pink theme for staff/admin, orange for exhibitor
   const isStaff = userInfo.type === "admin" || userInfo.type === "staff";
   const accentColor = isStaff ? STAFF_ACCENT_COLOR : ACCENT_COLOR;
+  const navUrls = navigationItems?.map((item) => item.url) ?? [];
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -70,7 +81,7 @@ export function Header({ navigationItems }: HeaderProps) {
           {navigationItems && navigationItems.length > 0 && (
             <nav className="flex items-center gap-1">
               {navigationItems.map((item) => {
-                const isActive = pathname === item.url;
+                const isActive = isNavItemActive(pathname, item.url, navUrls);
                 return (
                 <Link
                   key={item.url}

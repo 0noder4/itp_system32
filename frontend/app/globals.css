@@ -24,6 +24,21 @@ body {
   }
 }
 
+/* Native <select>: readable option lists in dark mode (OS popup). */
+html.dark {
+  color-scheme: dark;
+}
+
+select {
+  background-color: var(--background);
+  color: var(--foreground);
+}
+
+select option {
+  background-color: var(--background);
+  color: var(--foreground);
+}
+
 @theme inline {
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);

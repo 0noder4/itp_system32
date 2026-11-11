@@ -25,6 +25,7 @@ import {
 } from "@/components/staff/Companies/CompaniesTable";
 import { useFilteredRows } from "@/components/staff/Companies/useFilteredRows";
 import { useStaffDashboardFilters } from "@/hooks/useStaffDashboardFilters";
+import { useStaffNav } from "@/hooks/useStaffNav";
 import { ReminderDialog } from "@/components/staff/Reminders/ReminderDialog";
 import { WebsiteExportDialog } from "@/components/staff/WebsiteExport/WebsiteExportDialog";
 import {
@@ -186,16 +187,7 @@ export default function Index() {
   const hasError = error || invitationsError;
   const hasData = companies !== undefined || invitations !== undefined;
 
-  const navItems = [
-    {
-      title: t("companies.title"),
-      url: "/panel/staff",
-    },
-    {
-      title: t("staff.map.title"),
-      url: "/panel/staff/map",
-    },
-  ];
+  const navItems = useStaffNav();
 
   return (
     <div className="flex flex-col md:h-screen md:overflow-hidden min-h-screen md:min-h-0">

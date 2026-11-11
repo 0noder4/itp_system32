@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'companies.apps.CompaniesConfig',
     'users.apps.UsersConfig',
+    'sheets.apps.SheetsConfig',
     'rest_framework_simplejwt'
 ]
 
