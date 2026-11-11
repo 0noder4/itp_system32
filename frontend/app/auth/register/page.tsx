@@ -54,10 +54,12 @@ function RegisterForm() {
   }, [langParam, setLocale]);
 
   const [invitationInfo, setInvitationInfo] = React.useState<{
+    kind?: "company" | "staff";
     company_name: string;
     username: string;
     email: string;
-    company_status: string;
+    company_status: string | null;
+    role?: string;
   } | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
   const [isFetching, setIsFetching] = React.useState(true);
@@ -293,14 +295,20 @@ function RegisterForm() {
           />
         </div>
         <div className="flex items-center justify-between">
-          <CardTitle>{t("auth.register.title")}</CardTitle>
+          <CardTitle>
+            {invitationInfo.kind === "staff"
+              ? t("auth.register.staffTitle")
+              : t("auth.register.title")}
+          </CardTitle>
           <LanguageSelector />
         </div>
         <CardDescription>
-          {t("auth.register.description", {
-            companyName: invitationInfo.company_name,
-            email: invitationInfo.email,
-          })}
+          {invitationInfo.kind === "staff"
+            ? t("auth.register.staffDescription", { email: invitationInfo.email })
+            : t("auth.register.description", {
+                companyName: invitationInfo.company_name,
+                email: invitationInfo.email,
+              })}
         </CardDescription>
       </CardHeader>
       <CardContent>

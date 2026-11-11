@@ -77,6 +77,7 @@ class CataloguePreviewApiTests(APITestCase):
             username="staff_export",
             password="pass",
             type="staff",
+            staff_roles=["fr"],
         )
         self.company = Company.objects.create(
             name="Export Co",

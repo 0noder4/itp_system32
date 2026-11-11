@@ -72,6 +72,7 @@ class CompanySerializer(serializers.ModelSerializer):
     fr_resp_email = serializers.SerializerMethodField()
     fr_resp_phone_number = serializers.SerializerMethodField()
     fr_resp_username = serializers.SerializerMethodField()
+    opiekun = serializers.IntegerField(source='opiekun.id', read_only=True, allow_null=True)
     day1_stand = serializers.SerializerMethodField()
     day2_stand = serializers.SerializerMethodField()
     completed_stages_count = serializers.SerializerMethodField()
@@ -84,7 +85,7 @@ class CompanySerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Company
-        fields = ("id", "name", "status", "email", "representative", "representative_name", "representative_surname", "representative_phone_number", "representative_username", "fr_resp", "fr_resp_name", "fr_resp_surname", "fr_resp_email", "fr_resp_phone_number", "fr_resp_username", "day1_stand", "day2_stand", "completed_stages_count", "stage_1_completed", "stage_2_completed", "stage_3_completed", "stage_4_completed", "stage_5_completed", "stage_statuses", "created_at", "updated_at")
+        fields = ("id", "name", "status", "email", "representative", "representative_name", "representative_surname", "representative_phone_number", "representative_username", "fr_resp", "fr_resp_name", "fr_resp_surname", "fr_resp_email", "fr_resp_phone_number", "fr_resp_username", "opiekun", "day1_stand", "day2_stand", "completed_stages_count", "stage_1_completed", "stage_2_completed", "stage_3_completed", "stage_4_completed", "stage_5_completed", "stage_statuses", "created_at", "updated_at")
     
     def get_representative_name(self, obj):
         if obj.representative:
@@ -285,6 +286,18 @@ class CompanyInvitationSerializer(serializers.ModelSerializer):
         if has_active_invitation:
             raise serializers.ValidationError(
                 "An active invitation for this email already exists."
+            )
+
+        from users.models import StaffInvitation
+
+        if StaffInvitation.objects.filter(
+            email__iexact=value,
+            is_accepted=False,
+            is_cancelled=False,
+            expires_at__gt=timezone.now(),
+        ).exists():
+            raise serializers.ValidationError(
+                "An active staff invitation for this email already exists."
             )
 
         return value

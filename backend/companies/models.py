@@ -190,6 +190,15 @@ class Company(models.Model):
         null=True,
         related_name="fr_resp"
     )
+    opiekun = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="opiekun_companies",
+        verbose_name="opiekun firmy",
+        help_text="Członek stowarzyszenia opiekujący się firmą (konto staff z rolą Opiekun). Inna osoba niż FR.",
+    )
 
     status = models.CharField(
         max_length=10,

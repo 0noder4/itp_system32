@@ -134,6 +134,7 @@ class StagePendingFrEmailTests(TestCase):
             email="fr@example.com",
             password="TestPass123!",
             type="staff",
+            staff_roles=["fr"],
             language="pl",
         )
         self.company_user = User.objects.create_user(
@@ -303,6 +304,7 @@ class StageDraftTests(TestCase):
             email="draft-fr@example.com",
             password="TestPass123!",
             type="staff",
+            staff_roles=["fr"],
             language="pl",
         )
         self.company_user = User.objects.create_user(
@@ -448,6 +450,7 @@ class InvitationCreateValidityTests(TestCase):
             email="create-staff@example.com",
             password="TestPass123!",
             type="staff",
+            staff_roles=["fr"],
             language="pl",
         )
         self.settings_obj = Settings.get_settings()
@@ -496,6 +499,7 @@ class InvitationExpiryReminderCommandTests(TestCase):
             email="staff@example.com",
             password="TestPass123!",
             type="staff",
+            staff_roles=["fr"],
             language="pl",
         )
 
@@ -670,6 +674,7 @@ class SendStageReminderApiTests(TestCase):
             email="stage-staff@example.com",
             password="TestPass123!",
             type="staff",
+            staff_roles=["fr"],
         )
         self.company_user = User.objects.create_user(
             username="Stage Co",
@@ -750,6 +755,7 @@ class SendInvitationRemindersApiTests(TestCase):
             email="inv-rem-staff@example.com",
             password="TestPass123!",
             type="staff",
+            staff_roles=["fr"],
             language="pl",
         )
         self.company_user = User.objects.create_user(
@@ -890,6 +896,7 @@ class ExportCSVApiTests(TestCase):
             email="export-staff@example.com",
             password="TestPass123!",
             type="staff",
+            staff_roles=["fr"],
         )
         self.company_a = Company.objects.create(
             name="Alpha Export Co",
@@ -966,3 +973,68 @@ class ExportCSVApiTests(TestCase):
                 "stage_5": "not_started",
             },
         )
+
+
+class CompanyEndpointsPermissionTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.staff = User.objects.create_user(
+            username="perm-staff", email="s@example.com", password="x", type="staff",
+            staff_roles=["fr"],
+        )
+        self.owner = User.objects.create_user(
+            username="Owner Co", email="o@example.com", password="x", type="company"
+        )
+        self.other = User.objects.create_user(
+            username="Other Co", email="other@example.com", password="x", type="company"
+        )
+        self.company = Company.objects.create(name="Owner Co", email="o@example.com", representative=self.owner)
+        Company.objects.create(name="Other Co", email="other@example.com", representative=self.other)
+
+    def test_company_user_cannot_list_companies(self):
+        self.client.force_authenticate(self.owner)
+        self.assertEqual(self.client.get("/api/companies/").status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_staff_can_list_companies(self):
+        self.client.force_authenticate(self.staff)
+        self.assertEqual(self.client.get("/api/companies/").status_code, status.HTTP_200_OK)
+
+    def test_company_user_reads_only_own_company(self):
+        self.client.force_authenticate(self.owner)
+        self.assertEqual(self.client.get(f"/api/company/{self.company.id}/").status_code, status.HTTP_200_OK)
+        self.client.force_authenticate(self.other)
+        self.assertEqual(self.client.get(f"/api/company/{self.company.id}/").status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_company_user_cannot_patch_company(self):
+        self.client.force_authenticate(self.owner)
+        response = self.client.patch(f"/api/company/{self.company.id}/", {}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_tr_cannot_open_fr_panel_or_map(self):
+        tr = User.objects.create_user(
+            username="perm-tr", email="tr@example.com", password="x", type="staff", staff_roles=["tr"]
+        )
+        self.client.force_authenticate(tr)
+        self.assertEqual(self.client.get("/api/companies/").status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(self.client.get("/api/invitations/").status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(self.client.get("/api/map-layout/repartition-options/").status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(self.client.get("/api/staff/").status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_lg_can_read_companies_and_map_but_not_fr_panel(self):
+        lg = User.objects.create_user(
+            username="perm-lg", email="lg@example.com", password="x", type="staff", staff_roles=["lg"]
+        )
+        self.client.force_authenticate(lg)
+        self.assertEqual(self.client.get("/api/companies/").status_code, status.HTTP_200_OK)
+        self.assertEqual(self.client.get("/api/map-layout/").status_code, status.HTTP_200_OK)
+        self.assertEqual(self.client.get("/api/invitations/").status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(self.client.get("/api/staff/").status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_staff_list_returns_only_fr(self):
+        User.objects.create_user(
+            username="perm-tr2", email="tr2@example.com", password="x", type="staff", staff_roles=["tr"]
+        )
+        self.client.force_authenticate(self.staff)
+        names = {row["username"] for row in self.client.get("/api/staff/").data}
+        self.assertIn("perm-staff", names)
+        self.assertNotIn("perm-tr2", names)

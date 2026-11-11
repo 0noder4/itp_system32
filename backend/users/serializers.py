@@ -2,11 +2,29 @@ from django.core.mail import EmailMultiAlternatives
 from django.conf import settings
 from django.contrib.auth.password_validation import validate_password
 from django.template.loader import render_to_string
+from django.utils import timezone
 import os
+import re
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView
-from users.models import User, PasswordResetRequest
+from users.models import User, PasswordResetRequest, StaffInvitation, STAFF_ROLE_OPIEKUN
+
+OPIEKUN_EMAIL_DOMAIN = "best.pw.edu.pl"
+
+
+def opiekun_username_from_email(email: str) -> str:
+    """Login opiekuna = lokalna część maila Best (przed @)."""
+    local, sep, domain = (email or "").strip().partition("@")
+    if not sep or not local or domain.lower() != OPIEKUN_EMAIL_DOMAIN:
+        raise serializers.ValidationError(
+            f"Opiekun musi podać adres e-mail @{OPIEKUN_EMAIL_DOMAIN}."
+        )
+    if User.objects.filter(username__iexact=local).exists():
+        raise serializers.ValidationError(
+            f"Login „{local}” jest już zajęty (wynika z adresu przed @)."
+        )
+    return local
 
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -20,6 +38,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         token['first_name'] = user.first_name or ''
         token['last_name'] = user.last_name or ''
         token['language'] = user.language
+        token['staff_roles'] = sorted(user.get_staff_roles())
 
         return token
 
@@ -40,6 +59,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         data['first_name'] = self.user.first_name or ''
         data['last_name'] = self.user.last_name or ''
         data['language'] = self.user.language
+        data['staff_roles'] = sorted(self.user.get_staff_roles())
 
         return data
 
@@ -175,3 +195,105 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
         reset_request.save()
 
         return {"detail": "Password has been reset successfully."}
+
+
+def _validate_phone_number(value):
+    if not value:
+        return value
+    phone_pattern = r'^[\+]?[(]?[0-9]{1,4}[)]?[-\s\.]?[(]?[0-9]{1,4}[)]?[-\s\.]?[0-9]{1,9}$'
+    if not re.match(phone_pattern, value):
+        raise serializers.ValidationError("Please enter a valid phone number.")
+    digit_count = len(re.findall(r'\d', value))
+    if digit_count < 7:
+        raise serializers.ValidationError("Phone number must contain at least 7 digits.")
+    if digit_count > 15:
+        raise serializers.ValidationError("Phone number is too long.")
+    return value
+
+
+class StaffInvitationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = StaffInvitation
+        fields = ("id", "email", "role", "language", "created_at", "expires_at", "is_accepted")
+        read_only_fields = ("id", "created_at", "expires_at", "is_accepted", "role")
+
+    def validate_email(self, value):
+        value = (value or "").strip()
+        # Waliduje domenę Best i wolny login (= część przed @).
+        opiekun_username_from_email(value)
+        if User.objects.filter(email__iexact=value).exists():
+            raise serializers.ValidationError("A user with this email already exists.")
+
+        from companies.models import CompanyInvitation
+
+        if CompanyInvitation.objects.filter(
+            email__iexact=value,
+            is_accepted=False,
+            is_cancelled=False,
+            expires_at__gt=timezone.now(),
+        ).exists():
+            raise serializers.ValidationError(
+                "An active company invitation for this email already exists."
+            )
+        if StaffInvitation.objects.filter(
+            email__iexact=value,
+            is_accepted=False,
+            is_cancelled=False,
+            expires_at__gt=timezone.now(),
+        ).exists():
+            raise serializers.ValidationError(
+                "An active staff invitation for this email already exists."
+            )
+        return value
+
+    def create(self, validated_data):
+        validated_data['role'] = STAFF_ROLE_OPIEKUN
+        return super().create(validated_data)
+
+
+class StaffRegistrationSerializer(serializers.Serializer):
+    token = serializers.UUIDField(write_only=True)
+    password = serializers.CharField(write_only=True, validators=[validate_password])
+    first_name = serializers.CharField(write_only=True, required=True, max_length=150)
+    last_name = serializers.CharField(write_only=True, required=True, max_length=150)
+    phone_number = serializers.CharField(
+        write_only=True, required=True, max_length=20, validators=[_validate_phone_number]
+    )
+
+    def validate_token(self, value):
+        try:
+            invitation = StaffInvitation.objects.get(
+                token=value,
+                is_accepted=False,
+                is_cancelled=False,
+            )
+        except StaffInvitation.DoesNotExist:
+            raise serializers.ValidationError("Invalid or expired token")
+        if invitation.is_expired():
+            raise serializers.ValidationError("Invalid or expired token")
+        return invitation
+
+    def validate(self, attrs):
+        invitation = attrs["token"]
+        # Login = część przed @; domena musi być Best.
+        attrs["username"] = opiekun_username_from_email(invitation.email)
+        return attrs
+
+    def create(self, validated_data):
+        invitation = validated_data['token']
+        email = invitation.email.strip()
+        username = validated_data.pop("username")
+        user = User.objects.create_user(
+            username=username,
+            email=email,
+            type='staff',
+            password=validated_data['password'],
+            language=invitation.language or 'pl',
+            first_name=validated_data['first_name'],
+            last_name=validated_data['last_name'],
+            phone_number=validated_data['phone_number'],
+            staff_roles=[invitation.role],
+        )
+        invitation.is_accepted = True
+        invitation.save(update_fields=['is_accepted', 'updated_at'])
+        return user

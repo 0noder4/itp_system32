@@ -90,15 +90,65 @@ export const getUserInfo = (): {
   };
 };
 
+/** Numeric user id from JWT (`user_id` claim from SimpleJWT). */
+export const getUserId = (): number | null => {
+  const token = getAccessToken();
+  if (!token) return null;
+  const decoded = decodeToken(token);
+  const raw = decoded?.user_id;
+  if (typeof raw === "number" && Number.isFinite(raw)) return raw;
+  if (typeof raw === "string" && raw.trim() !== "") {
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+};
+
 /**
- * Get route for user type
+ * Staff roles from the access token.
+ * `null` means a token issued before roles existed — treat it like FR.
+ */
+export const getStaffRoles = (): string[] | null => {
+  const token = getAccessToken();
+  if (!token) return null;
+  const decoded = decodeToken(token);
+  if (!decoded || !Object.prototype.hasOwnProperty.call(decoded, "staff_roles")) {
+    return null;
+  }
+  return Array.isArray(decoded.staff_roles) ? decoded.staff_roles.map(String) : [];
+};
+
+export const hasStaffRole = (role: string): boolean => {
+  if (getUserType() === "admin") return true;
+  const roles = getStaffRoles();
+  if (roles === null) return role === "fr";
+  return roles.includes(role);
+};
+
+/**
+ * Sheets index, or the only sheet a role can open (avoids empty index flash).
+ * FR/LG see the catalog; pure TR → tr; pure opiekun → opiekun.
+ */
+export const getSheetsHomePath = (): string => {
+  if (getUserType() === "admin") return "/panel/staff/sheets";
+  if (hasStaffRole("fr") || hasStaffRole("lg")) return "/panel/staff/sheets";
+  if (hasStaffRole("tr") && hasStaffRole("opiekun")) return "/panel/staff/sheets";
+  if (hasStaffRole("tr")) return "/panel/staff/sheets/tr";
+  if (hasStaffRole("opiekun")) return "/panel/staff/sheets/opiekun";
+  return "/panel/staff/sheets";
+};
+
+/**
+ * Get route for user type. Staff without the FR role lands on Sheets
+ * (including LG — map is available from nav, but sheets are the home).
  */
 export const getUserRoute = (userType: UserType | null): string => {
   switch (userType) {
     case "admin":
       return "/panel/staff";
     case "staff":
-      return "/panel/staff";
+      if (hasStaffRole("fr")) return "/panel/staff";
+      return getSheetsHomePath();
     case "company":
       return "/panel/exhibitor";
     default:

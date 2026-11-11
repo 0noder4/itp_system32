@@ -5,14 +5,20 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework import status
+from textwrap import dedent
+from django.conf import settings
+from django.core.mail import EmailMultiAlternatives
+from django.template.loader import render_to_string
+from rest_framework import generics
 from .serializers import (
     PasswordResetRequestSerializer,
     PasswordResetConfirmSerializer,
-    UserSerializer
+    UserSerializer,
+    StaffInvitationSerializer,
 )
-from users.permissions import IsAdminOrStaff
-from companies.models import Company
-from users.models import User
+from users.permissions import HasStaffRole
+from companies.models import Company, Settings as CompanySettings, compute_invitation_expires_at
+from users.models import User, StaffInvitation
 
 class CurrentUserView(APIView):
     """
@@ -32,6 +38,7 @@ class CurrentUserView(APIView):
             "first_name": user.first_name or "",
             "last_name": user.last_name or "",
             "user_type": user.type,
+            "staff_roles": sorted(user.get_staff_roles()),
             "language": user.language,
             "is_active": user.is_active,
         }
@@ -176,9 +183,81 @@ class StaffListView(APIView):
     API endpoint to get all staff members (admin and staff users).
     Used for filtering companies by responsible staff member.
     """
-    permission_classes = [IsAuthenticated, IsAdminOrStaff]
+    permission_classes = [IsAuthenticated, HasStaffRole("fr")]
 
     def get(self, request):
-        staff_users = User.objects.filter(type__in=['admin', 'staff']).order_by('first_name', 'last_name', 'username')
+        candidates = User.objects.filter(type__in=['admin', 'staff'], is_active=True).order_by(
+            'first_name', 'last_name', 'username'
+        )
+        staff_users = [user for user in candidates if user.has_staff_role('fr')]
         serializer = UserSerializer(staff_users, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class StaffInvitationView(generics.CreateAPIView):
+    """POST /api/staff-invite/ — FR invites an opiekun; sends registration email."""
+
+    serializer_class = StaffInvitationSerializer
+    queryset = StaffInvitation.objects.all()
+    permission_classes = [IsAuthenticated, HasStaffRole("fr")]
+
+    def perform_create(self, serializer):
+        invitation = serializer.save(created_by=self.request.user)
+        invitation.expires_at = compute_invitation_expires_at()
+        invitation.save(update_fields=['expires_at'])
+        validity_days = CompanySettings.get_settings().invitation_validity_days or 7
+
+        language = invitation.language or 'pl'
+        if language not in ('en', 'pl'):
+            language = 'pl'
+
+        registration_link = (
+            f"{settings.FRONTEND_BASE_URL}/auth/register?token={invitation.token}&lang={language}"
+        )
+        logo_url = (
+            f"{settings.BACKEND_BASE_URL}{settings.STATIC_URL}"
+            "images/ITP_LOGO_horizontal_black.png"
+        )
+        template_name = f"emails/staff_invitation_{language}.html"
+        staff_email = invitation.created_by.email if invitation.created_by and invitation.created_by.email else None
+        default_email = CompanySettings.get_settings().get_general_contact_email()
+
+        if language == 'pl':
+            subject = "Dokończ rejestrację opiekuna - Inżynierskie Targi Pracy - ITP System"
+            plain_message = dedent(f"""
+                Zostałeś zaproszony do systemu Inżynierskich Targów Pracy jako opiekun firm.
+                Twój login: {invitation.email}
+
+                Dokończ rejestrację:
+                {registration_link}
+
+                Link wygaśnie za {validity_days} dni.
+            """).strip()
+        else:
+            subject = "Complete guardian registration - Engineering Job Fair - ITP System"
+            plain_message = dedent(f"""
+                You have been invited to the Engineering Job Fair platform as a company guardian.
+                Your login: {invitation.email}
+
+                Complete your registration:
+                {registration_link}
+
+                This link will expire in {validity_days} days.
+            """).strip()
+
+        html_content = render_to_string(template_name, {
+            'login': invitation.email,
+            'registration_link': registration_link,
+            'logo_url': logo_url,
+            'staff_email': staff_email,
+            'default_email': default_email,
+            'validity_days': validity_days,
+        })
+        email_message = EmailMultiAlternatives(
+            subject=subject,
+            body=plain_message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[invitation.email],
+        )
+        email_message.attach_alternative(html_content, "text/html")
+        email_message.send()

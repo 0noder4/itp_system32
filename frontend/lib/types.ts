@@ -15,6 +15,7 @@ export interface Company {
   fr_resp_email: string | null;
   fr_resp_phone_number: string | null;
   fr_resp_username: string | null;
+  opiekun: number | null;
   day1_stand: { stand_number: string; stand_size: string } | null;
   day2_stand: { stand_number: string; stand_size: string } | null;
   completed_stages_count: number;

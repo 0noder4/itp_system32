@@ -11,7 +11,7 @@ from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
-from users.permissions import IsAdminOrStaff, IsAdmin
+from users.permissions import HasStaffRole, IsAdmin, user_has_staff_role
 
 from django.db import IntegrityError
 from django.utils import timezone
@@ -170,11 +170,15 @@ def apply_stage_write_side_effects(company, form, stage_num, *, is_draft, latest
 
 # --- COMPANY VIEWS ---
 class CompanyListView(APIView):
-    permission_classes = [IsAuthenticated, IsAdminOrStaff]
     """
     List all companies or create a new company.
+    GET is also used by the stand map, so LG can read the list; creating stays with FR.
     """
-    permission_classes = [IsAuthenticated]
+
+    def get_permissions(self):
+        if self.request.method == "GET":
+            return [IsAuthenticated(), HasStaffRole("fr", "lg", "opiekun")()]
+        return [IsAuthenticated(), HasStaffRole("fr")()]
     
     def get(self, request):
         companies = (
@@ -185,6 +189,7 @@ class CompanyListView(APIView):
                 'workshops',
                 'description',
                 'finaldata',
+                'opiekun',
             )
             .prefetch_related('feedback', 'jobwalls')
             .all()
@@ -201,12 +206,17 @@ class CompanyListView(APIView):
 
 
 class CompanyDetailView(APIView):
-    permission_classes = [IsAuthenticated, IsAdminOrStaff]
     """
     Retrieve, update or delete a company instance.
+    GET: staff/admin or the company's own representative. PUT/PATCH: staff/admin only.
     """
     permission_classes = [IsAuthenticated]
-    
+
+    def check_permissions(self, request):
+        super().check_permissions(request)
+        if request.method != 'GET' and not user_has_staff_role(request.user, 'fr'):
+            self.permission_denied(request)
+
     def get(self, request, id):
         try:
             validate_company_id(id)
@@ -218,7 +228,13 @@ class CompanyDetailView(APIView):
         except Exception as e:
             logger.error(f"Error in CompanyDetailView.get: {e}", exc_info=True)
             return Response({"detail": "An error occurred while retrieving the company"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
+
+        if (
+            company.representative_id != request.user.id
+            and not user_has_staff_role(request.user, 'fr', 'lg')
+        ):
+            return Response({"detail": "Company not found"}, status=status.HTTP_404_NOT_FOUND)
+
         serializer = CompanySerializer(company)
         return Response(serializer.data)
     
@@ -534,7 +550,7 @@ class CompanyInvitationListView(APIView):
     """
     List all company invitations.
     """
-    permission_classes = [IsAuthenticated, IsAdminOrStaff]
+    permission_classes = [IsAuthenticated, HasStaffRole("fr")]
     
     def get(self, request):
         invitations = CompanyInvitation.objects.all().order_by('-created_at')
@@ -546,7 +562,7 @@ class CompanyInvitationDetailView(APIView):
     """
     Retrieve, update, or cancel a single company invitation by ID.
     """
-    permission_classes = [IsAuthenticated, IsAdminOrStaff]
+    permission_classes = [IsAuthenticated, HasStaffRole("fr")]
     
     def get(self, request, id):
         try:
@@ -599,7 +615,7 @@ class CompanyInvitationDetailView(APIView):
 class CompanyInvitationView(generics.CreateAPIView):
     serializer_class = CompanyInvitationSerializer
     queryset = CompanyInvitation.objects.all()
-    permission_classes = [IsAuthenticated, IsAdminOrStaff]
+    permission_classes = [IsAuthenticated, HasStaffRole("fr")]
 
     def perform_create(self, serializer):
         # Set the creator to the current user (staff member who created the invitation)
@@ -691,18 +707,43 @@ class CompanyRegistrationView(APIView):
             return Response({"detail": "Token parameter is required"}, status=status.HTTP_400_BAD_REQUEST)
         try:
             invitation = CompanyInvitation.objects.get(token=token, is_accepted=False)
+            if invitation.is_cancelled:
+                return Response({"detail": "Invalid or already used invitation token"}, status=status.HTTP_404_NOT_FOUND)
             if invitation.is_expired():
                 return Response({"detail": "Invitation has expired"}, status=status.HTTP_400_BAD_REQUEST)
             return Response({
+                "kind": "company",
                 "company_name": invitation.company_name,
                 "username": invitation.company_name,
                 "email": invitation.email,
-                "company_status": invitation.company_status
+                "company_status": invitation.company_status,
             })
         except CompanyInvitation.DoesNotExist:
-            return Response({"detail": "Invalid or already used invitation token"}, status=status.HTTP_404_NOT_FOUND)
+            pass
         except Exception as e:
             logger.error(f"Error in CompanyRegistrationView.get: {e}", exc_info=True)
+            return Response({"detail": "An error occurred while processing the invitation"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        from users.models import StaffInvitation
+
+        try:
+            staff_invite = StaffInvitation.objects.get(token=token, is_accepted=False, is_cancelled=False)
+            if staff_invite.is_expired():
+                return Response({"detail": "Invitation has expired"}, status=status.HTTP_400_BAD_REQUEST)
+            email = (staff_invite.email or "").strip()
+            username = email.split("@", 1)[0] if "@" in email else email
+            return Response({
+                "kind": "staff",
+                "role": staff_invite.role,
+                "company_name": "",
+                "username": username,
+                "email": email,
+                "company_status": None,
+            })
+        except StaffInvitation.DoesNotExist:
+            return Response({"detail": "Invalid or already used invitation token"}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"Error in CompanyRegistrationView.get staff: {e}", exc_info=True)
             return Response({"detail": "An error occurred while processing the invitation"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     def post(self, request, *args, **kwargs):
@@ -710,6 +751,21 @@ class CompanyRegistrationView(APIView):
         if not token:
             return Response({"detail": "Token is required"}, status=status.HTTP_400_BAD_REQUEST)
         data = request.data.copy()
+
+        from users.models import StaffInvitation
+        from users.serializers import StaffRegistrationSerializer
+
+        if StaffInvitation.objects.filter(token=token).exists():
+            serializer = StaffRegistrationSerializer(data=data)
+            if not serializer.is_valid():
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                serializer.save()
+                return Response({"message": "Staff registration successful"}, status=status.HTTP_201_CREATED)
+            except Exception as e:
+                logger.error(f"Error in staff registration: {e}", exc_info=True)
+                return Response({"detail": "An error occurred during registration"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
         serializer = CompanyRegistrationSerializer(data=data)
         
         # Validate serializer - this will raise ValidationError if invalid
@@ -732,7 +788,7 @@ class FormStage1View(APIView):
             validate_company_id(company_id)
             company = Company.objects.get(id=company_id)
             # Allow access for company representative or staff/admin
-            if company.representative != request.user and request.user.type not in ['admin', 'staff']:
+            if company.representative != request.user and not user_has_staff_role(request.user, 'fr', 'lg', 'opiekun'):
                 return Response({"detail": "Company not found or you don't have permission"}, status=status.HTTP_403_FORBIDDEN)
             basic_data = BasicData.objects.filter(company=company).first()
             if not basic_data:
@@ -857,8 +913,8 @@ class FormStage2View(APIView):
         try:
             validate_company_id(company_id)
             company = Company.objects.get(id=company_id)
-            # Allow access for company representative or staff/admin
-            if company.representative != request.user and request.user.type not in ['admin', 'staff']:
+            # Allow access for company representative or FR
+            if company.representative != request.user and not user_has_staff_role(request.user, 'fr'):
                 return Response({"detail": "Company not found or you don't have permission"}, status=status.HTTP_403_FORBIDDEN)
             stand = StandDetails.objects.filter(company=company).first()
             if not stand:
@@ -1311,8 +1367,8 @@ class FormStage3View(APIView):
         try:
             validate_company_id(company_id)
             company = Company.objects.get(id=company_id)
-            # Allow access for company representative or staff/admin
-            if company.representative != request.user and request.user.type not in ['admin', 'staff']:
+            # Allow access for company representative or FR
+            if company.representative != request.user and not user_has_staff_role(request.user, 'fr'):
                 return Response({"detail": "Company not found or you don't have permission"}, status=status.HTTP_403_FORBIDDEN)
             if not company_can_access_stage3(company):
                 ensure_basic_workshop_skipped(company)
@@ -1425,7 +1481,7 @@ class FormStage4View(APIView):
             validate_company_id(company_id)
             company = Company.objects.get(id=company_id)
             # Allow access for company representative or staff/admin
-            if company.representative != request.user and request.user.type not in ['admin', 'staff']:
+            if company.representative != request.user and not user_has_staff_role(request.user, 'fr', 'lg', 'opiekun'):
                 return Response({"detail": "Company not found or you don't have permission"}, status=status.HTTP_403_FORBIDDEN)
             jobwalls = Jobwall.objects.filter(company=company)
             description = Description.objects.filter(company=company).first()
@@ -1702,8 +1758,8 @@ class FormStage5View(APIView):
         try:
             validate_company_id(company_id)
             company = Company.objects.get(id=company_id)
-            # Allow access for company representative or staff/admin
-            if company.representative != request.user and request.user.type not in ['admin', 'staff']:
+            # Allow access for company representative or FR
+            if company.representative != request.user and not user_has_staff_role(request.user, 'fr'):
                 return Response({"detail": "Company not found or you don't have permission"}, status=status.HTTP_403_FORBIDDEN)
             form = Form.objects.get(company=company)
         except ValidationError as e:
@@ -1858,7 +1914,7 @@ class FormReviewView(APIView):
             validate_company_id(company_id)
             validate_stage_num(stage_num)
             company = Company.objects.get(id=company_id)
-            if company.fr_resp != request.user and request.user.type not in ['admin', 'staff']:
+            if company.fr_resp != request.user and not user_has_staff_role(request.user, 'fr'):
                 return Response({"detail": "You don't have permission to review this company's forms"}, status=status.HTTP_403_FORBIDDEN)
             form = Form.objects.get(company=company)
         except ValidationError as e:
@@ -2056,7 +2112,11 @@ class FormStatusView(APIView):
             validate_company_id(company_id)
             company = Company.objects.get(id=company_id)
             # Allow access for company representative, FR responsible, or staff/admin
-            if company.representative != request.user and company.fr_resp != request.user and request.user.type not in ['admin', 'staff']:
+            if (
+                company.representative != request.user
+                and company.fr_resp != request.user
+                and not user_has_staff_role(request.user, 'fr')
+            ):
                 return Response({"detail": "You don't have permission to view this company's form status"}, status=status.HTTP_403_FORBIDDEN)
             
             # Get or create the Form object
@@ -2282,7 +2342,7 @@ class StageDeadlinesView(APIView):
 
 class InvitationReminderSettingsView(APIView):
     """Current automatic invitation expiry reminder configuration from Settings."""
-    permission_classes = [IsAuthenticated, IsAdminOrStaff]
+    permission_classes = [IsAuthenticated, HasStaffRole("fr")]
 
     def get(self, request):
         try:
@@ -2316,8 +2376,8 @@ class OrderSummaryPDFView(APIView):
             validate_company_id(company_id)
             company = Company.objects.get(id=company_id)
             
-            # Check authorization - only company representative can access
-            if company.representative != request.user and request.user.type not in ['admin', 'staff']:
+            # Company representative or FR (order summary is part of the FR panel).
+            if company.representative != request.user and not user_has_staff_role(request.user, 'fr'):
                 return Response(
                     {"detail": "You don't have permission to access this order summary"},
                     status=status.HTTP_403_FORBIDDEN
@@ -2407,7 +2467,7 @@ class SendStageReminderView(APIView):
     Send stage reminder emails for selected companies that haven't completed
     a stage or have rejected feedback. Accessible by admin and staff.
     """
-    permission_classes = [IsAuthenticated, IsAdminOrStaff]
+    permission_classes = [IsAuthenticated, HasStaffRole("fr")]
 
     def post(self, request):
         try:
@@ -2613,7 +2673,7 @@ class SendInvitationRemindersView(APIView):
     Manually send invitation expiry reminder emails to exhibitors for selected
     invitations. Writes InvitationExpiryReminderSent (exhibitor) after a real send.
     """
-    permission_classes = [IsAuthenticated, IsAdminOrStaff]
+    permission_classes = [IsAuthenticated, HasStaffRole("fr")]
 
     def post(self, request):
         try:
@@ -2717,7 +2777,7 @@ class ExportCSVView(APIView):
     Accessible only to admin/staff users via JWT authentication.
     Requires POST with ordered company_ids; GET is rejected to avoid full dumps.
     """
-    permission_classes = [IsAuthenticated, IsAdminOrStaff]
+    permission_classes = [IsAuthenticated, HasStaffRole("fr")]
 
     def get(self, request):
         return Response(
@@ -2831,7 +2891,7 @@ class ExportLogosView(APIView):
     Accessible only to admin/staff users via JWT authentication.
     Creates a ZIP archive containing all logo files from stand_details.
     """
-    permission_classes = [IsAuthenticated, IsAdminOrStaff]
+    permission_classes = [IsAuthenticated, HasStaffRole("fr")]
 
     def get(self, request):
         from django.http import HttpResponse
@@ -2882,7 +2942,7 @@ class ExportMediaFilesView(APIView):
     Files are named: "folder/[stand_code_day1][stand_code_day2] full company name.extension"
     Folder structure is preserved: logos/, fire_certs/, stand_visualizations/, catalogue_logos/
     """
-    permission_classes = [IsAuthenticated, IsAdminOrStaff]
+    permission_classes = [IsAuthenticated, HasStaffRole("fr")]
 
     def _format_filename(self, company, original_filename, folder_prefix):
         """
@@ -3100,7 +3160,7 @@ class MapLayoutView(APIView):
     def get_permissions(self):
         if self.request.method == "GET":
             return [IsAuthenticated()]
-        return [IsAuthenticated(), IsAdminOrStaff()]
+        return [IsAuthenticated(), HasStaffRole("fr", "lg")()]
 
     def get(self, request):
         layout = MapLayout.get_solo()
@@ -3124,7 +3184,7 @@ class MapLayoutView(APIView):
 
 
 class MapLayoutRepartitionOptionsView(APIView):
-    permission_classes = [IsAuthenticated, IsAdminOrStaff]
+    permission_classes = [IsAuthenticated, HasStaffRole("fr", "lg")]
 
     def get(self, request):
         day = request.query_params.get("day", "day1")
@@ -3154,7 +3214,7 @@ class MapLayoutRepartitionOptionsView(APIView):
 class MapLayoutRepartitionValidateView(APIView):
     """Suggest + validate a custom partition (manual editor)."""
 
-    permission_classes = [IsAuthenticated, IsAdminOrStaff]
+    permission_classes = [IsAuthenticated, HasStaffRole("fr", "lg")]
 
     def post(self, request):
         day = request.data.get("day", "day1")
@@ -3220,7 +3280,7 @@ class MapLayoutRepartitionValidateView(APIView):
 
 
 class MapLayoutRepartitionView(APIView):
-    permission_classes = [IsAuthenticated, IsAdminOrStaff]
+    permission_classes = [IsAuthenticated, HasStaffRole("fr", "lg")]
 
     def post(self, request):
         day = request.data.get("day", "day1")
@@ -3282,7 +3342,7 @@ class MapLayoutResetView(APIView):
 class WebsiteCataloguePreviewView(APIView):
     """Preview catalogue payload that would be pushed to Strapi (staff only)."""
 
-    permission_classes = [IsAuthenticated, IsAdminOrStaff]
+    permission_classes = [IsAuthenticated, HasStaffRole("fr")]
 
     def get(self, request):
         raw_ids = request.query_params.getlist("company_ids")
@@ -3316,7 +3376,7 @@ def _parse_request_bool(raw, default: bool = True) -> bool:
 class WebsiteCatalogueExportView(APIView):
     """Push catalogue company/jobs to Strapi for selected companies (staff only)."""
 
-    permission_classes = [IsAuthenticated, IsAdminOrStaff]
+    permission_classes = [IsAuthenticated, HasStaffRole("fr")]
 
     def post(self, request):
         raw_ids = request.data.get("company_ids") or []
@@ -3365,7 +3425,7 @@ class WebsiteCatalogueExportView(APIView):
 class WebsiteCatalogueRemoveView(APIView):
     """Delete selected companies (+ jobs) from Strapi / public catalogue (staff only)."""
 
-    permission_classes = [IsAuthenticated, IsAdminOrStaff]
+    permission_classes = [IsAuthenticated, HasStaffRole("fr")]
 
     def post(self, request):
         raw_ids = request.data.get("company_ids") or []

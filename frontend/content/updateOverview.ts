@@ -13,6 +13,26 @@ export type UpdateOverviewEntry = {
 
 export const updateOverviews: readonly UpdateOverviewEntry[] = [
   {
+    releaseDate: "2026-11-11",
+    highlights: [
+      "Nowe Arkusze w menu staff: siatka firm jak w Excelu (edycja komórek, cofnij/ponów, kolory wypełnienia, zamrożone kolumny, ukrywanie kolumn).",
+      "Arkusze zależą od roli: FR, LG, TR i Opiekun widzą swoje zakładki; Opiekun tylko swoje firmy.",
+      "Eksport z arkusza: CSV / XLSX (z kolorami i pinami) oraz pliki mediów; zaznaczenie, jedna zakładka albo kilka naraz.",
+      "Konta staff mają role (FR / LG / TR / Opiekun). Zaproszenie nowego staff może od razu ustawić role.",
+      "Firma może mieć opiekuna (osoba ze stowarzyszenia) — widać go i da się ustawić w arkuszu.",
+      "Mapa: widoki kolorów (rozmiary stoisk, partnerzy, moje firmy) pod przyciskiem Widoki.",
+      "Menu staff dopasowuje się do roli — sam TR nie widzi mapy ani Panelu FR.",
+    ],
+    worthChecking: [
+      "Zaloguj FR → Arkusze → LG Główny → edytuj komórkę → odśwież (zapis) → Cofnij.",
+      "Arkusze → zaznacz komórki → kolor wypełnienia → Eksport → XLSX z pinami jak na siatce.",
+      "Konto Opiekun / TR → tylko dostępne pozycje menu i właściwy arkusz.",
+      "Zaproszenie staff z rolami → rejestracja → role w profilu.",
+      "Mapa → Widoki → rozmiary / partnerzy / moje firmy → kolory na hali.",
+      "Po zalogowaniu → przegląd aktualizacji → data 11.11.2026.",
+    ],
+  },
+  {
     releaseDate: "2026-11-08",
     highlights: [
       "Filtry listy firm są teraz w osobnym oknie pod przyciskiem „Edytuj filtry” — lista firm ma więcej miejsca. Przycisk pokazuje, ile filtrów jest włączonych.",
