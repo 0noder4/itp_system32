@@ -8,11 +8,17 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, Plus, Redo2, Trash2, Undo2 } from "lucide-react";
 import { MapCanvas } from "@/components/map/MapCanvas";
+import { MapViewsDialog } from "@/components/map/MapViewsDialog";
 import useSWR from "swr";
 import { apiClient, fetcher } from "@/lib/api";
 import { Company, Stage1Data, Stage4Data } from "@/lib/types";
 import { Header } from "@/components/layout/Header";
-import { getUserInfo } from "@/lib/auth";
+import { getUserId, getUserInfo, hasStaffRole } from "@/lib/auth";
+import {
+  DEFAULT_MAP_VIEW,
+  isDefaultMapView,
+  type MapViewFlags,
+} from "@/lib/mapViews";
 import {
   MapLayoutResponse,
   MapLayoutSnapshot,
@@ -34,6 +40,7 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { getFileUrl } from "@/components/staff/StageViewer/utils";
 import { STAFF_ACCENT_COLOR } from "@/lib/colors";
+import { useStaffNav } from "@/hooks/useStaffNav";
 
 const ALLOWED_AREAS = [4, 6, 8, 12] as const;
 
@@ -41,8 +48,10 @@ type ManualRow = { label: string; area: number };
 
 export default function StaffMapPage() {
   const { t } = useTranslation();
+  const canEditMap = hasStaffRole("fr") || hasStaffRole("lg");
   const [selectedDay, setSelectedDay] = useState<"day1" | "day2">("day1");
-  const [editMode, setEditMode] = useState(false);
+  const [editModeRaw, setEditMode] = useState(false);
+  const editMode = canEditMap && editModeRaw;
   const [selectedLabels, setSelectedLabels] = useState<string[]>([]);
   const [options, setOptions] = useState<RepartitionOption[]>([]);
   const [optionsOpen, setOptionsOpen] = useState(false);
@@ -65,8 +74,11 @@ export default function StaffMapPage() {
     description: string;
   } | null>(null);
   const [manualErrors, setManualErrors] = useState<string[]>([]);
+  const [viewsOpen, setViewsOpen] = useState(false);
+  const [colorView, setColorView] = useState<MapViewFlags>(DEFAULT_MAP_VIEW);
 
   const userInfo = getUserInfo();
+  const userId = getUserId();
   const isAdmin = userInfo?.type === "admin";
 
   const snapshotFrom = (src: MapLayoutResponse): MapLayoutSnapshot => ({
@@ -169,6 +181,10 @@ export default function StaffMapPage() {
           standNumber: stand.stand_number,
           logoUrl: logo,
           frRespName: frName || null,
+          status: c.status,
+          isMine:
+            userId != null &&
+            (c.fr_resp === userId || c.opiekun === userId),
         };
       });
   };
@@ -176,12 +192,12 @@ export default function StaffMapPage() {
   const day1CompanyStands = useMemo(
     () => buildStands("day1"),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [companies, stage1DataMap, stage4DataMap]
+    [companies, stage1DataMap, stage4DataMap, userId]
   );
   const day2CompanyStands = useMemo(
     () => buildStands("day2"),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [companies, stage1DataMap, stage4DataMap]
+    [companies, stage1DataMap, stage4DataMap, userId]
   );
 
   const dayLayout =
@@ -454,10 +470,7 @@ export default function StaffMapPage() {
   const isLoading = isLoadingLayout || isLoadingCompanies;
   const error = layoutError || companiesError;
 
-  const navItems = [
-    { title: t("companies.title"), url: "/panel/staff" },
-    { title: t("staff.map.title"), url: "/panel/staff/map" },
-  ];
+  const navItems = useStaffNav();
 
   if (isLoading) {
     return (
@@ -504,21 +517,36 @@ export default function StaffMapPage() {
             <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex flex-wrap items-center gap-3">
                 <CardTitle className="mb-0">{t("staff.map.title")}</CardTitle>
+                {canEditMap ? (
+                  <Button
+                    type="button"
+                    variant="default"
+                    size="sm"
+                    className="text-white hover:opacity-90"
+                    style={{
+                      backgroundColor: STAFF_ACCENT_COLOR,
+                      borderColor: STAFF_ACCENT_COLOR,
+                    }}
+                    onClick={() => {
+                      setEditMode((v) => !v);
+                      setSelectedLabels([]);
+                    }}
+                  >
+                    {editMode ? "Koniec edycji" : "Edytuj mapę"}
+                  </Button>
+                ) : null}
                 <Button
                   type="button"
-                  variant="default"
+                  variant="outline"
                   size="sm"
-                  className="text-white hover:opacity-90"
-                  style={{
-                    backgroundColor: STAFF_ACCENT_COLOR,
-                    borderColor: STAFF_ACCENT_COLOR,
-                  }}
-                  onClick={() => {
-                    setEditMode((v) => !v);
-                    setSelectedLabels([]);
-                  }}
+                  onClick={() => setViewsOpen(true)}
                 >
-                  {editMode ? "Koniec edycji" : "Edytuj mapę"}
+                  Widoki
+                  {!isDefaultMapView(colorView) ? (
+                    <span className="ml-1.5 text-xs text-muted-foreground">
+                      ●
+                    </span>
+                  ) : null}
                 </Button>
               </div>
               {editMode ? (
@@ -616,6 +644,7 @@ export default function StaffMapPage() {
                       editMode ? () => openManualEditor() : undefined
                     }
                     editable={editMode}
+                    colorView={colorView}
                   />
                 </TabsContent>
               </Tabs>
@@ -623,6 +652,13 @@ export default function StaffMapPage() {
           </Card>
         </div>
       </div>
+
+      <MapViewsDialog
+        open={viewsOpen}
+        onOpenChange={setViewsOpen}
+        value={colorView}
+        onChange={setColorView}
+      />
 
       <Dialog open={optionsOpen} onOpenChange={setOptionsOpen}>
         <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-lg">
