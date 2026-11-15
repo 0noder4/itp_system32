@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 import {
   CARPET_COLORS_BY_CHOICE,
   CarpetChoice,
+  DEFAULT_CARPET_COLOR,
   isValidCarpetColor,
 } from "@/lib/carpetCatalog";
 import { ACCENT_COLOR } from "@/lib/colors";
@@ -73,8 +74,7 @@ export function CarpetSelectionDialog({
       ? CARPET_COLORS_BY_CHOICE[choice]
       : [];
 
-  const hasSelection =
-    choice === "rips" || choice === "welur" || choice === "none";
+  const hasSelection = choice === "rips" || choice === "welur";
   /** Staff preview with no firm choice: catalog only + plain “not selected” text. */
   const showUnsetReadOnly = readOnly && !hasSelection;
   /** Staff preview with a choice: keep highlighted type/color (non-interactive). */
@@ -94,21 +94,19 @@ export function CarpetSelectionDialog({
     }
     if (!choice) {
       setLocalError(
-        t("exhibitor.form.carpetChoiceRequired") ||
-          "Select a carpet option"
+        t("exhibitor.form.carpetChoiceRequired") || "Select a carpet option"
       );
       return;
     }
-    if (choice !== "none" && !isValidCarpetColor(choice, color)) {
+    if (!isValidCarpetColor(choice, color)) {
       setLocalError(
-        t("exhibitor.form.carpetColorRequired") ||
-          "Select a carpet color"
+        t("exhibitor.form.carpetColorRequired") || "Select a carpet color"
       );
       return;
     }
     onConfirm?.({
       carpet_choice: choice,
-      carpet_color: choice === "none" ? "" : color,
+      carpet_color: color,
     });
     onOpenChange(false);
   };
@@ -159,12 +157,11 @@ export function CarpetSelectionDialog({
                     {t("exhibitor.form.carpetType")}{" "}
                     {!readOnly && <span className="text-red-500">*</span>}
                   </FieldLabel>
-                  <div className="grid gap-2 sm:grid-cols-3">
+                  <div className="grid gap-2 sm:grid-cols-2">
                     {(
                       [
                         ["rips", "exhibitor.form.carpetTypeRips"],
                         ["welur", "exhibitor.form.carpetTypeWelur"],
-                        ["none", "exhibitor.form.carpetTypeNone"],
                       ] as const
                     ).map(([valueKey, labelKey]) => {
                       const selected = choice === valueKey;
@@ -197,15 +194,22 @@ export function CarpetSelectionDialog({
                   </div>
                 </FieldGroup>
 
-                {choice && choice !== "none" && (
+                {choice && (
                   <FieldGroup>
                     <FieldLabel>
                       {t("exhibitor.form.carpetColor")}{" "}
                       {!readOnly && <span className="text-red-500">*</span>}
                     </FieldLabel>
+                    {!readOnly && choice === "rips" && (
+                      <p className="mb-2 text-xs text-muted-foreground">
+                        {t("exhibitor.form.carpetDefaultGreyHint")}
+                      </p>
+                    )}
                     <div className="grid max-h-48 gap-2 overflow-y-auto sm:grid-cols-2 md:grid-cols-3">
                       {colors.map((opt) => {
                         const selected = color === opt.code;
+                        const isDefaultExhibitorGrey =
+                          choice === "rips" && opt.code === DEFAULT_CARPET_COLOR;
                         const label =
                           locale === "pl"
                             ? `${opt.code} ${opt.namePl}`
@@ -225,6 +229,9 @@ export function CarpetSelectionDialog({
                               selected
                                 ? "border-primary bg-primary/10 font-medium"
                                 : "border-input bg-transparent hover:bg-accent",
+                              isDefaultExhibitorGrey &&
+                                !selected &&
+                                "ring-1 ring-amber-500/60",
                               readOnly && "cursor-default opacity-90"
                             )}
                             style={
@@ -237,6 +244,11 @@ export function CarpetSelectionDialog({
                             }
                           >
                             {label}
+                            {isDefaultExhibitorGrey && (
+                              <span className="mt-0.5 block text-[11px] font-normal text-amber-700 dark:text-amber-400">
+                                {t("exhibitor.form.carpetDefaultGreyBadge")}
+                              </span>
+                            )}
                           </button>
                         );
                       })}

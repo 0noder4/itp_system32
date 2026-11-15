@@ -5,7 +5,11 @@
  * `backend/companies/models.py` — CARPET_COLORS_RIPS / CARPET_COLORS_WELUR.
  * Catalog image itself lives in Settings.carpet_catalog_image (Django admin).
  */
-export type CarpetChoice = "rips" | "welur" | "none";
+export type CarpetChoice = "rips" | "welur";
+
+/** Mandatory default for non-partners (RIPS 892 grey). */
+export const DEFAULT_CARPET_CHOICE: CarpetChoice = "rips";
+export const DEFAULT_CARPET_COLOR = "892";
 
 export type CarpetColorOption = {
   code: string;
@@ -59,18 +63,13 @@ export const CARPET_COLORS_WELUR: CarpetColorOption[] = [
   { code: "V217", namePl: "czarny", nameEn: "black" },
 ];
 
-export const CARPET_COLORS_BY_CHOICE: Record<
-  Exclude<CarpetChoice, "none">,
-  CarpetColorOption[]
-> = {
-  rips: CARPET_COLORS_RIPS,
-  welur: CARPET_COLORS_WELUR,
-};
+export const CARPET_COLORS_BY_CHOICE: Record<CarpetChoice, CarpetColorOption[]> =
+  {
+    rips: CARPET_COLORS_RIPS,
+    welur: CARPET_COLORS_WELUR,
+  };
 
-export const CARPET_COLOR_CODE_SETS: Record<
-  Exclude<CarpetChoice, "none">,
-  Set<string>
-> = {
+export const CARPET_COLOR_CODE_SETS: Record<CarpetChoice, Set<string>> = {
   rips: new Set(CARPET_COLORS_RIPS.map((c) => c.code)),
   welur: new Set(CARPET_COLORS_WELUR.map((c) => c.code)),
 };
@@ -86,7 +85,7 @@ export function carpetColorLabel(
   colorCode: string | null | undefined,
   locale: string = "pl"
 ): string {
-  if (!choice || choice === "none" || !colorCode) return "";
+  if (!choice || !colorCode) return "";
   const palette = CARPET_COLORS_BY_CHOICE[choice] || [];
   const found = palette.find((c) => c.code === colorCode);
   if (!found) return colorCode;
@@ -98,7 +97,6 @@ export function isValidCarpetColor(
   choice: CarpetChoice | null | undefined,
   colorCode: string | null | undefined
 ): boolean {
-  if (!choice || choice === "none") return !colorCode;
-  if (!colorCode) return false;
+  if (!choice || !colorCode) return false;
   return CARPET_COLOR_CODE_SETS[choice].has(colorCode);
 }

@@ -36,6 +36,8 @@ import {
 import { useFormStatus } from "@/hooks/use-form-status";
 import {
   carpetColorLabel,
+  DEFAULT_CARPET_CHOICE,
+  DEFAULT_CARPET_COLOR,
   isCarpetPartnerStatus,
 } from "@/lib/carpetCatalog";
 
@@ -600,17 +602,16 @@ export function Stage2Form({
           data.stand_details?.brought_equipment ??
           currentFormValues.stand_details?.brought_equipment ??
           "",
-        carpet_choice:
-          data.stand_details?.carpet_choice ??
-          currentFormValues.stand_details?.carpet_choice ??
-          null,
-        carpet_color:
-          (data.stand_details?.carpet_choice ??
-            currentFormValues.stand_details?.carpet_choice) === "none"
-            ? ""
-            : data.stand_details?.carpet_color ??
-              currentFormValues.stand_details?.carpet_color ??
-              "",
+        carpet_choice: requiresCarpet
+          ? data.stand_details?.carpet_choice ??
+            currentFormValues.stand_details?.carpet_choice ??
+            null
+          : DEFAULT_CARPET_CHOICE,
+        carpet_color: requiresCarpet
+          ? data.stand_details?.carpet_color ??
+            currentFormValues.stand_details?.carpet_color ??
+            ""
+          : DEFAULT_CARPET_COLOR,
       },
       equipment_selections:
         data.equipment_selections?.filter((sel) => sel.quantity > 0) || [],
@@ -1177,22 +1178,22 @@ export function Stage2Form({
         </div>
       )}
 
-      {/* Carpet — partners / main only, both stand types */}
-      {requiresCarpet && watchStandType && (
+      {/* Carpet — mandatory for every firm; only partners choose colour */}
+      {watchStandType && (
         <div className="space-y-3">
           <h3 className="font-medium">
             {t("exhibitor.form.carpetSection")}{" "}
-            <span className="text-red-500">*</span>
+            {requiresCarpet && <span className="text-red-500">*</span>}
           </h3>
           <p className="text-sm text-muted-foreground">
-            {t("exhibitor.form.carpetSectionHint")}
+            {requiresCarpet
+              ? t("exhibitor.form.carpetSectionHint")
+              : t("exhibitor.form.carpetSectionHintNonPartner")}
           </p>
           <div className="rounded-lg border border-input bg-muted/30 px-4 py-3">
             <p className="text-sm">
-              {watchCarpetChoice === "none"
-                ? t("exhibitor.form.carpetSummaryNone")
-                : watchCarpetChoice === "rips" ||
-                    watchCarpetChoice === "welur"
+              {requiresCarpet
+                ? watchCarpetChoice === "rips" || watchCarpetChoice === "welur"
                   ? `${t(
                       watchCarpetChoice === "rips"
                         ? "exhibitor.form.carpetTypeRips"
@@ -1206,10 +1207,15 @@ export function Stage2Form({
                           )}`
                         : ""
                     }`
-                  : t("exhibitor.form.carpetSummaryUnset")}
+                  : t("exhibitor.form.carpetSummaryUnset")
+                : `${t("exhibitor.form.carpetTypeRips")} — ${carpetColorLabel(
+                    DEFAULT_CARPET_CHOICE,
+                    DEFAULT_CARPET_COLOR,
+                    locale
+                  )}`}
             </p>
           </div>
-          {!disabled && (
+          {requiresCarpet && !disabled && (
             <Button
               type="button"
               variant="outline"
@@ -1220,14 +1226,15 @@ export function Stage2Form({
                 : t("exhibitor.form.carpetSelectButton")}
             </Button>
           )}
-          {(form.formState.errors.stand_details?.carpet_choice ||
-            form.formState.errors.stand_details?.carpet_color) && (
-            <FieldError>
-              {form.formState.errors.stand_details?.carpet_choice?.message ||
-                form.formState.errors.stand_details?.carpet_color?.message ||
-                t("exhibitor.form.required")}
-            </FieldError>
-          )}
+          {requiresCarpet &&
+            (form.formState.errors.stand_details?.carpet_choice ||
+              form.formState.errors.stand_details?.carpet_color) && (
+              <FieldError>
+                {form.formState.errors.stand_details?.carpet_choice?.message ||
+                  form.formState.errors.stand_details?.carpet_color?.message ||
+                  t("exhibitor.form.required")}
+              </FieldError>
+            )}
         </div>
       )}
 
@@ -1470,7 +1477,7 @@ export function Stage2Form({
           });
           form.setValue(
             "stand_details.carpet_color",
-            carpet_choice === "none" ? "" : carpet_color,
+            carpet_color,
             { shouldValidate: true, shouldDirty: true }
           );
           form.clearErrors([

@@ -25,10 +25,12 @@ export function Stage2Viewer({ data, companyStatus }: Stage2ViewerProps) {
   const standType = data.stand_details?.stand_type;
   const isProvidedStand = standType === "provided_stand";
   const isSelfConstruction = standType === "self_construction";
-  const showCarpet = isCarpetPartnerStatus(companyStatus);
+  const isPartnerCarpet = isCarpetPartnerStatus(companyStatus);
   const carpetChoice = (data.stand_details?.carpet_choice ??
     null) as CarpetChoice | null;
   const carpetColor = data.stand_details?.carpet_color || "";
+  // Carpet is mandatory for every firm — always show in staff preview.
+  const showCarpet = true;
 
   // Group equipment by category
   const groupedEquipment = React.useMemo(() => {
@@ -68,9 +70,6 @@ export function Stage2Viewer({ data, companyStatus }: Stage2ViewerProps) {
   }, [data.equipment_selections]);
 
   const carpetSummary = (() => {
-    if (carpetChoice === "none") {
-      return t("exhibitor.form.carpetSummaryNone");
-    }
     if (carpetChoice === "rips" || carpetChoice === "welur") {
       const typeLabel = t(
         carpetChoice === "rips"
@@ -79,6 +78,9 @@ export function Stage2Viewer({ data, companyStatus }: Stage2ViewerProps) {
       );
       const colorLabel = carpetColorLabel(carpetChoice, carpetColor, locale);
       return colorLabel ? `${typeLabel} — ${colorLabel}` : typeLabel;
+    }
+    if (!isPartnerCarpet) {
+      return t("exhibitor.form.carpetSummaryNonPartnerDefault");
     }
     return t("exhibitor.form.carpetSummaryUnset");
   })();

@@ -177,7 +177,7 @@ export interface Stage1Data {
 }
 
 // === Stage 2: Stand Details ===
-export type CarpetChoice = "rips" | "welur" | "none";
+export type CarpetChoice = "rips" | "welur";
 
 export interface StandDetails {
   id?: number;

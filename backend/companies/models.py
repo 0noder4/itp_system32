@@ -88,13 +88,27 @@ STAND_TYPE_CHOICES = [
 
 CARPET_CHOICE_RIPS = 'rips'
 CARPET_CHOICE_WELUR = 'welur'
+# Legacy value — rejected on write; migrated to default RIPS 892.
 CARPET_CHOICE_NONE = 'none'
 
 CARPET_CHOICE_CHOICES = [
     (CARPET_CHOICE_RIPS, 'RIPS EXPO'),
     (CARPET_CHOICE_WELUR, 'WELUR EXPO'),
-    (CARPET_CHOICE_NONE, 'Nie chcemy wykładziny'),
 ]
+
+# Mandatory default for non-partners (and backfill of former "none").
+DEFAULT_CARPET_CHOICE = CARPET_CHOICE_RIPS
+DEFAULT_CARPET_COLOR = '892'
+
+
+def company_chooses_carpet(company) -> bool:
+    """Partners / main partners pick carpet colour; everyone else gets the default."""
+    return bool(company is not None and company.status in (STATUS_MAIN, STATUS_PARTENER))
+
+
+def apply_default_carpet(stand_details_data: dict) -> None:
+    stand_details_data['carpet_choice'] = DEFAULT_CARPET_CHOICE
+    stand_details_data['carpet_color'] = DEFAULT_CARPET_COLOR
 
 # Hardcoded IMAWEX palette (catalog image is separate in Settings).
 # Keep in sync with frontend/lib/carpetCatalog.ts (CARPET_COLORS_RIPS / WELUR).
@@ -422,13 +436,13 @@ class StandDetails(models.Model):
         blank=True,
         null=True,
         verbose_name="wykładzina — wybór",
-        help_text="Tylko partner / partner główny. null = jeszcze nie wybrano.",
+        help_text="Obowiązkowa dla każdej firmy. Partnerzy wybierają kolor; pozostali dostają RIPS 892.",
     )
     carpet_color = models.CharField(
         max_length=10,
         blank=True,
         verbose_name="wykładzina — kolor",
-        help_text="Kod koloru z palety RIPS/WELUR (np. 005, V005). Puste przy rezygnacji.",
+        help_text="Kod koloru z palety RIPS/WELUR (np. 005, V005). Domyślnie 892 dla niepartnerów.",
     )
     dl = models.ForeignKey(Deadline, on_delete=models.SET_NULL, null=True)
 

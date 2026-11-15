@@ -22,12 +22,12 @@ from .models import (
     PDI,
     PDIAttendee,
     Exhibitor,
-    STATUS_MAIN,
-    STATUS_PARTENER,
     CARPET_CHOICE_NONE,
     CARPET_CHOICE_RIPS,
     CARPET_CHOICE_WELUR,
     CARPET_COLOR_CODES_BY_CHOICE,
+    apply_default_carpet,
+    company_chooses_carpet,
     company_can_access_stage3,
 )
 from users.models import User
@@ -939,8 +939,6 @@ class Stage2Serializer(serializers.Serializer):
         if choice == '':
             stand['carpet_choice'] = None
             choice = None
-        if choice == CARPET_CHOICE_NONE:
-            stand['carpet_color'] = ''
 
         if self.context.get('draft'):
             return data
@@ -950,29 +948,23 @@ class Stage2Serializer(serializers.Serializer):
             raise serializers.ValidationError({
                 'stand_details': {
                     'el_power_acknowledged': (
-                        'Acknowledgement of electrical power in stage 5 is required.'
+                        'Acknowledgement of electrical power in stage 2 is required.'
                     )
                 }
             })
 
         company = self.context.get('company')
-        needs_carpet = bool(
-            company is not None
-            and company.status in (STATUS_MAIN, STATUS_PARTENER)
-        )
-        if needs_carpet:
+        if company_chooses_carpet(company):
             color = (stand.get('carpet_color') or '').strip()
             carpet_errors = {}
-            if choice not in (
-                CARPET_CHOICE_RIPS,
-                CARPET_CHOICE_WELUR,
-                CARPET_CHOICE_NONE,
-            ):
+            if choice == CARPET_CHOICE_NONE:
+                carpet_errors['carpet_choice'] = (
+                    'Carpet is mandatory; declining carpet is not allowed.'
+                )
+            elif choice not in (CARPET_CHOICE_RIPS, CARPET_CHOICE_WELUR):
                 carpet_errors['carpet_choice'] = (
                     'Carpet selection is required for partners.'
                 )
-            elif choice == CARPET_CHOICE_NONE:
-                stand['carpet_color'] = ''
             else:
                 allowed = CARPET_COLOR_CODES_BY_CHOICE.get(choice, set())
                 if not color:
@@ -987,6 +979,9 @@ class Stage2Serializer(serializers.Serializer):
                     stand['carpet_color'] = color
             if carpet_errors:
                 raise serializers.ValidationError({'stand_details': carpet_errors})
+        else:
+            # Non-partners always get default RIPS 892 (mandatory carpet).
+            apply_default_carpet(stand)
         return data
 
     def create(self, validated_data):
@@ -1004,8 +999,10 @@ class Stage2Serializer(serializers.Serializer):
 
         if stand_details_data.get('carpet_choice') == '':
             stand_details_data['carpet_choice'] = None
-        if stand_details_data.get('carpet_choice') == CARPET_CHOICE_NONE:
-            stand_details_data['carpet_color'] = ''
+        if not company_chooses_carpet(company):
+            apply_default_carpet(stand_details_data)
+        elif stand_details_data.get('carpet_choice') == CARPET_CHOICE_NONE:
+            apply_default_carpet(stand_details_data)
 
         stand_details_obj = StandDetails.objects.create(**stand_details_data)
 
@@ -1098,9 +1095,14 @@ class Stage2Serializer(serializers.Serializer):
 
                 if stand_details_data.get('carpet_choice') == '':
                     stand_details_data['carpet_choice'] = None
-                if stand_details_data.get('carpet_choice') == CARPET_CHOICE_NONE:
-                    stand_details_data['carpet_color'] = ''
-                
+                company = self.context.get('company') or getattr(
+                    stand_details_obj, 'company', None
+                )
+                if not company_chooses_carpet(company):
+                    apply_default_carpet(stand_details_data)
+                elif stand_details_data.get('carpet_choice') == CARPET_CHOICE_NONE:
+                    apply_default_carpet(stand_details_data)
+
                 # Handle other fields - update all provided fields
                 for key, value in stand_details_data.items():
                     if key not in file_fields and key != 'company':  # Don't update company

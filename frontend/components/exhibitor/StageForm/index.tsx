@@ -255,9 +255,7 @@ export function StageForm({
             formData.append("stand_details[carpet_choice]", carpetChoice);
             formData.append(
               "stand_details[carpet_color]",
-              carpetChoice === "none" || !carpetChoice
-                ? ""
-                : data.stand_details.carpet_color || ""
+              !carpetChoice ? "" : data.stand_details.carpet_color || ""
             );
           }
           // Handle file uploads - only send new File instances, not existing URLs

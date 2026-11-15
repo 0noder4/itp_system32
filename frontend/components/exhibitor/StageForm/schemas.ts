@@ -29,7 +29,7 @@ export function createStage2Schema(options?: { requiresCarpet?: boolean }) {
           message: "Stand type is required",
         }),
         el_power_acknowledged: z.boolean().refine((val) => val === true, {
-          message: "Acknowledgement of electrical power in stage 5 is required",
+          message: "Acknowledgement of electrical power in stage 2 is required",
         }),
         sc_details: z.string().max(255, "Description must be 255 characters or less").optional(),
         name_sign_text: z.string().max(255, "Name sign text must be 255 characters or less").optional(),
@@ -37,10 +37,7 @@ export function createStage2Schema(options?: { requiresCarpet?: boolean }) {
         fire_cert: z.any().optional(), // File upload
         stand_visualization: z.any().optional(), // File upload
         brought_equipment: z.string().max(2000).optional(),
-        carpet_choice: z
-          .enum(["rips", "welur", "none"])
-          .nullable()
-          .optional(),
+        carpet_choice: z.enum(["rips", "welur"]).nullable().optional(),
         carpet_color: z.string().max(10).optional(),
       })
       .superRefine((data, ctx) => {
@@ -100,13 +97,13 @@ export function createStage2Schema(options?: { requiresCarpet?: boolean }) {
         if (requiresCarpet) {
           const choice = data.carpet_choice;
           const color = (data.carpet_color || "").trim();
-          if (choice !== "rips" && choice !== "welur" && choice !== "none") {
+          if (choice !== "rips" && choice !== "welur") {
             ctx.addIssue({
               code: z.ZodIssueCode.custom,
               message: "Carpet selection is required",
               path: ["carpet_choice"],
             });
-          } else if (choice === "rips" || choice === "welur") {
+          } else {
             const allowed = CARPET_COLOR_CODE_SETS[choice];
             if (!color || !allowed.has(color)) {
               ctx.addIssue({
