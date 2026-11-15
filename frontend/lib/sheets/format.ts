@@ -143,6 +143,37 @@ export function aggregateValues(column: SheetColumn, values: SheetCellValue[]): 
   return "";
 }
 
+/**
+ * True when at least one active row is actually on day 1 or 2.
+ * Having empty stand/day columns in the tab is not enough — otherwise day
+ * footers show only zeros (e.g. Welcome before map assignment).
+ */
+export function rowsExposeFairDays(
+  rows: { cells: Record<string, SheetCellValue>; resigned?: boolean }[]
+): boolean {
+  return rows.some(
+    (row) => !row.resigned && (rowInDay(row, 1) || rowInDay(row, 2))
+  );
+}
+
+/** True when the firm participates in day 1 or day 2 (stand.dayN / company.days). */
+export function rowInDay(
+  row: { cells: Record<string, SheetCellValue> },
+  day: 1 | 2
+): boolean {
+  const dayKey = day === 1 ? "stand.day1" : "stand.day2";
+  const dayCell = row.cells[dayKey];
+  if (dayCell !== null && dayCell !== undefined && dayCell !== "" && dayCell !== "brak") {
+    return true;
+  }
+  const days = row.cells["company.days"] ?? row.cells["stand.days"];
+  if (typeof days !== "string") return false;
+  const lower = days.toLowerCase();
+  if (lower.includes("oba")) return true;
+  if (day === 1) return lower.includes("dzień 1") || lower.includes("dzien 1") || lower === "1";
+  return lower.includes("dzień 2") || lower.includes("dzien 2") || lower === "2";
+}
+
 /** Clipboard format compatible with Excel / Google Sheets. */
 export function toTsv(matrix: string[][]): string {
   return matrix

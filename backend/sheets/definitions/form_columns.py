@@ -5,8 +5,16 @@ from decimal import Decimal
 
 from django.core.exceptions import ObjectDoesNotExist
 
-from companies.models import ATTENDANCE_OPT, CARPET_CHOICE_CHOICES, TV_MOUNT_CHOICES, carpet_color_label
-from users.models import STAFF_ROLE_FR, STAFF_ROLE_LG
+from companies.models import (
+    ATTENDANCE_OPT,
+    CARPET_CHOICE_CHOICES,
+    FinalData,
+    PDI,
+    PDIAttendee,
+    TV_MOUNT_CHOICES,
+    carpet_color_label,
+)
+from users.models import STAFF_ROLE_FR, STAFF_ROLE_LG, STAFF_ROLE_OPIEKUN
 
 from ..registry import (
     KIND_BOOL,
@@ -17,6 +25,7 @@ from ..registry import (
     KIND_TEXT,
     KIND_TIME,
     SOURCE_COMPUTED,
+    SOURCE_CUSTOM,
     SOURCE_SYSTEM,
     ColumnDef,
     RowContext,
@@ -194,12 +203,6 @@ def _lunch_qty(day: str):
     return read
 
 
-def _diet_info(ctx: RowContext) -> str:
-    final = _final(ctx)
-    if final is None:
-        return ''
-    return '\n'.join(lunch.diet_info for lunch in final.lunches.all() if lunch.diet_info)
-
 
 def _extra_lunch_cost(ctx: RowContext):
     final = _final(ctx)
@@ -269,6 +272,86 @@ def _pdi_emails(ctx: RowContext) -> str:
         f'{person.name} {person.surname}: {person.email}'.strip()
         for person in pdi.pdiattendees.all() if person.email
     )
+
+
+PDI_MAIL2_HELP = (
+    'Lista i liczba osób na galę PDI nie są wypełniane przez firmę w formularzu — '
+    'zbiera je Opiekun w Mailu #2 i wpisuje bezpośrednio w arkuszu. '
+    'Pierwsze 2 bilety są w pakiecie; dodatkowe wyliczają się automatycznie.'
+)
+
+_PDI_EDIT_ROLES = frozenset({STAFF_ROLE_LG, STAFF_ROLE_OPIEKUN})
+_PDI_VIEW_ROLES = frozenset({STAFF_ROLE_LG, STAFF_ROLE_FR, STAFF_ROLE_OPIEKUN})
+
+
+def _ensure_pdi(company) -> PDI:
+    final, _ = FinalData.objects.get_or_create(company=company)
+    pdi, _ = PDI.objects.get_or_create(form=final, defaults={'tickets_quantity': 0})
+    return pdi
+
+
+def _set_pdi_tickets(company, value) -> None:
+    qty = 0 if value is None or value == '' else int(value)
+    if qty < 0:
+        qty = 0
+    pdi = _ensure_pdi(company)
+    pdi.tickets_quantity = qty
+    pdi.save(update_fields=['tickets_quantity'])
+
+
+def _pdi_extra_tickets(ctx: RowContext):
+    pdi = _pdi(ctx)
+    if pdi is None or pdi.tickets_quantity is None:
+        return 0
+    return max(0, int(pdi.tickets_quantity) - 2)
+
+
+def _parse_pdi_attendee_line(line: str) -> tuple[str, str, str] | None:
+    """Parse 'Imię Nazwisko: mail' or 'Imię Nazwisko - mail'."""
+    text = (line or '').strip()
+    if not text:
+        return None
+    sep = None
+    if ': ' in text:
+        sep = ': '
+    elif ' - ' in text:
+        sep = ' - '
+    elif ':' in text:
+        sep = ':'
+    elif ' -' in text:
+        sep = ' -'
+    if sep is None:
+        return None
+    left, email = text.split(sep, 1)
+    email = email.strip()
+    parts = left.strip().split()
+    if not email or not parts:
+        return None
+    name = parts[0]
+    surname = ' '.join(parts[1:]) if len(parts) > 1 else '-'
+    return name, surname, email
+
+
+def _set_pdi_emails(company, value) -> None:
+    raw = '' if value is None else str(value)
+    attendees: list[tuple[str, str, str]] = []
+    for line in raw.splitlines():
+        parsed = _parse_pdi_attendee_line(line)
+        if parsed is not None:
+            attendees.append(parsed)
+    pdi = _ensure_pdi(company)
+    pdi.pdiattendees.all().delete()
+    for name, surname, email in attendees:
+        PDIAttendee.objects.create(
+            form=pdi,
+            name=name[:100],
+            surname=surname[:100],
+            phone_number='-',
+            email=email[:254],
+        )
+    if pdi.tickets_quantity < len(attendees):
+        pdi.tickets_quantity = len(attendees)
+        pdi.save(update_fields=['tickets_quantity'])
 
 
 def _publication(ctx: RowContext) -> str:
@@ -350,7 +433,8 @@ STAND_TYPE = ColumnDef(
 )
 STAND_OWN_BUILD = ColumnDef(
     key='stand.own_build', label='Własna zabudowa', kind=KIND_BOOL, source=SOURCE_COMPUTED,
-    group=GROUP_STAND, width=120, getter=_own_build, highlight='truthy', aggregate='count_true',
+    group=GROUP_STAND, width=120, getter=_own_build, highlight='truthy',
+    aggregate='count_true', aggregate_by_day=True,
 )
 STAND_COMPOSITION = _system(
     'stand.composition', 'Z czego składa się zabudowa', _stand_details, 'sc_details',
@@ -363,7 +447,7 @@ STAND_BROUGHT = _system(
 STAND_POWER_ACK = _system(
     'stand.power_ack', 'Potwierdzenie mocy', _stand_details, 'el_power_acknowledged',
     'StandDetails.el_power_acknowledged', kind=KIND_BOOL, group=GROUP_POWER, width=130, default=False,
-    aggregate='count_true',
+    aggregate='count_true', aggregate_by_day=True,
 )
 POWER_DEVICES = _system(
     'power.devices', 'Urządzenia elektryczne', _final, 'el_devices', 'FinalData.el_devices',
@@ -374,7 +458,8 @@ POWER_TOTAL = _system(
 )
 POWER_LOW = _system(
     'power.low', 'Niska moc', _final, 'el_low_power', 'FinalData.el_low_power', kind=KIND_BOOL,
-    group=GROUP_POWER, width=100, default=False, highlight='truthy', aggregate='count_true',
+    group=GROUP_POWER, width=100, default=False, highlight='truthy',
+    aggregate='count_true', aggregate_by_day=True,
 )
 
 SIGN_TEXT = _system(
@@ -468,6 +553,7 @@ def build_equipment_qty_columns() -> list[ColumnDef]:
                 width=88,
                 getter=_equipment_qty_getter(item.id),
                 aggregate='sum',
+                aggregate_by_day=True,
                 highlight='over_included' if included > 0 else 'positive',
                 highlight_above=included if included > 0 else None,
                 help=(
@@ -527,7 +613,8 @@ ARRIVAL_DAY2 = _system(
 
 LUNCH_DECLINED = _system(
     'lunch.declined', 'Rezygnacja\nz obiadów', _final, 'lunches_declined', 'FinalData.lunches_declined',
-    kind=KIND_BOOL, group=GROUP_LUNCH, width=88, default=False, highlight='truthy', aggregate='count_true',
+    kind=KIND_BOOL, group=GROUP_LUNCH, width=88, default=False, highlight='truthy',
+    aggregate='count_true',
 )
 LUNCH_DAY1 = ColumnDef(
     key='lunch.day1', label='Obiady\ndzień 1', kind=KIND_NUMBER, source=SOURCE_SYSTEM, group=GROUP_LUNCH,
@@ -535,8 +622,9 @@ LUNCH_DAY1 = ColumnDef(
     source_fields=('Lunch.day', 'Lunch.lunch_quantity'),
 )
 LUNCH_DAY2 = ColumnDef(
-    key='lunch.day2', label='Obiady\ndzień 2', kind=KIND_NUMBER, source=SOURCE_COMPUTED, group=GROUP_LUNCH,
+    key='lunch.day2', label='Obiady\ndzień 2', kind=KIND_NUMBER, source=SOURCE_SYSTEM, group=GROUP_LUNCH,
     width=72, getter=_lunch_qty('day2'), aggregate='sum',
+    source_fields=('Lunch.day', 'Lunch.lunch_quantity'),
 )
 
 
@@ -562,10 +650,6 @@ LUNCH_EXTRA_DAY2 = ColumnDef(
     key='lunch.extra_day2', label='Ponad 2\ndzień 2', kind=KIND_NUMBER, source=SOURCE_COMPUTED,
     group=GROUP_LUNCH, width=72, getter=_lunch_over_free('day2'), aggregate='sum', highlight='positive',
     help='Liczba obiadów powyżej 2 w dniu 2.',
-)
-LUNCH_DIET = ColumnDef(
-    key='lunch.diet', label='Diety', kind=KIND_LONGTEXT, source=SOURCE_SYSTEM, group=GROUP_LUNCH,
-    width=180, getter=_diet_info, source_fields=('Lunch.diet_info',),
 )
 LUNCH_EXTRA_COST = ColumnDef(
     key='lunch.extra_cost', label='Dopłata\nza obiady', kind=KIND_NUMBER, source=SOURCE_COMPUTED,
@@ -600,20 +684,28 @@ DELEGATES = ColumnDef(
     source_fields=('Exhibitor.name', 'Exhibitor.surname', 'Exhibitor.phone_number', 'Exhibitor.attendance'),
 )
 PDI_TICKETS = ColumnDef(
-    key='people.pdi_tickets', label='Bilety PDI', kind=KIND_NUMBER, source=SOURCE_SYSTEM, group=GROUP_PEOPLE,
-    width=110, getter=_attr(_pdi, 'tickets_quantity', None), aggregate='sum',
-    source_fields=('PDI.tickets_quantity',),
+    key='people.pdi_tickets', label='Bilety PDI', kind=KIND_NUMBER, source=SOURCE_CUSTOM,
+    group=GROUP_PEOPLE, width=110, getter=_attr(_pdi, 'tickets_quantity', 0),
+    setter=_set_pdi_tickets, aggregate='sum', edit_roles=_PDI_EDIT_ROLES,
+    source_fields=('PDI.tickets_quantity',), help=PDI_MAIL2_HELP,
+)
+PDI_EXTRA_TICKETS = ColumnDef(
+    key='people.pdi_extra', label='Dodatkowe\nPDI (>2)', kind=KIND_NUMBER, source=SOURCE_COMPUTED,
+    group=GROUP_PEOPLE, width=100, getter=_pdi_extra_tickets, aggregate='sum', highlight='positive',
+    help='Automatycznie: max(0, bilety PDI − 2 w pakiecie).',
 )
 PDI_PEOPLE = ColumnDef(
     key='people.pdi', label='Uczestnicy PDI', kind=KIND_LONGTEXT, source=SOURCE_SYSTEM, group=GROUP_PEOPLE,
     width=220, getter=_pdi_people,
     source_fields=('PDIAttendee.name', 'PDIAttendee.surname', 'PDIAttendee.phone_number'),
+    help=PDI_MAIL2_HELP,
 )
 PDI_EMAILS = ColumnDef(
-    key='people.pdi_emails', label='E-maile uczestników PDI', kind=KIND_LONGTEXT, source=SOURCE_SYSTEM,
-    group=GROUP_PEOPLE, width=240, getter=_pdi_emails, source_fields=('PDIAttendee.email',),
-    view_roles=frozenset({STAFF_ROLE_LG, STAFF_ROLE_FR}),
-    help='Widoczne dla logistyki, FR i administratora.',
+    key='people.pdi_emails', label='E-maile uczestników PDI', kind=KIND_LONGTEXT, source=SOURCE_CUSTOM,
+    group=GROUP_PEOPLE, width=240, getter=_pdi_emails, setter=_set_pdi_emails,
+    source_fields=('PDIAttendee.email',),
+    view_roles=_PDI_VIEW_ROLES, edit_roles=_PDI_EDIT_ROLES,
+    help=PDI_MAIL2_HELP + ' Format wiersza: Imię Nazwisko: email',
 )
 
 CATALOGUE_TEXT = _system(

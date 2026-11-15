@@ -16,6 +16,8 @@ import {
   isFileValue,
   isHighlighted,
   parseTsv,
+  rowInDay,
+  rowsExposeFairDays,
   toTsv,
 } from "@/lib/sheets/format";
 import {
@@ -26,7 +28,12 @@ import {
   readStoredWidths,
   writeStoredWidths,
 } from "@/lib/sheets/columnWidths";
-import { sheetGroupColumnBg, sheetGroupHeaderBg } from "@/lib/sheets/groupColors";
+import {
+  sheetGroupColumnBg,
+  sheetGroupHeaderBg,
+  sheetGroupHeaderInk,
+} from "@/lib/sheets/groupColors";
+import { sheetPastelInk, sheetToneInk, toneBackground } from "@/lib/sheets/tones";
 import type { SheetCellValue, SheetColumn, SheetRow } from "@/lib/sheets/types";
 
 export interface SheetSort {
@@ -79,6 +86,8 @@ export interface SheetGridHandle {
   getSelectedCells: () => { companyId: number; columnKey: string }[];
   getColumnWidths: () => Record<string, number>;
   setColumnWidths: (widths: Record<string, number>) => void;
+  /** Open editor for the focused cell (editable columns only). */
+  editFocusCell: () => void;
 }
 
 interface SheetGridProps {
@@ -97,6 +106,15 @@ interface SheetGridProps {
   tabKey: string;
   /** Fill colours keyed by `${companyId}|${columnKey}`. */
   cellStyles?: Record<string, string>;
+  /** Wrap text in cells (taller, expanding rows). */
+  wrapLongtext?: boolean;
+  /** Active focus cell for the preview bar. */
+  onFocusChange?: (focus: {
+    companyId: number;
+    columnKey: string;
+    row: SheetRow;
+    column: SheetColumn;
+  } | null) => void;
 }
 
 const toRange = (sel: Selection): Range => ({
@@ -138,6 +156,8 @@ export const SheetGrid = React.forwardRef<SheetGridHandle, SheetGridProps>(funct
     sheetKey,
     tabKey,
     cellStyles = {},
+    wrapLongtext = false,
+    onFocusChange,
   },
   ref
 ) {
@@ -331,6 +351,8 @@ export const SheetGrid = React.forwardRef<SheetGridHandle, SheetGridProps>(funct
 
   const hasGroups = groups.some((g) => g.label);
   const hasAggregates = columns.some((c) => c.aggregate);
+  const showDayFooters =
+    columns.some((c) => c.aggregate_by_day) && rowsExposeFairDays(rows);
 
   const focusGrid = () => containerRef.current?.focus({ preventScroll: true });
 
@@ -360,7 +382,48 @@ export const SheetGrid = React.forwardRef<SheetGridHandle, SheetGridProps>(funct
     el?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }, [safeSelection]);
 
+  React.useEffect(() => {
+    if (!onFocusChange) return;
+    if (!safeSelection) {
+      onFocusChange(null);
+      return;
+    }
+    const { r, c } = safeSelection.focus;
+    const col = columns[c];
+    const row = rows[r];
+    if (!col || !row) {
+      onFocusChange(null);
+      return;
+    }
+    onFocusChange({ companyId: row.company_id, columnKey: col.key, row, column: col });
+  }, [safeSelection, columns, rows, onFocusChange]);
+
   const editableAt = (r: number, c: number) => Boolean(columns[c]?.editable && rows[r]);
+
+  const beginCellEdit = (r: number, c: number, initial?: string) => {
+    const col = columns[c];
+    const row = rows[r];
+    if (!col || !row) return;
+    if (col.kind === "bool") {
+      onEdit([
+        {
+          companyId: row.company_id,
+          columnKey: col.key,
+          value: row.cells[col.key] !== true,
+        },
+      ]);
+      return;
+    }
+    const current = row.cells[col.key];
+    const text =
+      initial ??
+      (col.kind === "select" || col.kind === "user_select"
+        ? current === null || current === undefined
+          ? ""
+          : String(current)
+        : displayText(col, current));
+    setEditing({ r, c, initial: text });
+  };
 
   const commitEdit = (raw: string, move: "down" | "right" | "none") => {
     if (!editing) return;
@@ -369,7 +432,13 @@ export const SheetGrid = React.forwardRef<SheetGridHandle, SheetGridProps>(funct
     const row = rows[r];
     setEditing(null);
     if (col && row) {
-      onEdit([{ companyId: row.company_id, columnKey: col.key, value: coerceInput(col, raw) }]);
+      onEdit([
+        {
+          companyId: row.company_id,
+          columnKey: col.key,
+          value: coerceInput(col, raw),
+        },
+      ]);
     }
     if (move === "down" || move === "right") setPickedCells(null);
     if (move === "down") setSelection({ anchor: { r: clamp(r + 1, maxRow), c }, focus: { r: clamp(r + 1, maxRow), c } });
@@ -390,19 +459,7 @@ export const SheetGrid = React.forwardRef<SheetGridHandle, SheetGridProps>(funct
       toast.info(t("sheets.readOnlyCell"));
       return;
     }
-    if (col.kind === "bool") {
-      onEdit([{ companyId: row.company_id, columnKey: col.key, value: row.cells[col.key] !== true }]);
-      return;
-    }
-    const current = row.cells[col.key];
-    const text =
-      initial ??
-      (col.kind === "select" || col.kind === "user_select"
-        ? current === null || current === undefined
-          ? ""
-          : String(current)
-        : displayText(col, current));
-    setEditing({ r, c, initial: text });
+    beginCellEdit(r, c, initial);
   };
 
   const clearCells = (cells: Iterable<{ r: number; c: number }>) => {
@@ -493,8 +550,12 @@ export const SheetGrid = React.forwardRef<SheetGridHandle, SheetGridProps>(funct
       setColumnWidths: (widths: Record<string, number>) => {
         persistWidths(widths);
       },
+      editFocusCell: () => {
+        if (!safeSelection) return;
+        startEdit(safeSelection.focus.r, safeSelection.focus.c);
+      },
     }),
-    [range, matrixFor, safeSelection, rows, columns, pickedCells, maxRow, maxCol, colWidths, persistWidths]
+    [range, matrixFor, safeSelection, rows, columns, pickedCells, maxRow, maxCol, colWidths, persistWidths, startEdit]
   );
 
   const moveFocus = (dr: number, dc: number, extend: boolean) => {
@@ -509,6 +570,41 @@ export const SheetGrid = React.forwardRef<SheetGridHandle, SheetGridProps>(funct
     };
     setPickedCells(null);
     setSelection(extend ? { anchor: safeSelection.anchor, focus } : { anchor: focus, focus });
+  };
+
+  const selectionAsTsv = (): string | null => {
+    if (pickedCells && pickedCells.size > 0) {
+      let r1 = Infinity;
+      let r2 = -1;
+      let c1 = Infinity;
+      let c2 = -1;
+      const keys = new Set<string>();
+      for (const key of pickedCells) {
+        const { r: ri, c: ci } = parseCellKey(key);
+        if (ri < 0 || ci < 0 || ri > maxRow || ci > maxCol) continue;
+        keys.add(key);
+        r1 = Math.min(r1, ri);
+        r2 = Math.max(r2, ri);
+        c1 = Math.min(c1, ci);
+        c2 = Math.max(c2, ci);
+      }
+      if (r2 < 0) return null;
+      const body: string[][] = [];
+      for (let ri = r1; ri <= r2; ri++) {
+        const line: string[] = [];
+        for (let ci = c1; ci <= c2; ci++) {
+          if (keys.has(cellKey(ri, ci))) {
+            line.push(displayText(columns[ci], rows[ri].cells[columns[ci].key]));
+          } else {
+            line.push("");
+          }
+        }
+        body.push(line);
+      }
+      return toTsv(body);
+    }
+    if (!range) return null;
+    return toTsv(matrixFor(range, false));
   };
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
@@ -542,6 +638,15 @@ export const SheetGrid = React.forwardRef<SheetGridHandle, SheetGridProps>(funct
       event.preventDefault();
       setPickedCells(null);
       setSelection({ anchor: { r: 0, c: 0 }, focus: { r: maxRow, c: maxCol } });
+    } else if (ctrl && event.key.toLowerCase() === "c") {
+      // select-none blocks native selection, so Chrome often skips onCopy — copy explicitly.
+      event.preventDefault();
+      const tsv = selectionAsTsv();
+      if (tsv != null) {
+        void navigator.clipboard.writeText(tsv).catch(() => {
+          /* clipboard may be denied; onCopy remains as fallback when available */
+        });
+      }
     } else if (event.key === " " && columns[c]?.kind === "bool") {
       event.preventDefault();
       startEdit(r, c);
@@ -556,41 +661,10 @@ export const SheetGrid = React.forwardRef<SheetGridHandle, SheetGridProps>(funct
 
   const onCopy = (event: React.ClipboardEvent<HTMLDivElement>) => {
     if (editing) return;
-    if (pickedCells && pickedCells.size > 0) {
-      event.preventDefault();
-      let r1 = Infinity;
-      let r2 = -1;
-      let c1 = Infinity;
-      let c2 = -1;
-      const keys = new Set<string>();
-      for (const key of pickedCells) {
-        const { r: ri, c: ci } = parseCellKey(key);
-        if (ri < 0 || ci < 0 || ri > maxRow || ci > maxCol) continue;
-        keys.add(key);
-        r1 = Math.min(r1, ri);
-        r2 = Math.max(r2, ri);
-        c1 = Math.min(c1, ci);
-        c2 = Math.max(c2, ci);
-      }
-      if (r2 < 0) return;
-      const body: string[][] = [];
-      for (let ri = r1; ri <= r2; ri++) {
-        const line: string[] = [];
-        for (let ci = c1; ci <= c2; ci++) {
-          if (keys.has(cellKey(ri, ci))) {
-            line.push(displayText(columns[ci], rows[ri].cells[columns[ci].key]));
-          } else {
-            line.push("");
-          }
-        }
-        body.push(line);
-      }
-      event.clipboardData.setData("text/plain", toTsv(body));
-      return;
-    }
-    if (!range) return;
+    const tsv = selectionAsTsv();
+    if (tsv == null) return;
     event.preventDefault();
-    event.clipboardData.setData("text/plain", toTsv(matrixFor(range, false)));
+    event.clipboardData.setData("text/plain", tsv);
   };
 
   const onPaste = (event: React.ClipboardEvent<HTMLDivElement>) => {
@@ -853,14 +927,20 @@ export const SheetGrid = React.forwardRef<SheetGridHandle, SheetGridProps>(funct
                   <th
                     key={`${g.start}-${g.span}-${g.label}`}
                     colSpan={g.span}
-                    className="border-b border-r px-2 py-1.5 text-left text-[11px] font-semibold uppercase leading-snug tracking-wide text-foreground"
+                    className="border-b border-r px-2 py-1.5 text-left text-[11px] font-semibold uppercase leading-snug tracking-wide"
                     style={
                       g.frozen
                         ? {
-                            ...stickyStyle(g.start, { backgroundColor: groupBg }),
+                            ...stickyStyle(g.start, {
+                              backgroundColor: groupBg,
+                              color: sheetGroupHeaderInk(),
+                            }),
                             ...(atFreezeEdge ? { boxShadow: FREEZE_EDGE_SHADOW } : {}),
                           }
-                        : scrollCellStyle({ backgroundColor: groupBg })
+                        : scrollCellStyle({
+                            backgroundColor: groupBg,
+                            color: sheetGroupHeaderInk(),
+                          })
                     }
                     title={g.label}
                   >
@@ -899,9 +979,12 @@ export const SheetGrid = React.forwardRef<SheetGridHandle, SheetGridProps>(funct
                 key={col.key}
                 className={cn(
                   "border-b border-r px-1.5 py-1.5 text-left align-bottom font-medium",
-                  !col.editable && "text-muted-foreground"
+                  !col.editable && "opacity-80"
                 )}
-                style={stickyStyle(index, { backgroundColor: sheetGroupColumnBg(col.group) })}
+                style={stickyStyle(index, {
+                  backgroundColor: sheetGroupColumnBg(col.group),
+                  color: sheetGroupHeaderInk(),
+                })}
                 title={col.help || flatColumnLabel(col.label)}
               >
                 <button
@@ -984,6 +1067,7 @@ export const SheetGrid = React.forwardRef<SheetGridHandle, SheetGridProps>(funct
                 focusCol={safeSelection && safeSelection.focus.r === r ? safeSelection.focus.c : -1}
                 editing={editing && editing.r === r ? editing : null}
                 cellStyles={cellStyles}
+                wrapLongtext={wrapLongtext}
                 onCellMouseDown={stable.onCellMouseDown}
                 onCellMouseEnter={stable.onCellMouseEnter}
                 onCellDoubleClick={stable.startEdit}
@@ -996,27 +1080,59 @@ export const SheetGrid = React.forwardRef<SheetGridHandle, SheetGridProps>(funct
         </tbody>
         {hasAggregates && (
           <tfoot className="sticky bottom-0 z-30" style={{ backgroundColor: STICKY_HEADER_BG }}>
-            <tr>
-              <td
-                className="sticky left-0 border-r border-t px-1 text-center text-[11px] text-muted-foreground"
-                style={{
-                  zIndex: STICKY_HEAD_Z + 1,
-                  left: 0,
-                  backgroundColor: STICKY_HEADER_BG,
-                }}
-              >
-                Σ
-              </td>
-              {columns.map((col, index) => (
+            {(
+              [
+                {
+                  key: "sum",
+                  label: t("sheets.footer.sum"),
+                  filter: (row: SheetRow) => !row.resigned,
+                  byDay: false,
+                },
+                ...(showDayFooters
+                  ? [
+                      {
+                        key: "day1",
+                        label: t("sheets.footer.day1"),
+                        filter: (row: SheetRow) => !row.resigned && rowInDay(row, 1),
+                        byDay: true,
+                      },
+                      {
+                        key: "day2",
+                        label: t("sheets.footer.day2"),
+                        filter: (row: SheetRow) => !row.resigned && rowInDay(row, 2),
+                        byDay: true,
+                      },
+                    ]
+                  : []),
+              ]
+            ).map((footerRow) => (
+              <tr key={footerRow.key}>
                 <td
-                  key={col.key}
-                  className="border-r border-t px-2 py-1 font-medium tabular-nums"
-                  style={stickyStyle(index)}
+                  className="sticky left-0 border-r border-t px-1 text-center text-[10px] leading-tight text-muted-foreground"
+                  style={{
+                    zIndex: STICKY_HEAD_Z + 1,
+                    left: 0,
+                    backgroundColor: STICKY_HEADER_BG,
+                  }}
                 >
-                  {col.aggregate ? aggregateValues(col, rows.map((row) => row.cells[col.key])) : ""}
+                  {footerRow.label}
                 </td>
-              ))}
-            </tr>
+                {columns.map((col, index) => (
+                  <td
+                    key={col.key}
+                    className="border-r border-t px-2 py-1 font-medium tabular-nums"
+                    style={stickyStyle(index)}
+                  >
+                    {col.aggregate && (!footerRow.byDay || col.aggregate_by_day)
+                      ? aggregateValues(
+                          col,
+                          rows.filter(footerRow.filter).map((row) => row.cells[col.key])
+                        )
+                      : ""}
+                  </td>
+                ))}
+              </tr>
+            ))}
           </tfoot>
         )}
       </table>
@@ -1041,6 +1157,7 @@ interface GridRowProps {
   focusCol: number;
   editing: EditingState | null;
   cellStyles: Record<string, string>;
+  wrapLongtext: boolean;
   onCellMouseDown: (event: React.MouseEvent, r: number, c: number) => void;
   onCellMouseEnter: (r: number, c: number) => void;
   onCellDoubleClick: (r: number, c: number) => void;
@@ -1062,6 +1179,7 @@ const GridRow = React.memo(function GridRow({
   focusCol,
   editing,
   cellStyles,
+  wrapLongtext,
   onCellMouseDown,
   onCellMouseEnter,
   onCellDoubleClick,
@@ -1070,7 +1188,10 @@ const GridRow = React.memo(function GridRow({
   onCancel,
 }: GridRowProps) {
   return (
-    <tr style={{ height: ROW_HEIGHT }} className={cn(row.resigned && "text-muted-foreground line-through")}>
+    <tr
+      style={wrapLongtext ? undefined : { height: ROW_HEIGHT }}
+      className={cn(row.resigned && "text-muted-foreground line-through")}
+    >
       <td
         className="sticky left-0 cursor-pointer border-b border-r px-1 text-center text-[11px] text-muted-foreground"
         style={{
@@ -1093,9 +1214,14 @@ const GridRow = React.memo(function GridRow({
         const fill = cellStyles[`${row.company_id}|${col.key}`] || "";
         const highlighted = !fill && isHighlighted(col, value);
         const selectedPlain = selected && !fill;
+        const toneBg = !fill && !selected ? toneBackground(row.tones?.[col.key]) : "";
+        const hasTone = Boolean(toneBg);
+        const hasPastelFill = Boolean(fill || highlighted);
+        const ink = hasTone ? sheetToneInk() : hasPastelFill ? sheetPastelInk() : undefined;
         let solidBg = "";
         if (fill) solidBg = fill;
         else if (selectedPlain) solidBg = CELL_SELECTED_BG;
+        else if (toneBg) solidBg = toneBg;
         else if (highlighted) solidBg = CELL_HIGHLIGHT_BG;
         else if (sticky) solidBg = col.editable ? STICKY_EDITABLE_BG : STICKY_READONLY_BG;
         else solidBg = col.editable ? STICKY_EDITABLE_BG : STICKY_READONLY_BG;
@@ -1107,13 +1233,21 @@ const GridRow = React.memo(function GridRow({
             onMouseEnter={() => onCellMouseEnter(rowIndex, c)}
             onDoubleClick={() => onCellDoubleClick(rowIndex, c)}
             className={cn(
-              "border-b border-r px-1.5",
+              "relative border-b border-r px-1.5",
+              wrapLongtext ? "align-top py-1" : "align-middle",
               col.kind === "number" && "text-right tabular-nums",
               pending && "italic"
             )}
             style={{
               backgroundColor: solidBg,
               backgroundClip: "border-box",
+              ...(ink
+                ? {
+                    color: ink,
+                    // Manual pastel fills stay light; native checkbox must stay light-scheme.
+                    ...(hasPastelFill ? { colorScheme: "light" as const } : {}),
+                  }
+                : {}),
               ...(sticky
                 ? {
                     position: "sticky",
@@ -1132,7 +1266,13 @@ const GridRow = React.memo(function GridRow({
                   : {}),
             }}
           >
-            <CellContent column={col} value={value} />
+            <CellContent
+              column={col}
+              value={value}
+              wrap={wrapLongtext}
+              ink={ink}
+              onPastel={hasPastelFill}
+            />
             {isEditing && editing && (
               <CellEditor column={col} initial={editing.initial} onCommit={onCommit} onCancel={onCancel} />
             )}
@@ -1158,12 +1298,37 @@ async function downloadAuthenticated(path: string, filename: string, errorText: 
   }
 }
 
-function CellContent({ column, value }: { column: SheetColumn; value: SheetCellValue }) {
+function CellContent({
+  column,
+  value,
+  wrap = false,
+  ink,
+  onPastel = false,
+}: {
+  column: SheetColumn;
+  value: SheetCellValue;
+  wrap?: boolean;
+  ink?: string;
+  onPastel?: boolean;
+}) {
   const { t } = useTranslation();
   if (column.kind === "bool") {
     return (
       <span className="flex justify-center">
-        <input type="checkbox" checked={value === true} readOnly tabIndex={-1} className="pointer-events-none" />
+        <input
+          type="checkbox"
+          checked={value === true}
+          readOnly
+          tabIndex={-1}
+          className={cn(
+            "pointer-events-none h-3.5 w-3.5 rounded-sm border",
+            onPastel
+              ? "border-slate-700 accent-slate-900"
+              : ink
+                ? "border-current accent-current"
+                : "border-foreground/50 accent-foreground"
+          )}
+        />
       </span>
     );
   }
@@ -1172,7 +1337,10 @@ function CellContent({ column, value }: { column: SheetColumn; value: SheetCellV
       return (
         <button
           type="button"
-          className="block max-w-full truncate text-left text-sky-700 underline"
+          className={cn(
+            "block max-w-full truncate text-left underline",
+            onPastel ? "text-sky-800" : "text-sky-700 dark:text-sky-400"
+          )}
           onMouseDown={(event) => event.stopPropagation()}
           onClick={() => downloadAuthenticated(value.url, value.name, t("sheets.pdfError"))}
         >
@@ -1186,7 +1354,10 @@ function CellContent({ column, value }: { column: SheetColumn; value: SheetCellV
         href={href}
         target="_blank"
         rel="noreferrer"
-        className="block truncate text-sky-700 underline"
+        className={cn(
+          "block truncate underline",
+          onPastel ? "text-sky-800" : "text-sky-700 dark:text-sky-400"
+        )}
         onMouseDown={(event) => event.stopPropagation()}
       >
         {value.name}
@@ -1195,7 +1366,14 @@ function CellContent({ column, value }: { column: SheetColumn; value: SheetCellV
   }
   const text = displayText(column, value);
   return (
-    <div className="truncate" title={text.length > 20 ? text : undefined}>
+    <div
+      className={cn(
+        wrap
+          ? "max-w-full whitespace-pre-wrap break-words [overflow-wrap:anywhere] leading-snug"
+          : "truncate"
+      )}
+      title={!wrap && text.length > 20 ? text : undefined}
+    >
       {text}
     </div>
   );

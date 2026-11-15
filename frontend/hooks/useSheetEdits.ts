@@ -69,7 +69,7 @@ export function useSheetEdits({ cellsUrl, getServerValue, onServerValues, column
   const optionsRef = React.useRef({ getServerValue, onServerValues, columnLabel, cellsUrl, t });
   optionsRef.current = { getServerValue, onServerValues, columnLabel, cellsUrl, t };
 
-  const updateOverlay = React.useCallback((fn: (draft: Map<string, SheetCellValue>) => void) => {
+  const updateOverlay = React.useCallback((fn: (map: Map<string, SheetCellValue>) => void) => {
     const next = new Map(overlayRef.current);
     fn(next);
     overlayRef.current = next;
@@ -104,9 +104,9 @@ export function useSheetEdits({ cellsUrl, getServerValue, onServerValues, column
     const opts = optionsRef.current;
 
     const settle = (ids: Iterable<string>) => {
-      updateOverlay((draft) => {
+      updateOverlay((map) => {
         for (const id of ids) {
-          if (!queueRef.current.has(id)) draft.delete(id);
+          if (!queueRef.current.has(id)) map.delete(id);
         }
       });
     };
@@ -117,8 +117,16 @@ export function useSheetEdits({ cellsUrl, getServerValue, onServerValues, column
       retryRef.current = 0;
 
       const confirmed: CellEdit[] = [
-        ...data.applied.map((a) => ({ companyId: a.company_id, columnKey: a.column_key, value: a.value })),
-        ...data.conflicts.map((c) => ({ companyId: c.company_id, columnKey: c.column_key, value: c.current })),
+        ...data.applied.map((a) => ({
+          companyId: a.company_id,
+          columnKey: a.column_key,
+          value: a.value,
+        })),
+        ...data.conflicts.map((c) => ({
+          companyId: c.company_id,
+          columnKey: c.column_key,
+          value: c.current,
+        })),
       ];
       // Edits queued meanwhile for a conflicted cell were based on a stale value — drop them.
       for (const conflict of data.conflicts) {
@@ -193,10 +201,10 @@ export function useSheetEdits({ cellsUrl, getServerValue, onServerValues, column
   const writeGroup = React.useCallback(
     (entries: HistoryEntry[], direction: "do" | "undo" | "redo") => {
       if (entries.length === 0) return;
-      updateOverlay((draft) => {
+      updateOverlay((map) => {
         for (const e of entries) {
           const value = direction === "undo" ? e.before : e.after;
-          draft.set(cellId(e.companyId, e.columnKey), value);
+          map.set(cellId(e.companyId, e.columnKey), value);
         }
       });
       for (const e of entries) {
@@ -222,7 +230,12 @@ export function useSheetEdits({ cellsUrl, getServerValue, onServerValues, column
       for (const edit of edits) {
         const before = currentValue(edit.companyId, edit.columnKey);
         if (sameValue(before, edit.value)) continue;
-        entries.push({ companyId: edit.companyId, columnKey: edit.columnKey, before, after: edit.value });
+        entries.push({
+          companyId: edit.companyId,
+          columnKey: edit.columnKey,
+          before,
+          after: edit.value,
+        });
       }
       if (entries.length === 0) return;
       undoRef.current = [...undoRef.current, entries].slice(-HISTORY_LIMIT);

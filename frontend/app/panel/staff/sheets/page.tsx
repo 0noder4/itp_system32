@@ -45,7 +45,7 @@ export default function SheetsIndexPage() {
         {data && data.length > 1 && (
           <div className="grid gap-4 sm:grid-cols-2">
             {data.map((sheet) => {
-              // Opiekun: single tab "Moje firmy" only repeats the card title — omit on the index.
+              // A sheet with one tab only repeats the card title — omit the tab line.
               const tabLine =
                 sheet.key === "opiekun" && sheet.tabs.length === 1
                   ? ""

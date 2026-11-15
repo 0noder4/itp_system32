@@ -13,6 +13,26 @@ export type UpdateOverviewEntry = {
 
 export const updateOverviews: readonly UpdateOverviewEntry[] = [
   {
+    releaseDate: "2026-11-15",
+    highlights: [
+      "Arkusze Opiekuna: zakładki montażu (harmonogram slotów z kolorami i przypisywaniem firm), Welcome packi, Obiady Beściaków, tony statusu zabudowy oraz stopki SUMA / DZIEŃ 1 / DZIEŃ 2.",
+      "W arkuszu: podgląd pełnej treści komórki, zawijanie tekstu, ustawienia ukrytych kolumn wg grup i synchronizacja układu z domyślnym.",
+      "Wykładzina obowiązkowa: partnerzy wybierają typ i kolor; pozostali wystawcy dostają automatycznie RIPS EXPO 892 szary (bez rezygnacji).",
+      "Mapa: przy wyłączonej synchronizacji dni edycja dotyczy tylko aktywnego dnia — nie kopiuje już zmian na drugi dzień.",
+      "Zaproszenie firmy: limit 100 znaków nazwy oraz podpowiedź, że ta nazwa staje się loginem w mailu powitalnym.",
+      "Podgląd etapu 5: informacja, że listę PDI / gali zbiera Opiekun w Mailu #2 w arkuszu (nie firma w formularzu).",
+    ],
+    worthChecking: [
+      "Arkusze → Opiekun → Montaż (dzień) → kliknij pusty slot → przypisz firmę → sprawdź kolor i etykietę; usuń przypisanie.",
+      "Arkusze → Opiekun → Główny / Welcome / Obiady Beściaków → stopki sum i tonów; ustawienia → ukryj grupę → synchronizuj układ.",
+      "Panel firmy (wystawca) → Etap 2 → wykładzina bez wyboru (892); partner → wybór koloru bez opcji rezygnacji.",
+      "Mapa → wyłącz sync dni → przesuń stoiska tylko w dniu 1 → dzień 2 bez zmian.",
+      "Zaproszenia → nazwa firmy > 100 znaków / hint o loginie.",
+      "Staff → firma → Etap 5 → żółty box PDI / gala.",
+      "Po zalogowaniu → przegląd aktualizacji → data 15.11.2026.",
+    ],
+  },
+  {
     releaseDate: "2026-11-11",
     highlights: [
       "Nowe Arkusze w menu staff: siatka firm jak w Excelu (edycja komórek, cofnij/ponów, kolory wypełnienia, zamrożone kolumny, ukrywanie kolumn).",
@@ -154,18 +174,6 @@ export const updateOverviews: readonly UpdateOverviewEntry[] = [
       "Panel firmy (basic) → sprawdź, że etap 3 jest niedostępny, a etap 4 się odblokowuje.",
       "Panel staff → firma → podgląd etapu 3: szczegóły warsztatu i lista prowadzących.",
       "Panel staff → eksport CSV → w pliku kolumny warsztatów (nazwa, dzień, godzina, prowadzący…).",
-    ],
-  },
-  {
-    releaseDate: "2026-09-15",
-    highlights: [
-      "Zaktualizowano silnik panelu (Next.js) — łatka bezpieczeństwa zamykająca lukę wykorzystywaną przez ataki na serwer.",
-      "Po zalogowaniu do panelu staff pojawia się przegląd najnowszej aktualizacji systemu.",
-      "Możesz zaznaczyć „Nie pokazuj ponownie”, żeby ten przegląd się więcej nie wyświetlał.",
-    ],
-    worthChecking: [
-      "Zaloguj się jako staff → sprawdź, że panel firm ładuje się normalnie.",
-      "Otwórz przegląd aktualizacji (jeśli się pokazuje) i zamknij go przyciskiem lub „Nie pokazuj ponownie”.",
     ],
   },
 ];

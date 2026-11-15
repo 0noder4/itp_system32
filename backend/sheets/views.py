@@ -9,6 +9,7 @@ from users.permissions import IsAdmin
 from .definitions import CATALOG
 from .definitions.common import user_display
 from .models import SheetCellChange, SheetLayoutDefault
+from .registry import ROW_STAFF
 from .service import (
     SheetPermissionError,
     SheetValidationError,
@@ -17,6 +18,7 @@ from .service import (
     build_tab_payload,
     company_queryset,
     parse_changes,
+    staff_cell_history,
     visible_columns,
 )
 from .values import present
@@ -56,11 +58,40 @@ class SheetCatalogView(APIView):
         ])
 
 
+def _clean_hidden_by_tab(raw) -> dict[str, list[str]] | None:
+    """Validate hidden_by_tab payload; None means omit / leave unchanged."""
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise ValueError('hidden_by_tab musi być obiektem')
+    cleaned: dict[str, list[str]] = {}
+    for tab_key, keys in raw.items():
+        if not isinstance(tab_key, str) or not tab_key or len(tab_key) > 50:
+            continue
+        if not isinstance(keys, list):
+            continue
+        out: list[str] = []
+        seen: set[str] = set()
+        for key in keys:
+            if not isinstance(key, str) or not key or len(key) > 100:
+                continue
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(key)
+        cleaned[tab_key] = out
+    return cleaned
+
+
 class SheetLayoutDefaultView(APIView):
     """
-    GET  /api/sheets/<sheet>/layout/ — default column widths for this sheet (any staff).
-    PUT  /api/sheets/<sheet>/layout/ — publish current widths as the sheet default (admin only).
-    Body PUT: {"column_widths": {"company.name": 180, ...}}
+    GET  /api/sheets/<sheet>/layout/ — default column widths + hidden_by_tab (any staff).
+    PUT  /api/sheets/<sheet>/layout/ — publish widths (and optional hidden) as default (admin only).
+    Body PUT: {
+      "column_widths": {"company.name": 180, ...},
+      "hidden_by_tab": {"firmy": ["stand.day2", ...]},  # optional; merges per tab when merge_hidden_tab set
+      "merge_hidden_tab": "firmy"  # optional: only replace that tab's hidden list in existing JSON
+    }
     """
 
     def get_permissions(self):
@@ -74,9 +105,15 @@ class SheetLayoutDefaultView(APIView):
             return Response({'detail': 'Nie znaleziono arkusza.'}, status=status.HTTP_404_NOT_FOUND)
         layout = SheetLayoutDefault.objects.filter(sheet_key=sheet_key).first()
         if layout is None:
-            return Response({'column_widths': {}, 'updated_at': None, 'updated_by': None})
+            return Response({
+                'column_widths': {},
+                'hidden_by_tab': {},
+                'updated_at': None,
+                'updated_by': None,
+            })
         return Response({
             'column_widths': layout.column_widths or {},
+            'hidden_by_tab': layout.hidden_by_tab or {},
             'updated_at': layout.updated_at.isoformat() if layout.updated_at else None,
             'updated_by': user_display(layout.updated_by) if layout.updated_by_id else None,
         })
@@ -97,12 +134,32 @@ class SheetLayoutDefaultView(APIView):
             width = int(value)
             if 40 <= width <= 800:
                 cleaned[key] = width
+        try:
+            hidden_incoming = _clean_hidden_by_tab(request.data.get('hidden_by_tab'))
+        except ValueError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        existing = SheetLayoutDefault.objects.filter(sheet_key=sheet_key).first()
+        previous_hidden = (existing.hidden_by_tab or {}) if existing else {}
+        merge_tab = request.data.get('merge_hidden_tab')
+        if hidden_incoming is None:
+            hidden_final = previous_hidden
+        elif isinstance(merge_tab, str) and merge_tab and merge_tab in hidden_incoming:
+            hidden_final = {**previous_hidden, merge_tab: hidden_incoming[merge_tab]}
+        else:
+            hidden_final = hidden_incoming
+
         layout, _ = SheetLayoutDefault.objects.update_or_create(
             sheet_key=sheet_key,
-            defaults={'column_widths': cleaned, 'updated_by': request.user},
+            defaults={
+                'column_widths': cleaned,
+                'hidden_by_tab': hidden_final,
+                'updated_by': request.user,
+            },
         )
         return Response({
             'column_widths': layout.column_widths,
+            'hidden_by_tab': layout.hidden_by_tab or {},
             'updated_at': layout.updated_at.isoformat(),
             'updated_by': user_display(request.user),
         })
@@ -183,6 +240,11 @@ class SheetCellHistoryView(APIView):
         column = next((col for col in visible_columns(tab, request.user) if col.key == column_key), None)
         if column is None:
             return Response({'detail': 'Nie znaleziono kolumny.'}, status=status.HTTP_404_NOT_FOUND)
+        if tab.row_source == ROW_STAFF:
+            history = staff_cell_history(sheet, tab, request.user, company_id, column_key)
+            if history is None:
+                return Response({'detail': 'Nie znaleziono osoby.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response(history)
         if not company_queryset(sheet, tab, request.user).filter(id=company_id).exists():
             return Response({'detail': 'Nie znaleziono firmy.'}, status=status.HTTP_404_NOT_FOUND)
         changes = (

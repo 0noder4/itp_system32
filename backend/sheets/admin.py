@@ -1,6 +1,13 @@
 from django.contrib import admin
 
-from .models import SheetCellChange, SheetCellStyle, SheetCellValue, SheetLayoutDefault
+from .models import (
+    SheetCellChange,
+    SheetCellStyle,
+    SheetCellValue,
+    SheetLayoutDefault,
+    StaffMeal,
+    StaffMealChange,
+)
 
 
 @admin.register(SheetCellValue)
@@ -23,6 +30,20 @@ class SheetCellChangeAdmin(admin.ModelAdmin):
 class SheetLayoutDefaultAdmin(admin.ModelAdmin):
     list_display = ('sheet_key', 'updated_by', 'updated_at')
     search_fields = ('sheet_key',)
+
+
+@admin.register(StaffMeal)
+class StaffMealAdmin(admin.ModelAdmin):
+    list_display = ('user', 'day1', 'day2', 'updated_by', 'updated_at')
+    list_filter = ('day1', 'day2')
+    raw_id_fields = ('user', 'updated_by')
+
+
+@admin.register(StaffMealChange)
+class StaffMealChangeAdmin(admin.ModelAdmin):
+    list_display = ('user', 'column_key', 'old_value', 'new_value', 'changed_by', 'changed_at')
+    list_filter = ('column_key',)
+    raw_id_fields = ('user', 'changed_by')
 
 
 @admin.register(SheetCellStyle)

@@ -7,6 +7,7 @@ from rest_framework.test import APIClient
 
 from companies.models import (
     Company,
+    CompanyInvitation,
     EquipmentItem,
     EquipmentSelection,
     Feedback,
@@ -23,7 +24,14 @@ from .coverage import EXCLUDED_FIELDS, NOT_YET_MAPPED, form_field_names
 from .definitions import CATALOG
 from .definitions.common import COMPANY_NAME, COMPANY_OPIEKUN
 from .definitions.form_columns import PDI_EMAILS
-from .models import SheetCellChange, SheetCellStyle, SheetCellValue
+from .models import (
+    SheetCellChange,
+    SheetCellStyle,
+    SheetCellValue,
+    SheetLayoutDefault,
+    StaffMeal,
+    StaffMealChange,
+)
 from .registry import KIND_TEXT, SOURCE_EXTRA, Catalog, ColumnDef, SheetDef, TabDef
 
 User = get_user_model()
@@ -221,7 +229,7 @@ class OpiekunLgFrTests(SheetsApiBase):
     def test_opiekun_edits_own_car_but_not_lg_orders(self):
         self.partner.opiekun = self.opiekun
         self.partner.save()
-        url = '/api/sheets/opiekun/firmy/cells/'
+        url = '/api/sheets/opiekun/glowny/cells/'
         saved = self.patch(self.opiekun, [
             {'company_id': self.partner.id, 'column_key': 'care.car_registration', 'value': 'WX 123', 'base': None},
         ], url=url)
@@ -232,10 +240,48 @@ class OpiekunLgFrTests(SheetsApiBase):
         ], url=url)
         self.assertEqual(denied.status_code, status.HTTP_403_FORBIDDEN)
 
+    def test_care_day_slot_pair_is_all_or_nothing(self):
+        """Conflict on arrival_day must not leave a new slot applied in the same batch."""
+        self.partner.opiekun = self.opiekun
+        self.partner.save()
+        url = '/api/sheets/opiekun/glowny/cells/'
+        SheetCellValue.objects.create(
+            company=self.partner, column_key='care.arrival_day', value='2027-03-09', updated_by=self.fr,
+        )
+        SheetCellValue.objects.create(
+            company=self.partner, column_key='care.slot', value='14-16', updated_by=self.fr,
+        )
+        response = self.patch(self.opiekun, [
+            {
+                'company_id': self.partner.id,
+                'column_key': 'care.arrival_day',
+                'value': '2027-03-10',
+                'base': None,  # stale — server has 2027-03-09
+            },
+            {
+                'company_id': self.partner.id,
+                'column_key': 'care.slot',
+                'value': '16-18',
+                'base': '14-16',  # would apply alone
+            },
+        ], url=url)
+        self.assertEqual(response.status_code, 200, response.data)
+        conflict_keys = {c['column_key'] for c in response.data['conflicts']}
+        self.assertEqual(conflict_keys, {'care.arrival_day', 'care.slot'})
+        self.assertEqual(response.data['applied'], [])
+        self.assertEqual(
+            SheetCellValue.objects.get(company=self.partner, column_key='care.arrival_day').value,
+            '2027-03-09',
+        )
+        self.assertEqual(
+            SheetCellValue.objects.get(company=self.partner, column_key='care.slot').value,
+            '14-16',
+        )
+
     def test_opiekun_does_not_see_other_companies(self):
         self.partner.opiekun = self.opiekun
         self.partner.save()
-        rows = self.as_user(self.opiekun).get('/api/sheets/opiekun/firmy/').data['rows']
+        rows = self.as_user(self.opiekun).get('/api/sheets/opiekun/glowny/').data['rows']
         self.assertEqual([row['company_id'] for row in rows], [self.partner.id])
 
     def test_fr_mine_flag_and_slot_load(self):
@@ -243,7 +289,7 @@ class OpiekunLgFrTests(SheetsApiBase):
         self.partner.save()
         SheetCellValue.objects.create(company=self.partner, column_key='care.slot', value='rano')
         SheetCellValue.objects.create(company=self.basic, column_key='care.slot', value='rano')
-        data = self.as_user(self.fr).get('/api/sheets/opiekun/firmy/').data
+        data = self.as_user(self.fr).get('/api/sheets/opiekun/glowny/').data
         by_id = {row['company_id']: row for row in data['rows']}
         self.assertTrue(by_id[self.partner.id]['mine'])
         self.assertFalse(by_id[self.basic.id]['mine'])
@@ -329,9 +375,104 @@ class OpiekunLgFrTests(SheetsApiBase):
         partner = next(row for row in cells if row['company_id'] == self.partner.id)
         self.assertEqual(partner['cells']['lunch.extra_cost'], 20)
 
-    def test_pdi_emails_hidden_from_opiekun_role(self):
-        self.assertFalse(PDI_EMAILS.visible_to(self.opiekun))
+    def test_pdi_emails_visible_to_opiekun_and_fr(self):
+        # Mail #2: Opiekun edits PDI in the sheet; FR/LG also see the column.
+        self.assertTrue(PDI_EMAILS.visible_to(self.opiekun))
         self.assertTrue(PDI_EMAILS.visible_to(self.fr))
+        self.assertTrue(PDI_EMAILS.editable_by(self.opiekun))
+        self.assertFalse(PDI_EMAILS.editable_by(self.fr))
+
+    def test_system_cells_are_read_only_in_sheets(self):
+        self.partner.opiekun = self.opiekun
+        self.partner.save()
+        StandDetails.objects.create(company=self.partner, stand_type='provided_stand', sc_details='')
+        url = '/api/sheets/opiekun/glowny/cells/'
+        denied_draft = self.patch(self.opiekun, [
+            {
+                'company_id': self.partner.id,
+                'column_key': 'stand.composition',
+                'value': 'ścianki + lada (prośba firmy)',
+                'base': '',
+                'mode': 'draft',
+            },
+        ], url=url)
+        self.assertEqual(denied_draft.status_code, status.HTTP_400_BAD_REQUEST)
+        denied_edit = self.patch(self.opiekun, [
+            {
+                'company_id': self.partner.id,
+                'column_key': 'stand.composition',
+                'value': 'ścianki + lada',
+                'base': '',
+            },
+        ], url=url)
+        self.assertEqual(denied_edit.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertFalse(
+            SheetCellValue.objects.filter(
+                company=self.partner, column_key='stand.composition'
+            ).exists()
+        )
+        self.assertEqual(
+            StandDetails.objects.get(company=self.partner).sc_details, ''
+        )
+        meta = {
+            c['key']: c
+            for c in self.as_user(self.opiekun).get('/api/sheets/opiekun/glowny/').data['columns']
+        }
+        self.assertFalse(meta['stand.composition']['editable'])
+        self.assertNotIn('can_draft', meta['stand.composition'])
+        self.assertNotIn('can_commit', meta['stand.composition'])
+
+    def test_pdi_editable_on_lg_delegaci(self):
+        from companies.models import PDI, PDIAttendee
+
+        lg = make_user('lg-pdi', roles=['lg'])
+        url = '/api/sheets/lg/delegaci/cells/'
+        response = self.patch(lg, [
+            {
+                'company_id': self.partner.id,
+                'column_key': 'people.pdi_tickets',
+                'value': 4,
+                'base': 0,
+            },
+            {
+                'company_id': self.partner.id,
+                'column_key': 'people.pdi_emails',
+                'value': 'Anna Nowak: anna@example.com\nJan Kowalski - jan@example.com',
+                'base': '',
+            },
+        ], url=url)
+        self.assertEqual(response.status_code, 200, response.data)
+        pdi = PDI.objects.get(form__company=self.partner)
+        self.assertEqual(pdi.tickets_quantity, 4)
+        emails = sorted(pdi.pdiattendees.values_list('email', flat=True))
+        self.assertEqual(emails, ['anna@example.com', 'jan@example.com'])
+        cells = next(
+            row for row in self.as_user(lg).get('/api/sheets/lg/delegaci/').data['rows']
+            if row['company_id'] == self.partner.id
+        )['cells']
+        self.assertEqual(cells['people.pdi_extra'], 2)
+
+    def test_sign_visual_on_glowny_not_fryz(self):
+        glowny = self.as_user(self.fr).get('/api/sheets/lg/glowny/').data
+        fryz = self.as_user(self.fr).get('/api/sheets/lg/fryz/').data
+        g_keys = [c['key'] for c in glowny['columns']]
+        f_keys = [c['key'] for c in fryz['columns']]
+        self.assertIn('sign.visualization', g_keys)
+        self.assertIn('sign.fire_cert', g_keys)
+        self.assertNotIn('sign.visualization', f_keys)
+        self.assertNotIn('sign.fire_cert', f_keys)
+        self.assertIn('sign.logo', f_keys)
+
+    def test_wyposazenie_inserts_equipment_qty(self):
+        item = EquipmentItem.objects.create(
+            name_en='Table', name_pl='Stolik', price=20, included_quantity=1, is_active=True,
+        )
+        data = self.as_user(self.fr).get('/api/sheets/lg/wyposazenie/').data
+        keys = [c['key'] for c in data['columns']]
+        qty_key = f'equipment.qty.{item.id}'
+        self.assertIn(qty_key, keys)
+        self.assertLess(keys.index(qty_key), keys.index('equipment.tv_mount'))
+        self.assertIn('power.devices', keys)
 
     def test_history_and_xlsx(self):
         self.patch(self.tr, [
@@ -416,3 +557,233 @@ class FieldCoverageTests(TestCase):
         self.assertEqual(mapped & NOT_YET_MAPPED, set(), 'Zmapowane pola usuń z NOT_YET_MAPPED')
         self.assertEqual(mapped & set(EXCLUDED_FIELDS), set())
         self.assertEqual((mapped | NOT_YET_MAPPED | set(EXCLUDED_FIELDS)) - fields, set(), 'Nieistniejące pola')
+
+
+class SheetLayoutDefaultTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = User.objects.create_user(
+            username='layout-admin',
+            email='layout-admin@example.com',
+            password='x',
+            type='admin',
+        )
+        self.fr = make_user('layout-fr', roles=['fr'])
+
+    def test_put_and_get_hidden_by_tab(self):
+        url = '/api/sheets/fr/layout/'
+        self.client.force_authenticate(self.admin)
+        put = self.client.put(
+            url,
+            {
+                'column_widths': {'company.name': 200},
+                'hidden_by_tab': {'firmy': ['stand.day2']},
+                'merge_hidden_tab': 'firmy',
+            },
+            format='json',
+        )
+        self.assertEqual(put.status_code, 200, put.data)
+        self.assertEqual(put.data['hidden_by_tab']['firmy'], ['stand.day2'])
+        layout = SheetLayoutDefault.objects.get(sheet_key='fr')
+        self.assertEqual(layout.hidden_by_tab['firmy'], ['stand.day2'])
+
+        self.client.force_authenticate(self.fr)
+        get = self.client.get(url)
+        self.assertEqual(get.status_code, 200)
+        self.assertEqual(get.data['hidden_by_tab']['firmy'], ['stand.day2'])
+        self.assertEqual(get.data['column_widths']['company.name'], 200)
+
+    def test_merge_preserves_other_tabs(self):
+        SheetLayoutDefault.objects.create(
+            sheet_key='fr',
+            column_widths={'company.name': 160},
+            hidden_by_tab={'inne': ['x.y']},
+        )
+        self.client.force_authenticate(self.admin)
+        put = self.client.put(
+            '/api/sheets/fr/layout/',
+            {
+                'column_widths': {'company.name': 180},
+                'hidden_by_tab': {'firmy': ['stand.day1']},
+                'merge_hidden_tab': 'firmy',
+            },
+            format='json',
+        )
+        self.assertEqual(put.status_code, 200, put.data)
+        self.assertEqual(put.data['hidden_by_tab']['inne'], ['x.y'])
+        self.assertEqual(put.data['hidden_by_tab']['firmy'], ['stand.day1'])
+
+
+class OpiekunKrok3Tests(SheetsApiBase):
+    GL = '/api/sheets/opiekun/glowny/'
+    WELCOME = '/api/sheets/opiekun/welcome/'
+    MEALS = '/api/sheets/opiekun/obiady_besciakow/'
+
+    def _row(self, user, url, company_id):
+        data = self.as_user(user).get(url).data
+        return next(row for row in data['rows'] if row['company_id'] == company_id)
+
+    def test_checklist_extra_saves_for_opiekun(self):
+        self.partner.opiekun = self.opiekun
+        self.partner.save()
+        saved = self.patch(self.opiekun, [
+            {'company_id': self.partner.id, 'column_key': 'mail1.sent', 'value': True, 'base': False},
+        ], url=self.GL + 'cells/')
+        self.assertEqual(saved.status_code, 200, saved.data)
+        self.assertTrue(SheetCellValue.objects.get(company=self.partner, column_key='mail1.sent').value)
+        fr_saved = self.patch(self.fr, [
+            {'company_id': self.partner.id, 'column_key': 'mail3.people_count', 'value': 4, 'base': None},
+        ], url=self.GL + 'cells/')
+        self.assertEqual(fr_saved.status_code, 200, fr_saved.data)
+        welcome = self._row(self.fr, self.WELCOME, self.partner.id)
+        self.assertEqual(welcome['cells']['mail3.people_count'], 4)
+
+    def test_own_build_tones(self):
+        bare = self._row(self.fr, self.GL, self.partner.id)
+        self.assertEqual(bare['cells']['care.build_tone'], 'nie dotyczy')
+        self.assertEqual(bare['tones']['care.build_tone'], 'na')
+
+        StandDetails.objects.create(company=self.partner, stand_type='self_construction')
+        missing = self._row(self.fr, self.GL, self.partner.id)
+        self.assertEqual(missing['cells']['care.build_tone'], 'braki')
+        self.assertEqual(missing['tones']['care.build_tone'], 'warn')
+
+        details = StandDetails.objects.get(company=self.partner)
+        details.stand_visualization = 'viz.pdf'
+        details.fire_cert = 'cert.pdf'
+        details.save(update_fields=['stand_visualization', 'fire_cert'])
+        SheetCellValue.objects.create(company=self.partner, column_key='care.car_registration', value='WX 1')
+        SheetCellValue.objects.create(company=self.partner, column_key='care.slot', value='14-16')
+        complete = self._row(self.fr, self.GL, self.partner.id)
+        self.assertEqual(complete['cells']['care.build_tone'], 'komplet')
+        self.assertEqual(complete['tones']['care.build_tone'], 'ok')
+
+        Stand.objects.create(company=self.partner, day='day1', stand_number='A1', stand_size='standardowy')
+        day_row = self._row(self.fr, self.GL, self.partner.id)
+        self.assertEqual(day_row['tones']['final.protocol_d1_am'], 'todo')
+        self.assertEqual(day_row['tones']['final.protocol_d2_am'], 'na')
+
+    def test_welcome_sum_skips_resigned_in_the_row_flag(self):
+        final = FinalData.objects.create(company=self.partner)
+        Lunch.objects.create(form=final, day='day1', lunch_quantity=3)
+        Lunch.objects.create(form=final, day='day2', lunch_quantity=1)
+        other = FinalData.objects.create(company=self.basic)
+        Lunch.objects.create(form=other, day='day1', lunch_quantity=9)
+        CompanyInvitation.objects.create(
+            email='b@example.com', company_name=self.basic.name, is_cancelled=True, is_resigned=True,
+        )
+        data = self.as_user(self.fr).get(self.WELCOME).data
+        by_id = {row['company_id']: row for row in data['rows']}
+        self.assertEqual(by_id[self.partner.id]['cells']['welcome.lunch_sum'], 4)
+        self.assertFalse(by_id[self.partner.id]['resigned'])
+        self.assertTrue(by_id[self.basic.id]['resigned'])
+        active = [
+            row['cells']['welcome.lunch_sum']
+            for row in data['rows']
+            if not row['resigned'] and isinstance(row['cells']['welcome.lunch_sum'], int)
+        ]
+        self.assertEqual(sum(active), 4)
+        self.assertEqual(by_id[self.basic.id]['tones']['welcome.lunches_issued'], 'na')
+
+    def test_staff_meal_day1_and_opiekun_sees_only_self(self):
+        other = make_user('op2', roles=['opiekun'])
+        saved = self.patch(self.opiekun, [
+            {'company_id': self.opiekun.id, 'column_key': 'staff.meal.day1', 'value': True, 'base': False},
+        ], url=self.MEALS + 'cells/')
+        self.assertEqual(saved.status_code, 200, saved.data)
+        meal = StaffMeal.objects.get(user=self.opiekun)
+        self.assertTrue(meal.day1)
+        self.assertFalse(meal.day2)
+        self.assertTrue(StaffMealChange.objects.filter(user=self.opiekun, column_key='staff.meal.day1').exists())
+
+        own_rows = self.as_user(self.opiekun).get(self.MEALS).data['rows']
+        self.assertEqual([row['company_id'] for row in own_rows], [self.opiekun.id])
+        self.assertEqual(own_rows[0]['entity'], 'user')
+        self.assertTrue(own_rows[0]['cells']['staff.meal.day1'])
+
+        denied = self.patch(self.opiekun, [
+            {'company_id': other.id, 'column_key': 'staff.meal.day1', 'value': True, 'base': False},
+        ], url=self.MEALS + 'cells/')
+        self.assertEqual(denied.status_code, status.HTTP_403_FORBIDDEN)
+
+        seen = {row['company_id'] for row in self.as_user(self.fr).get(self.MEALS).data['rows']}
+        self.assertEqual(seen, {self.opiekun.id, other.id})
+
+    def test_matrix_places_company_by_day_and_slot(self):
+        day1 = '2027-03-09'
+        day2 = '2027-03-10'
+
+        def own(name, day, slot):
+            company = Company.objects.create(name=name, email=f'{name}@e.com', status='partner')
+            StandDetails.objects.create(company=company, stand_type='self_construction')
+            SheetCellValue.objects.create(company=company, column_key='care.arrival_day', value=day)
+            SheetCellValue.objects.create(company=company, column_key='care.slot', value=slot)
+            SheetCellValue.objects.create(company=company, column_key='care.car_make', value='VW')
+            SheetCellValue.objects.create(company=company, column_key='care.car_registration', value=name)
+            return company
+
+        for index in range(1, 7):
+            own(f'A{index}', day1, '14-16')
+        own('ObcySlot', day1, 'rano')
+        own('DrugiDzien', day2, '16-18')
+        plain = Company.objects.create(name='BezZabudowy', email='bz@e.com', status='partner')
+        StandDetails.objects.create(company=plain, stand_type='provided_stand')
+        SheetCellValue.objects.create(company=plain, column_key='care.arrival_day', value=day1)
+        SheetCellValue.objects.create(company=plain, column_key='care.slot', value='14-16')
+
+        monday = self.as_user(self.fr).get('/api/sheets/opiekun/montaz_1/').data
+        self.assertEqual(monday['tab']['view'], 'matrix')
+        self.assertIn('Wtorek', monday['tab']['title'])
+        slot = [
+            row['cells']['matrix.slot.14-16']
+            for row in monday['rows']
+            if row['cells']['matrix.slot.14-16']
+        ]
+        self.assertEqual(len(slot), 5)
+        self.assertTrue(all('A' in text and 'A6' not in text for text in slot))
+        # Excel-style multiline: „Nazwa\nMarka - Rejestracja”
+        self.assertTrue(all('\nVW - A' in text for text in slot))
+        placed = monday['matrix']['placements']['14-16']
+        self.assertEqual(len(placed), 5)
+        self.assertTrue(all(item.get('color') and item.get('registration') for item in placed))
+        self.assertTrue(all(row['tones'].get('matrix.slot.14-16') == 'warn' for row in monday['rows']))
+        no_text = ' '.join(
+            row['cells']['matrix.slot.NO'] or '' for row in monday['rows']
+        )
+        self.assertIn('A6', no_text)
+        self.assertIn('ObcySlot', no_text)
+        self.assertNotIn('DrugiDzien', no_text)
+        self.assertNotIn('BezZabudowy', no_text)
+
+        tuesday = self.as_user(self.fr).get('/api/sheets/opiekun/montaz_2/').data
+        self.assertIn('Środa', tuesday['tab']['title'])
+        joined = ' '.join(
+            row['cells']['matrix.slot.16-18'] or '' for row in tuesday['rows']
+        )
+        self.assertIn('DrugiDzien', joined)
+        readonly = self.patch(self.fr, [
+            {'company_id': -1, 'column_key': 'matrix.pos', 'value': 'x', 'base': '1'},
+        ], url='/api/sheets/opiekun/montaz_1/cells/')
+        self.assertEqual(readonly.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_footer_day_split_only_when_it_is_a_fair_day_subset(self):
+        meals = {col['key']: col for col in self.as_user(self.fr).get(self.MEALS).data['columns']}
+        self.assertEqual(meals['staff.meal.day1']['aggregate'], 'count_true')
+        self.assertFalse(meals['staff.meal.day1']['aggregate_by_day'])
+        self.assertFalse(meals['staff.meal.day2']['aggregate_by_day'])
+
+        welcome = {col['key']: col for col in self.as_user(self.fr).get(self.WELCOME).data['columns']}
+        self.assertFalse(welcome['lunch.day1']['aggregate_by_day'])
+        self.assertFalse(welcome['welcome.lunch_sum']['aggregate_by_day'])
+        self.assertTrue(welcome['welcome.lunches_issued']['aggregate_by_day'])
+        self.assertTrue(welcome['mail3.people_count']['aggregate_by_day'])
+        self.assertIn('company.days', welcome)
+
+        glowny = {col['key']: col for col in self.as_user(self.fr).get('/api/sheets/lg/glowny/').data['columns']}
+        self.assertTrue(glowny['stand.own_build']['aggregate_by_day'])
+        self.assertFalse(glowny['equipment.paid']['aggregate_by_day'])
+
+        money = {col['key']: col for col in self.as_user(self.fr).get('/api/sheets/fr/rozliczenia/').data['columns']}
+        self.assertFalse(money['money.total']['aggregate_by_day'])
+        self.assertNotIn('company.days', money)
+        self.assertNotIn('stand.day1', money)

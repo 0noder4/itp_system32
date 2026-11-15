@@ -3,7 +3,7 @@
 import React from "react";
 import { createPortal } from "react-dom";
 import useSWR from "swr";
-import { Filter, Paintbrush, Redo2, Search, Undo2 } from "lucide-react";
+import { Filter, Paintbrush, Redo2, Search, Undo2, WrapText } from "lucide-react";
 import { toast } from "sonner";
 import { apiClient } from "@/lib/api";
 import { useTranslation } from "@/lib/i18n";
@@ -23,12 +23,16 @@ import { compareCells, displayText } from "@/lib/sheets/format";
 import { SHEET_CELL_COLORS, cellStyleId } from "@/lib/sheets/cellColors";
 import { cellId, type SheetCellValue, type SheetRow, type SheetTabPayload } from "@/lib/sheets/types";
 import { SheetGrid, type SheetGridHandle, type SheetSort } from "./SheetGrid";
+import { SheetMatrix } from "./SheetMatrix";
+import { SheetToneLegend } from "./SheetToneLegend";
 import { SheetExportDialog } from "./SheetExportDialog";
 import { SheetSettingsDialog } from "./SheetSettingsDialog";
+import { SheetPreviewBar, type PreviewFocus } from "./SheetPreviewBar";
 import { SaveStatusIndicator } from "./SaveStatusIndicator";
 import { cn } from "@/lib/utils";
 
 const POLL_INTERVAL_MS = 15000;
+const wrapStorageKey = (sheet: string, tab: string) => `sheets:wrap:${sheet}:${tab}`;
 
 /** Stronger outline than default — light mode borders were hard to see on white. */
 const SHEET_TOOLBAR_OUTLINE = "border-neutral-400 shadow-none dark:border-input";
@@ -45,6 +49,7 @@ const tabFetcher = async (url: string): Promise<FetchedTab> => {
 };
 
 const hiddenStorageKey = (sheet: string, tab: string) => `sheets:hidden:${sheet}:${tab}`;
+const hiddenSeededKey = (sheet: string, tab: string) => `sheets:hidden-seeded:${sheet}:${tab}`;
 
 function readHidden(sheet: string, tab: string): Set<string> {
   if (typeof window === "undefined") return new Set();
@@ -54,6 +59,19 @@ function readHidden(sheet: string, tab: string): Set<string> {
   } catch {
     return new Set();
   }
+}
+
+function readWrap(sheet: string, tab: string): boolean {
+  if (typeof window === "undefined") return false;
+  return window.localStorage.getItem(wrapStorageKey(sheet, tab)) === "1";
+}
+
+function hasLocalHidden(sheet: string, tab: string): boolean {
+  if (typeof window === "undefined") return false;
+  return (
+    window.localStorage.getItem(hiddenStorageKey(sheet, tab)) != null ||
+    window.localStorage.getItem(hiddenSeededKey(sheet, tab)) === "1"
+  );
 }
 
 const isTypingTarget = (target: EventTarget | null) =>
@@ -96,15 +114,18 @@ export function SheetTabView({
     return row ? (row.cells[columnKey] ?? null) : null;
   }, []);
 
-  const onServerValues = React.useCallback((values: CellEdit[]) => {
-    const at = Date.now();
-    setConfirmed((prev) => {
-      const next = new Map(prev);
-      for (const v of values) next.set(cellId(v.companyId, v.columnKey), { value: v.value, at });
-      confirmedRef.current = next;
-      return next;
-    });
-  }, []);
+  const onServerValues = React.useCallback(
+    (values: CellEdit[]) => {
+      const at = Date.now();
+      setConfirmed((prev) => {
+        const next = new Map(prev);
+        for (const v of values) next.set(cellId(v.companyId, v.columnKey), { value: v.value, at });
+        confirmedRef.current = next;
+        return next;
+      });
+    },
+    []
+  );
 
   const columnLabel = React.useCallback(
     (key: string) => dataRef.current?.columns.find((c) => c.key === key)?.label ?? key,
@@ -138,11 +159,45 @@ export function SheetTabView({
   const [showFilters, setShowFilters] = React.useState(false);
   const [sort, setSort] = React.useState<SheetSort | null>(null);
   const [hidden, setHidden] = React.useState<Set<string>>(() => readHidden(sheetKey, tabKey));
+  const [wrapLongtext, setWrapLongtext] = React.useState(() => readWrap(sheetKey, tabKey));
+  const [previewFocus, setPreviewFocus] = React.useState<PreviewFocus | null>(null);
   const [cellStyles, setCellStyles] = React.useState<Record<string, string>>({});
   const [fillColor, setFillColor] = React.useState("");
   const [fillBusy, setFillBusy] = React.useState(false);
   const [headerHost, setHeaderHost] = React.useState<HTMLElement | null>(null);
   const gridRef = React.useRef<SheetGridHandle>(null);
+
+  React.useEffect(() => {
+    setHidden(readHidden(sheetKey, tabKey));
+    setWrapLongtext(readWrap(sheetKey, tabKey));
+  }, [sheetKey, tabKey]);
+
+  // Seed hidden columns from sheet default layout when user has no local preference.
+  React.useEffect(() => {
+    if (hasLocalHidden(sheetKey, tabKey)) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const { data: layout } = await apiClient.get<{
+          column_widths?: Record<string, number>;
+          hidden_by_tab?: Record<string, string[]>;
+        }>(`/api/sheets/${sheetKey}/layout/`);
+        if (cancelled) return;
+        const fromDefault = layout.hidden_by_tab?.[tabKey];
+        if (fromDefault && fromDefault.length > 0) {
+          const next = new Set(fromDefault);
+          setHidden(next);
+          window.localStorage.setItem(hiddenStorageKey(sheetKey, tabKey), JSON.stringify([...next]));
+        }
+        window.localStorage.setItem(hiddenSeededKey(sheetKey, tabKey), "1");
+      } catch {
+        /* ignore — layout optional */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [sheetKey, tabKey]);
 
   React.useEffect(() => {
     setHeaderHost(document.getElementById("sheet-header-actions"));
@@ -159,6 +214,7 @@ export function SheetTabView({
       if (next.has(key)) next.delete(key);
       else next.add(key);
       window.localStorage.setItem(hiddenStorageKey(sheetKey, tabKey), JSON.stringify([...next]));
+      window.localStorage.setItem(hiddenSeededKey(sheetKey, tabKey), "1");
       return next;
     });
   };
@@ -307,6 +363,10 @@ export function SheetTabView({
   }
   if (!data) return null;
 
+  const isMatrix = data.tab.view === "matrix";
+  const showToneLegend =
+    isMatrix || data.rows.some((row) => row.tones && Object.keys(row.tones).length > 0);
+
   const headerActions = (
     <>
       <SheetExportDialog
@@ -321,12 +381,20 @@ export function SheetTabView({
       />
       <SheetSettingsDialog
         sheetKey={sheetKey}
+        tabKey={tabKey}
         columns={data.columns}
         hidden={hidden}
         onToggleHidden={toggleHidden}
+        onSetHidden={(keys) => {
+          const next = new Set(keys);
+          setHidden(next);
+          window.localStorage.setItem(hiddenStorageKey(sheetKey, tabKey), JSON.stringify([...next]));
+          window.localStorage.setItem(hiddenSeededKey(sheetKey, tabKey), "1");
+        }}
         getColumnWidths={() => gridRef.current?.getColumnWidths() ?? {}}
         applyColumnWidths={(widths) => gridRef.current?.setColumnWidths(widths)}
         hiddenCount={hidden.size}
+        frozenColumns={data.tab.frozen_columns}
         onOpenHistory={() => void openHistory()}
       />
     </>
@@ -345,6 +413,7 @@ export function SheetTabView({
             className="h-8 pl-8 border-neutral-400 dark:border-input"
           />
         </div>
+        {!isMatrix && (
         <Button
           type="button"
           size="sm"
@@ -355,6 +424,27 @@ export function SheetTabView({
           <Filter className="mr-1 h-4 w-4" />
           {t("sheets.filters")}
         </Button>
+        )}
+        {!isMatrix && (
+        <Button
+          type="button"
+          size="sm"
+          variant={wrapLongtext ? "secondary" : "outline"}
+          className={wrapLongtext ? undefined : SHEET_TOOLBAR_OUTLINE}
+          title={t("sheets.wrapHint")}
+          onClick={() => {
+            setWrapLongtext((prev) => {
+              const next = !prev;
+              window.localStorage.setItem(wrapStorageKey(sheetKey, tabKey), next ? "1" : "0");
+              return next;
+            });
+          }}
+        >
+          <WrapText className="mr-1 h-4 w-4" />
+          {t("sheets.wrap")}
+        </Button>
+        )}
+        {!isMatrix && data.tab.row_source !== "staff" && (
         <Popover>
           <PopoverTrigger asChild>
             <Button
@@ -398,12 +488,14 @@ export function SheetTabView({
             </div>
           </PopoverContent>
         </Popover>
-        {mineFilter && (
+        )}
+        {mineFilter && !isMatrix && (
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={mineOnly} onChange={(e) => setMineOnly(e.target.checked)} />
             {t("sheets.mineOnly")}
           </label>
         )}
+        {!isMatrix && (
         <div className="ml-auto flex items-center gap-2">
           <SaveStatusIndicator status={edits.status} />
           <Button
@@ -431,11 +523,31 @@ export function SheetTabView({
             {t("sheets.redo")}
           </Button>
         </div>
+        )}
       </div>
+      {isMatrix ? (
+        <p className="text-xs text-muted-foreground">
+          Pomarańczowy slot ma więcej niż 5 firm. Nadmiar i nierozpoznany slot są w kolumnie NO.
+        </p>
+      ) : (
+        showToneLegend && <SheetToneLegend />
+      )}
       <div className="text-xs text-muted-foreground">
         {t("sheets.rowCount", { shown: visibleRows.length, total: data.rows.length })}
       </div>
+      {!isMatrix && (
+      <SheetPreviewBar focus={previewFocus} onEdit={edits.applyEdits} />
+      )}
       <div className="min-h-0 flex-1">
+        {isMatrix ? (
+          <SheetMatrix
+            columns={columns}
+            rows={visibleRows}
+            meta={data.matrix}
+            sheetKey={sheetKey}
+            onChanged={() => void mutate()}
+          />
+        ) : (
         <SheetGrid
           ref={gridRef}
           columns={columns}
@@ -451,7 +563,10 @@ export function SheetTabView({
           sheetKey={sheetKey}
           tabKey={tabKey}
           cellStyles={cellStyles}
+          wrapLongtext={wrapLongtext}
+          onFocusChange={setPreviewFocus}
         />
+        )}
       </div>
       <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
         <DialogContent>

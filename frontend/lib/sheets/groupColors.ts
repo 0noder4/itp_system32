@@ -20,6 +20,15 @@ export const GROUP_HEADER_BG: Record<string, string> = {
   "KATALOG (z formularza)": "#86EFAC",
   "ROZLICZENIE (wyliczane)": "#FCD34D",
   "OPIEKUN (edytowalne)": "#FDA4AF",
+  "WŁASNA ZABUDOWA": "#FDBA74",
+  "MAIL #1 · do 25.02": "#FDE68A",
+  "MAIL #2 · do 27.02": "#FCA5A5",
+  "MAIL #3 · do 03.03": "#93C5FD",
+  "MAIL #4 · do 05.03": "#C4B5FD",
+  "MAIL #5 · 09.03": "#86EFAC",
+  "FINAŁ NZS": "#6EE7B7",
+  "WELCOME PACKI": "#F9A8D4",
+  "OBIADY BEŚCIAKÓW": "#FDE047",
   "LOGISTYKA (edytowalne)": "#67E8F9",
   "WARSZTAT (z formularza firmy)": "#A5B4FC",
   "SALA (z formularza firmy)": "#99F6E4",
@@ -51,18 +60,27 @@ export function sheetGroupColumnSolidBg(group: string): string {
   return lightenHex(sheetGroupSolidBg(group), 0.45);
 }
 
-/** Theme-aware opaque fill — sticky panes must not use translucent Tailwind fills. */
-function themeMix(hex: string, pastelShare: number): string {
-  return `color-mix(in oklch, ${hex} ${pastelShare}%, var(--background))`;
+/**
+ * Theme-aware opaque fill — sticky panes must not use translucent Tailwind fills.
+ * Dark mode uses a lower pastel share so header bands stay muted (not neon).
+ */
+function themeMix(hex: string, lightShare: number, darkShare?: number): string {
+  const dark = darkShare ?? Math.max(12, Math.round(lightShare * 0.4));
+  return `light-dark(color-mix(in oklch, ${hex} ${lightShare}%, var(--background)), color-mix(in oklch, ${hex} ${dark}%, var(--background)))`;
+}
+
+/** Dark ink on light bands, light ink on muted dark bands. */
+export function sheetGroupHeaderInk(): string {
+  return "light-dark(#0f172a, #f4f4f5)";
 }
 
 export function sheetGroupHeaderBg(group: string): string {
-  if (!group) return themeMix(FALLBACK_HEADER, 45);
-  return themeMix(GROUP_HEADER_BG[group] ?? FALLBACK_HEADER, 50);
+  if (!group) return themeMix(FALLBACK_HEADER, 45, 28);
+  return themeMix(GROUP_HEADER_BG[group] ?? FALLBACK_HEADER, 55, 32);
 }
 
 /** Softer tint for the column-name row under a coloured group band. */
 export function sheetGroupColumnBg(group: string): string {
-  if (!group) return themeMix(FALLBACK_HEADER, 22);
-  return themeMix(GROUP_HEADER_BG[group] ?? FALLBACK_HEADER, 28);
+  if (!group) return themeMix(FALLBACK_HEADER, 22, 16);
+  return themeMix(GROUP_HEADER_BG[group] ?? FALLBACK_HEADER, 32, 20);
 }

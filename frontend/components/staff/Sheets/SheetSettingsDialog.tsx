@@ -18,25 +18,53 @@ import {
 } from "@/components/ui/dialog";
 import { flatColumnLabel } from "@/lib/sheets/columnWidths";
 
+interface SettingsColumn {
+  key: string;
+  label: string;
+  group?: string;
+}
+
 interface SheetSettingsDialogProps {
   sheetKey: string;
-  columns: { key: string; label: string }[];
+  tabKey: string;
+  columns: SettingsColumn[];
   hidden: Set<string>;
   onToggleHidden: (key: string) => void;
+  onSetHidden: (keys: string[]) => void;
   getColumnWidths: () => Record<string, number>;
   applyColumnWidths: (widths: Record<string, number>) => void;
   hiddenCount: number;
+  frozenColumns: number;
   onOpenHistory: () => void;
+}
+
+function groupColumns(columns: SettingsColumn[]) {
+  const groups: { label: string; cols: SettingsColumn[] }[] = [];
+  const index = new Map<string, number>();
+  for (const col of columns.slice(1)) {
+    const label = col.group?.trim() || "";
+    let i = index.get(label);
+    if (i === undefined) {
+      i = groups.length;
+      index.set(label, i);
+      groups.push({ label, cols: [] });
+    }
+    groups[i].cols.push(col);
+  }
+  return groups;
 }
 
 export function SheetSettingsDialog({
   sheetKey,
+  tabKey,
   columns,
   hidden,
   onToggleHidden,
+  onSetHidden,
   getColumnWidths,
   applyColumnWidths,
   hiddenCount,
+  frozenColumns,
   onOpenHistory,
 }: SheetSettingsDialogProps) {
   const { t } = useTranslation();
@@ -44,19 +72,32 @@ export function SheetSettingsDialog({
   const [confirmDefault, setConfirmDefault] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
   const isAdmin = getUserType() === "admin";
+  const groups = React.useMemo(() => groupColumns(columns), [columns]);
+
+  const toggleGroup = (cols: SettingsColumn[], show: boolean) => {
+    const next = new Set(hidden);
+    for (const col of cols) {
+      if (show) next.delete(col.key);
+      else next.add(col.key);
+    }
+    onSetHidden([...next]);
+  };
 
   const syncFromDefault = async () => {
     setBusy(true);
     try {
-      const { data } = await apiClient.get<{ column_widths: Record<string, number> }>(
-        `/api/sheets/${sheetKey}/layout/`
-      );
+      const { data } = await apiClient.get<{
+        column_widths: Record<string, number>;
+        hidden_by_tab?: Record<string, string[]>;
+      }>(`/api/sheets/${sheetKey}/layout/`);
       const widths = data.column_widths || {};
-      if (Object.keys(widths).length === 0) {
+      const hiddenKeys = data.hidden_by_tab?.[tabKey];
+      if (Object.keys(widths).length === 0 && (!hiddenKeys || hiddenKeys.length === 0)) {
         toast.message(t("sheets.settings.noDefaultLayout"));
         return;
       }
-      applyColumnWidths(widths);
+      if (Object.keys(widths).length > 0) applyColumnWidths(widths);
+      if (hiddenKeys) onSetHidden(hiddenKeys);
       toast.success(t("sheets.settings.syncSuccess"));
       setOpen(false);
     } catch {
@@ -71,6 +112,8 @@ export function SheetSettingsDialog({
     try {
       await apiClient.put(`/api/sheets/${sheetKey}/layout/`, {
         column_widths: getColumnWidths(),
+        hidden_by_tab: { [tabKey]: [...hidden] },
+        merge_hidden_tab: tabKey,
       });
       toast.success(t("sheets.settings.publishSuccess"));
       setConfirmDefault(false);
@@ -112,20 +155,47 @@ export function SheetSettingsDialog({
           <div className="space-y-4">
             <section className="space-y-2">
               <h3 className="text-sm font-medium">{t("sheets.columns")}</h3>
-              <div className="max-h-52 space-y-1 overflow-auto rounded border p-2">
-                {columns.slice(1).map((col) => (
-                  <label
-                    key={col.key}
-                    className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm hover:bg-muted"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={!hidden.has(col.key)}
-                      onChange={() => onToggleHidden(col.key)}
-                    />
-                    <span className="truncate">{flatColumnLabel(col.label)}</span>
-                  </label>
-                ))}
+              <p className="text-xs text-muted-foreground">
+                {t("sheets.settings.freezeInfo", { count: frozenColumns })}
+              </p>
+              <div className="max-h-64 space-y-3 overflow-auto rounded border p-2">
+                {groups.map((group) => {
+                  const visibleCount = group.cols.filter((c) => !hidden.has(c.key)).length;
+                  const allOn = visibleCount === group.cols.length;
+                  const allOff = visibleCount === 0;
+                  return (
+                    <div key={group.label || "__ungrouped"} className="space-y-1">
+                      <label className="flex cursor-pointer items-center gap-2 rounded bg-muted/50 px-2 py-1 text-sm font-medium">
+                        <input
+                          type="checkbox"
+                          checked={allOn}
+                          ref={(el) => {
+                            if (el) el.indeterminate = !allOn && !allOff;
+                          }}
+                          onChange={() => toggleGroup(group.cols, !allOn)}
+                        />
+                        <span className="truncate">
+                          {group.label || t("sheets.settings.ungrouped")}
+                        </span>
+                      </label>
+                      <div className="space-y-0.5 pl-4">
+                        {group.cols.map((col) => (
+                          <label
+                            key={col.key}
+                            className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm hover:bg-muted"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={!hidden.has(col.key)}
+                              onChange={() => onToggleHidden(col.key)}
+                            />
+                            <span className="truncate">{flatColumnLabel(col.label)}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </section>
 

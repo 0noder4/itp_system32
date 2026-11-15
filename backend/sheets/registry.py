@@ -40,8 +40,25 @@ SOURCE_SYSTEM = 'system'
 SOURCE_COMPUTED = 'computed'
 SOURCE_EXTRA = 'extra'
 SOURCE_CUSTOM = 'custom'
-SOURCES = frozenset({SOURCE_SYSTEM, SOURCE_COMPUTED, SOURCE_EXTRA, SOURCE_CUSTOM})
-EDITABLE_SOURCES = frozenset({SOURCE_EXTRA, SOURCE_CUSTOM})
+# staff = editable bool on StaffMeal (row is a user, not a company)
+SOURCE_STAFF = 'staff'
+SOURCES = frozenset({SOURCE_SYSTEM, SOURCE_COMPUTED, SOURCE_EXTRA, SOURCE_CUSTOM, SOURCE_STAFF})
+EDITABLE_SOURCES = frozenset({SOURCE_EXTRA, SOURCE_CUSTOM, SOURCE_STAFF})
+
+# Automatic cell background (payload row.tones). Manual SheetCellStyle still wins.
+TONE_OWN_BUILD = 'own_build'
+TONE_DAY1 = 'day1'
+TONE_DAY2 = 'day2'
+TONE_ANY_DAY = 'any_day'
+TONE_PROTOCOL = 'protocol'
+TONE_RULES = frozenset({TONE_OWN_BUILD, TONE_DAY1, TONE_DAY2, TONE_ANY_DAY, TONE_PROTOCOL})
+
+VIEW_GRID = 'grid'
+VIEW_MATRIX = 'matrix'
+VIEWS = frozenset({VIEW_GRID, VIEW_MATRIX})
+ROW_COMPANY = 'company'
+ROW_STAFF = 'staff'
+ROW_SOURCES = frozenset({ROW_COMPANY, ROW_STAFF})
 
 AGGREGATES = frozenset({'sum', 'count_true'})
 # Frontend highlight rules (cell background):
@@ -100,11 +117,17 @@ class ColumnDef:
     source_fields: tuple[str, ...] = ()
     width: int = 140
     aggregate: str | None = None
+    # True: footer also splits this column by which fair day the firm attends.
+    # False: only the SUMA row. Day rows stay empty (the column is already one day,
+    # a single invoice, or the sheet has no day to split on).
+    aggregate_by_day: bool = False
     highlight: str | None = None
     # When highlight == 'over_included', frontend compares the cell value to this threshold.
     highlight_above: int | None = None
     help: str = ''
     max_length: int = 2000
+    # How build_tab_payload paints row.tones for this column (None = no automatic colour).
+    tone: str | None = None
 
     def __post_init__(self):
         if self.kind not in KINDS:
@@ -113,6 +136,8 @@ class ColumnDef:
             raise ValueError(f'{self.key}: unknown source {self.source!r}')
         if self.aggregate is not None and self.aggregate not in AGGREGATES:
             raise ValueError(f'{self.key}: unknown aggregate {self.aggregate!r}')
+        if self.aggregate_by_day and not self.aggregate:
+            raise ValueError(f'{self.key}: aggregate_by_day needs an aggregate')
         if self.highlight is not None and self.highlight not in HIGHLIGHTS:
             raise ValueError(f'{self.key}: unknown highlight {self.highlight!r}')
         if self.highlight == 'over_included' and self.highlight_above is None:
@@ -130,8 +155,10 @@ class ColumnDef:
             raise ValueError(f'{self.key}: {self.source} column needs a getter')
         if self.source == SOURCE_CUSTOM and self.setter is None:
             raise ValueError(f'{self.key}: custom column needs a setter')
-        if self.source == SOURCE_EXTRA and (self.getter or self.setter):
-            raise ValueError(f'{self.key}: extra column is stored in SheetCellValue, no getter/setter')
+        if self.source in (SOURCE_EXTRA, SOURCE_STAFF) and (self.getter or self.setter):
+            raise ValueError(f'{self.key}: {self.source} column has no getter/setter')
+        if self.tone is not None and self.tone not in TONE_RULES:
+            raise ValueError(f'{self.key}: unknown tone {self.tone!r}')
 
     @property
     def is_editable_source(self) -> bool:
@@ -141,7 +168,7 @@ class ColumnDef:
         return self.options() if callable(self.options) else self.options
 
     def read(self, ctx: RowContext) -> Any:
-        if self.source == SOURCE_EXTRA:
+        if self.source in (SOURCE_EXTRA, SOURCE_STAFF):
             return ctx.extras.get(self.key)
         return self.getter(ctx)
 
@@ -162,6 +189,14 @@ class TabDef:
     prefetch_related: tuple[str, ...] = ()
     frozen_columns: int = 1
     roles: frozenset[str] | None = None
+    view: str = VIEW_GRID
+    row_source: str = ROW_COMPANY
+
+    def __post_init__(self):
+        if self.view not in VIEWS:
+            raise ValueError(f'{self.key}: unknown view {self.view!r}')
+        if self.row_source not in ROW_SOURCES:
+            raise ValueError(f'{self.key}: unknown row_source {self.row_source!r}')
 
     def column(self, key: str) -> ColumnDef | None:
         for col in self.columns:
