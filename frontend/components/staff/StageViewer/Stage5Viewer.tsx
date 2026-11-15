@@ -171,6 +171,11 @@ export function Stage5Viewer({ data }: Stage5ViewerProps) {
           </div>
         )}
 
+        <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
+          <p className="font-medium">{t("exhibitor.form.pdiStaffTitle")}</p>
+          <p className="mt-1">{t("exhibitor.form.pdiStaffHint")}</p>
+        </div>
+
         <div>
           <h3 className="font-medium mb-3">{t("exhibitor.form.exhibitors")}</h3>
           {finalData?.no_other_delegates ? (
