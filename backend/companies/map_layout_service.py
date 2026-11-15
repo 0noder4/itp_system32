@@ -17,7 +17,8 @@ from .models import MapLayout, Stand
 
 logger = logging.getLogger(__name__)
 
-TEMP_REMAP_PREFIX = "__remap__"
+# Keep short: stand_number max_length=10; "__remap__{pk}" overflows for pk >= 10.
+TEMP_REMAP_PREFIX = "~"
 
 
 def get_day_layout(layout: MapLayout, day: str) -> dict:
@@ -272,16 +273,12 @@ def apply_repartition_to_layout(
 
     other_day = "day2" if day == "day1" else "day1"
     should_write_other = False
-    other_warnings = find_stand_conflicts(affected, days=[other_day])
     if layout.sync_days:
         # Either day: keep both layouts identical
         should_write_other = True
+        other_warnings = find_stand_conflicts(affected, days=[other_day])
         warnings = warnings + other_warnings
-    elif day == "day1":
-        # sync off: still copy day1→day2 when safe / confirmed
-        if not other_warnings or confirm:
-            should_write_other = True
-        warnings = warnings + other_warnings
+    # sync_days=False: edit only the active day — never copy day1→day2 or warn on the other day.
 
     if warnings and not confirm:
         return layout, warnings, False
