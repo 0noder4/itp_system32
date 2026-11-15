@@ -66,7 +66,10 @@ export function InvitationFormDialog({ onSuccess }: InvitationFormDialogProps) {
         targetRef.current === "company"
           ? z.object({
               email: z.string().email(t("auth.validation.emailRequired")),
-              company_name: z.string().min(1, t("auth.validation.companyNameRequired")),
+              company_name: z
+                .string()
+                .min(1, t("auth.validation.companyNameRequired"))
+                .max(100, t("companies.invite.companyNameMaxLength")),
               company_status: z.enum(["main", "partner", "basic"]),
               language: z.enum(["en", "pl"]),
             })
@@ -256,10 +259,14 @@ export function InvitationFormDialog({ onSuccess }: InvitationFormDialogProps) {
                         {...field}
                         id="invite-company-name"
                         type="text"
+                        maxLength={100}
                         placeholder={t("companies.invite.companyNamePlaceholder")}
                         aria-invalid={fieldState.invalid}
                         disabled={isSubmitting}
                       />
+                      <p className="text-xs text-muted-foreground">
+                        {t("companies.invite.companyNameLoginHint")}
+                      </p>
                       {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
                     </Field>
                   )}
