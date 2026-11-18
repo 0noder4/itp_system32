@@ -34,11 +34,11 @@ from .form_columns import (
 GROUP_CARE = 'OPIEKUN (edytowalne)'
 GROUP_LG = 'LOGISTYKA (edytowalne)'
 GROUP_BUILD = 'WŁASNA ZABUDOWA'
-GROUP_MAIL1 = 'MAIL #1 · do 25.02'
-GROUP_MAIL2 = 'MAIL #2 · do 27.02'
-GROUP_MAIL3 = 'MAIL #3 · do 03.03'
-GROUP_MAIL4 = 'MAIL #4 · do 05.03'
-GROUP_MAIL5 = 'MAIL #5 · 09.03'
+GROUP_MAIL1 = 'MAIL #1'
+GROUP_MAIL2 = 'MAIL #2'
+GROUP_MAIL3 = 'MAIL #3'
+GROUP_MAIL4 = 'MAIL #4'
+GROUP_MAIL5 = 'MAIL #5'
 GROUP_FINAL = 'FINAŁ NZS'
 GROUP_WELCOME = 'WELCOME PACKI'
 GROUP_STAFF = 'OBIADY BEŚCIAKÓW'
@@ -126,7 +126,7 @@ def _lunch_sum(ctx: RowContext):
 
 
 def _firemka_contact(ctx: RowContext) -> str:
-    """Excel Main: „Dane do firemki” = imię nazwisko | telefon głównego przedstawiciela."""
+    """Excel Main „Dane do firemki”: imię, nazwisko i telefon głównego przedstawiciela."""
     final = ctx.related('finaldata')
     if final is None:
         return ''
@@ -169,25 +169,37 @@ CARE_CAR_REGISTRATION = _extra(
     'care.car_registration', 'Numer rejestracyjny', width=140, group=GROUP_BUILD,
     help='Numer rejestracyjny auta z zabudową (widać też w komórkach harmonogramu montażu).',
 )
-CARE_CAR_MAKE = _extra('care.car_make', 'Marka auta', width=140, group=GROUP_BUILD)
-CARE_DRIVER = _extra('care.driver', 'Kierowca (kontakt)', width=180, group=GROUP_BUILD)
+CARE_CAR_MAKE = _extra(
+    'care.car_make', 'Marka auta', width=140, group=GROUP_BUILD,
+    help='Marka auta, którym przywożą zabudowę.',
+)
+CARE_DRIVER = _extra(
+    'care.driver', 'Kierowca (kontakt)', width=180, group=GROUP_BUILD,
+    help='Imię, nazwisko i telefon kierowcy.',
+)
 CARE_ARRIVAL_DAY = _extra(
-    'care.arrival_day', 'Dzień przyjazdu', kind=KIND_SELECT, width=160, group=GROUP_BUILD,
+    'care.arrival_day', 'Dzień montażu', kind=KIND_SELECT, width=160, group=GROUP_BUILD,
     options=ARRIVAL_DAY_OPTIONS,
-    help='Dzień montażu własnej zabudowy: 9, 10 albo 11 marca 2027.',
+    help=(
+        'Dzień, w którym przywożą własną zabudowę. '
+        'Godzina wejścia na same targi jest w kolumnach Wejście dzień 1 i Wejście dzień 2.'
+    ),
 )
 CARE_SLOT = _extra(
     SLOT_KEY, 'Slot przyjazdu', kind=KIND_SELECT, width=120, group=GROUP_BUILD,
     options=ARRIVAL_SLOT_OPTIONS,
-    help='Slot 2h: 14-16, 16-18, 18-20, 20-22. Inny, starszy tekst zostaje w bazie i na harmonogramie wpada do NO.',
+    help=(
+        'Przedział 2 godziny: 14–16, 16–18, 18–20 albo 20–22. W jednym przedziale najwyżej 5 firm. '
+        'Inny zapis zostaje w komórce, a na harmonogramie montażu trafia do kolumny Bez godziny.'
+    ),
 )
 CARE_SLOT_LOAD = ColumnDef(
     key='care.slot_count', label='Firm w slocie', kind=KIND_NUMBER, source=SOURCE_COMPUTED,
     group=GROUP_BUILD, width=110, getter=_slot_load, highlight='over_five',
-    help='Podświetlenie, gdy w tym slocie jest więcej niż 5 firm.',
+    help='Ile firm ma ten sam przedział godzin. Kolor ostrzega, gdy jest ich więcej niż 5.',
 )
 CARE_BUILD_SIZE = _extra(
-    'care.build_size', 'Rozmiar zabudowy', width=150, group=GROUP_BUILD,
+    'care.build_size', 'Wymiary zabudowy', width=150, group=GROUP_BUILD,
     help='Wymiary własnej zabudowy, np. 200x50x250 cm. Osobno od rozmiaru stoiska z pakietu.',
 )
 CARE_PICKUP = _extra(
@@ -201,16 +213,32 @@ CARE_PICKUP_TIME = _extra(
 CARE_BUILD_TONE = ColumnDef(
     key='care.build_tone', label='Status zabudowy', kind=KIND_TEXT, source=SOURCE_COMPUTED,
     group=GROUP_BUILD, width=130, getter=_build_tone_label, tone=TONE_OWN_BUILD,
-    help='Szary: brak własnej zabudowy. Pomarańczowy: brakuje wizualizacji, certyfikatu, auta albo slotu. Zielony: komplet.',
+    help=(
+        'Szary: brak własnej zabudowy. Pomarańczowy: brakuje wizualizacji, certyfikatu, auta albo slotu. '
+        'Zielony: te rzeczy są. Osobno zaznacz Certyfikat sprawdzony, gdy ktoś obejrzał plik.'
+    ),
+)
+CARE_FIRE_CERT_CHECKED = _extra(
+    'care.fire_cert_checked', 'Certyfikat\nsprawdzony', kind=KIND_BOOL, width=130, group=GROUP_BUILD,
+    aggregate='count_true', aggregate_by_day=True,
+    help=(
+        'Otwórz plik certyfikatu i potwierdź, że data oraz nazwa firmy się zgadzają. '
+        'Sam plik obok nie oznacza, że ktoś go obejrzał.'
+    ),
 )
 CARE_LOGO_APPROVED = _extra(
-    'care.logo_approved', 'Logo zatwierdzone', kind=KIND_BOOL, width=120, edit_roles=EDIT_LOGO,
+    'care.logo_approved', 'Logo zatwierdzone', kind=KIND_BOOL, width=130, edit_roles=EDIT_LOGO,
     aggregate='count_true', aggregate_by_day=True,
+    help='Logistyka potwierdza, że logo na fryz nadaje się do druku. To nie jest ptaszek Logo sprawdzone z maila 1.',
 )
-CARE_COMMENT = _extra('care.comment', 'Komentarz opiekuna', kind=KIND_LONGTEXT, width=240)
+CARE_COMMENT = _extra(
+    'care.comment', 'Komentarz opiekuna', kind=KIND_LONGTEXT, width=240,
+    help='Notatka opiekuna przy tej firmie.',
+)
 LG_EXTRA_ORDERS = _extra(
     'lg.extra_orders', 'Dodatkowe zamówienia', kind=KIND_LONGTEXT, width=220,
     edit_roles=EDIT_LG, group=GROUP_LG,
+    help='Notatka logistyki poza katalogiem, np. wykładzina dla sponsora albo rezygnacja ze ścianek.',
 )
 
 CARE_COLUMNS = (
@@ -224,6 +252,7 @@ CARE_COLUMNS = (
     CARE_PICKUP,
     CARE_PICKUP_TIME,
     CARE_BUILD_TONE,
+    CARE_FIRE_CERT_CHECKED,
     CARE_LOGO_APPROVED,
     CARE_COMMENT,
 )
@@ -236,44 +265,62 @@ def _check(key, label, group, kind=KIND_BOOL, width=110, by_day=True, **kwargs):
     )
 
 
-MAIL1_SENT = _check('mail1.sent', 'Wysłany?', GROUP_MAIL1, help='Mail #1 do 25.02.', tone=TONE_PROTOCOL)
+MAIL1_SENT = _check(
+    'mail1.sent', 'Wysłany?', GROUP_MAIL1,
+    help='Mail 1: potwierdzenie zamówienia. Wysyłka do {{m1}}.', tone=TONE_PROTOCOL,
+)
 MAIL1_STANDARD = _check(
-    'mail1.standard_ok', 'Standardowe OK?', GROUP_MAIL1, width=130,
-    help='Czy poprawne standardowe? Deadline 25.02.', tone=TONE_PROTOCOL,
+    'mail1.standard_ok', 'Wyposażenie\nz pakietu OK?', GROUP_MAIL1, width=140,
+    help=(
+        'Czy światło, gniazdka, kosz, wieszak, fryz i ilości z katalogu obok się zgadzają. '
+        'Jak nie, komentarz z propozycją przy Dodatkowe zamówienia. Termin {{m1}}.'
+    ),
+    tone=TONE_PROTOCOL,
 )
 MAIL1_EXTRA = _check(
-    'mail1.extra_ok', 'Dodatkowe OK?', GROUP_MAIL1, width=120,
-    help='Czy poprawne dodatkowe? Deadline 25.02.', tone=TONE_PROTOCOL,
+    'mail1.extra_ok', 'Dokupione\nwyposażenie OK?', GROUP_MAIL1, width=140,
+    help=(
+        'Czy płatne dodatki i notatka Dodatkowe zamówienia się zgadzają. '
+        'Jak nie, komentarz z propozycją przy tej notatce. Termin {{m1}}.'
+    ),
+    tone=TONE_PROTOCOL,
 )
 MAIL1_LOGO = _check(
     'mail1.logo_check', 'Logo sprawdzone', GROUP_MAIL1, width=130,
-    help='Sprawdź logo w logos + catalogue (przy własnej zabudowie tylko catalogue). Deadline 25.02.',
+    help=(
+        'Czy logo z formularza jest właściwe. Przy zabudowie ITP sprawdź logo na fryz i logo do katalogu. '
+        'Przy własnej zabudowie tylko logo do katalogu. Termin {{m1}}.'
+    ),
     tone=TONE_PROTOCOL,
 )
 
 MAIL2_SENT = _check(
     'mail2.sent', 'Wysłany?', GROUP_MAIL2,
-    help='Mail #2 do 27.02. Liczbę i listę PDI wpisuje opiekun w kolumnach PDI.', tone=TONE_PROTOCOL,
+    help='Mail 2: zaproszenie na galę PDI, liczba osób i maile. Wysyłka do {{m2}}. Liczbę i listę wpisujesz w kolumnach PDI.',
+    tone=TONE_PROTOCOL,
 )
 
-MAIL3_SENT = _check('mail3.sent', 'Wysłany?', GROUP_MAIL3, help='Mail #3 do 03.03.', tone=TONE_PROTOCOL)
+MAIL3_SENT = _check(
+    'mail3.sent', 'Wysłany?', GROUP_MAIL3,
+    help='Mail 3: informator i parking. Wysyłka do {{m3}}.', tone=TONE_PROTOCOL,
+)
 MAIL3_HR = _extra(
     'mail3.hr_phone', 'HR z maila', width=180, group=GROUP_MAIL3,
-    help='Kontakt z odpowiedzi na Mail #3. Lista z formularza jest w kolumnie Delegaci. Deadline 03.03.',
+    help='Kontakt z odpowiedzi na Mail #3. Osoby na targi są w kolumnie Delegaci na targi. Deadline {{m3}}.',
 )
 
 FIREMKA_CONTACT = ColumnDef(
-    key='people.firemka', label='Dane do firemki', kind=KIND_TEXT, source=SOURCE_COMPUTED,
+    key='people.firemka', label='Główny przedstawiciel', kind=KIND_TEXT, source=SOURCE_COMPUTED,
     group=GROUP_COMPANY, width=220, getter=_firemka_contact,
-    help='Imię i nazwisko oraz telefon głównego przedstawiciela z formularza.',
+    help='Imię, nazwisko i telefon głównego przedstawiciela z formularza.',
 )
 MAIL3_COURIER = _check(
     'mail3.courier', 'Kurier z gadżetami?', GROUP_MAIL3, width=140,
-    help='Czy wysyłają kurierem gadżety? Deadline 03.03.', tone=TONE_PROTOCOL,
+    help='Czy wysyłają kurierem gadżety? Deadline {{m3}}.', tone=TONE_PROTOCOL,
 )
 MAIL3_ARRIVAL = _extra(
     'mail3.arrival_time', 'Przyjazd od 6:30', width=140, group=GROUP_MAIL3,
-    help='O której przyjazd od 6:30. Deadline 03.03.',
+    help='O której przyjazd od 6:30. Deadline {{m3}}.',
 )
 MAIL3_PEOPLE = _extra(
     'mail3.people_count', 'Osób z firmy', kind=KIND_NUMBER, width=110, group=GROUP_MAIL3,
@@ -281,33 +328,48 @@ MAIL3_PEOPLE = _extra(
     help='Ile osób z firmy (Mail #3). Ta sama komórka na zakładce Welcome packi.',
 )
 
-MAIL4_HR = _extra('mail4.hr', 'HRówka', width=140, group=GROUP_MAIL4, help='Mail #4 do 05.03.')
+MAIL4_HR = _extra(
+    'mail4.hr', 'Kontakt HR', width=160, group=GROUP_MAIL4,
+    help='Osoba, z którą prowadzisz kontakt przy zaproszeniach na PDI. Termin {{m4}}.',
+)
 MAIL4_SENT = _check(
     'mail4.sent', 'Mail #4 wysłany', GROUP_MAIL4, width=130,
-    help='Wysłany Mail #4 dla każdej osoby? Deadline 05.03.', tone=TONE_PROTOCOL,
+    help='Czy osobiste zaproszenie na PDI poszło do każdej osoby z listy? Termin {{m4}}.',
+    tone=TONE_PROTOCOL,
 )
 
-MAIL5_SENT = _check('mail5.sent', 'Wysłany?', GROUP_MAIL5, help='Mail #5, 09.03 — powitanie.', tone=TONE_PROTOCOL)
+MAIL5_SENT = _check(
+    'mail5.sent', 'Wysłany?', GROUP_MAIL5,
+    help='Mail 5: powitanie na targach. Wysyłka {{m5}}.', tone=TONE_PROTOCOL,
+)
 MAIL5_NOTES = _extra(
     'mail5.notes', 'Uwagi przed startem', kind=KIND_LONGTEXT, width=200, group=GROUP_MAIL5,
-    help='Uwagi przedstartowe. Deadline 09.03.',
+    help='Uwagi przedstartowe. Deadline {{m5}}.',
 )
 
 FINAL_WELCOME = _check(
-    'final.welcome_handed', 'Welcomepack', GROUP_FINAL, tone=TONE_ANY_DAY,
-    help='Wręczony welcome pack.',
+    'final.welcome_handed', 'Welcome pack\nwręczony?', GROUP_FINAL, width=130, tone=TONE_ANY_DAY,
+    help='Osoba z firmy odebrała welcome pack.',
 )
 FINAL_D1_AM = _check(
-    'final.protocol_d1_am', 'Odbiór rano D1', GROUP_FINAL, width=130, tone=TONE_DAY1, by_day=False,
+    'final.protocol_d1_am', 'Protokół odbioru\nrano, dzień 1', GROUP_FINAL, width=150,
+    tone=TONE_DAY1, by_day=False,
+    help='Podpisany protokół odbiorczy rano pierwszego dnia targów.',
 )
 FINAL_D1_PM = _check(
-    'final.protocol_d1_pm', 'Zdanie popł. D1', GROUP_FINAL, width=130, tone=TONE_DAY1, by_day=False,
+    'final.protocol_d1_pm', 'Protokół zdania\npopołudnie, dzień 1', GROUP_FINAL, width=160,
+    tone=TONE_DAY1, by_day=False,
+    help='Podpisany protokół zdawczy popołudniu pierwszego dnia targów.',
 )
 FINAL_D2_AM = _check(
-    'final.protocol_d2_am', 'Odbiór rano D2', GROUP_FINAL, width=130, tone=TONE_DAY2, by_day=False,
+    'final.protocol_d2_am', 'Protokół odbioru\nrano, dzień 2', GROUP_FINAL, width=150,
+    tone=TONE_DAY2, by_day=False,
+    help='Podpisany protokół odbiorczy rano drugiego dnia targów.',
 )
 FINAL_D2_PM = _check(
-    'final.protocol_d2_pm', 'Zdanie popł. D2', GROUP_FINAL, width=130, tone=TONE_DAY2, by_day=False,
+    'final.protocol_d2_pm', 'Protokół zdania\npopołudnie, dzień 2', GROUP_FINAL, width=160,
+    tone=TONE_DAY2, by_day=False,
+    help='Podpisany protokół zdawczy popołudniu drugiego dnia targów.',
 )
 
 WELCOME_LUNCH_SUM = ColumnDef(
@@ -317,36 +379,49 @@ WELCOME_LUNCH_SUM = ColumnDef(
 )
 WELCOME_LUNCHES_ISSUED = _check(
     'welcome.lunches_issued', 'Obiady wydane', GROUP_WELCOME, width=120, tone=TONE_ANY_DAY,
+    help='Zaznacz, gdy obiady dla tej firmy zostały wydane.',
 )
 WELCOME_LUNCHES_COUNT = _extra(
     'welcome.lunches_count', 'Obiadów wydano', kind=KIND_NUMBER, width=120, group=GROUP_WELCOME,
     aggregate='sum', aggregate_by_day=True,
+    help='Ile obiadów faktycznie wydano.',
 )
 WELCOME_BADGES_ISSUED = _check(
-    'welcome.badges_issued', 'Badge wydane', GROUP_WELCOME, width=120, tone=TONE_ANY_DAY,
+    'welcome.badges_issued', 'Identyfikatory\nwydane', GROUP_WELCOME, width=130, tone=TONE_ANY_DAY,
+    help='Zaznacz, gdy identyfikatory dla tej firmy zostały wydane.',
 )
 WELCOME_BADGES_COUNT = _extra(
-    'welcome.badges_count', 'Badge szt.', kind=KIND_NUMBER, width=100, group=GROUP_WELCOME,
+    'welcome.badges_count', 'Ile\nidentyfikatorów', kind=KIND_NUMBER, width=120, group=GROUP_WELCOME,
     aggregate='sum', aggregate_by_day=True,
+    help='Ile identyfikatorów wydano.',
 )
 WELCOME_ALL_READY = _check(
     'welcome.all_ready', 'Wszystko gotowe', GROUP_WELCOME, width=130, tone=TONE_ANY_DAY,
+    help='Obiady i identyfikatory są skompletowane i czekają na odbiór przez firmę.',
 )
 
 STAFF_NAME = ColumnDef(
     key='staff.name', label='Osoba', kind=KIND_TEXT, source=SOURCE_COMPUTED, group=GROUP_STAFF,
     width=180, getter=lambda ctx: '',
 )
+STAFF_MEAL_NOTE = ColumnDef(
+    key='staff.meal.note', label='Uwagi', kind=KIND_LONGTEXT, source=SOURCE_STAFF,
+    group=GROUP_STAFF, width=220, edit_roles=EDIT_CARE,
+    help='Notatka przy osobie, np. że nie chce obiadu albo jest w core teamie.',
+)
 STAFF_MEAL_DAY1 = ColumnDef(
-    key='staff.meal.day1', label='Obiad dzień 1', kind=KIND_BOOL, source=SOURCE_STAFF,
+    key='staff.meal.day1', label='Bon na obiad\ndzień 1', kind=KIND_BOOL, source=SOURCE_STAFF,
     group=GROUP_STAFF, width=120, edit_roles=EDIT_CARE, aggregate='count_true',
+    help='Zaznacz, gdy bon na obiad pierwszego dnia został wydany.',
 )
 STAFF_MEAL_DAY2 = ColumnDef(
-    key='staff.meal.day2', label='Obiad dzień 2', kind=KIND_BOOL, source=SOURCE_STAFF,
+    key='staff.meal.day2', label='Bon na obiad\ndzień 2', kind=KIND_BOOL, source=SOURCE_STAFF,
     group=GROUP_STAFF, width=120, edit_roles=EDIT_CARE, aggregate='count_true',
+    help='Zaznacz, gdy bon na obiad drugiego dnia został wydany.',
 )
 
 STAFF_MEAL_FIELDS = {
     STAFF_MEAL_DAY1.key: 'day1',
     STAFF_MEAL_DAY2.key: 'day2',
+    STAFF_MEAL_NOTE.key: 'note',
 }

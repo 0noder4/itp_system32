@@ -4,6 +4,7 @@ from __future__ import annotations
 from companies.models import COMPANY_STATUS_CHOICES, DAY_OPT, SIZE_OPT, Company, Settings
 from users.models import STAFF_ROLE_FR, STAFF_ROLE_LG, STAFF_ROLE_OPIEKUN, User
 
+from ..form_writes import set_stand_size
 from ..registry import (
     KIND_BOOL,
     KIND_LONGTEXT,
@@ -25,7 +26,6 @@ COMPANY_STATUS_LABELS = {
     'partner': 'Partner',
     'basic': 'Wystawca',
 }
-SIZE_LABELS = dict(SIZE_OPT)
 
 STAGE_STATUS_OPTIONS = (
     ('accepted', 'zaakceptowany'),
@@ -96,9 +96,16 @@ def stand_size_code(ctx: RowContext) -> str:
     return ''
 
 
-def _stand_size(ctx: RowContext) -> str:
-    code = stand_size_code(ctx)
-    return SIZE_LABELS.get(code, code) if code else ''
+# W arkuszu sam metraż. Nazwa pakietu (podstawowy / standardowy / rozszerzony) zostaje w kodzie stoiska.
+_SIZE_SHEET_LABELS = {
+    'podstawowy': '4 m²',
+    'standardowy': '6 m²',
+    'rozszerzony': '8 m²',
+    '12m2': '12 m²',
+}
+STAND_SIZE_OPTIONS = tuple(
+    (code, _SIZE_SHEET_LABELS[code]) for code, _ in SIZE_OPT if code in _SIZE_SHEET_LABELS
+)
 
 
 COMPANY_NAME = ColumnDef(
@@ -106,15 +113,17 @@ COMPANY_NAME = ColumnDef(
     getter=lambda ctx: ctx.company.name, group=GROUP_BASE, width=180,
 )
 COMPANY_STATUS = ColumnDef(
-    key='company.status', label='Pakiet', kind=KIND_SELECT, source=SOURCE_SYSTEM,
-    getter=lambda ctx: ctx.company.status, group=GROUP_STATUS, width=96,
+    key='company.status', label='Status firmy', kind=KIND_SELECT, source=SOURCE_SYSTEM,
+    getter=lambda ctx: ctx.company.status, group=GROUP_STATUS, width=140,
     options=tuple((code, COMPANY_STATUS_LABELS.get(code, code)) for code, _ in COMPANY_STATUS_CHOICES),
+    help='Główny Partner, Partner albo Wystawca.',
 )
 COMPANY_FR = ColumnDef(
-    key='company.fr', label='FR', kind=KIND_TEXT, source=SOURCE_SYSTEM, group=GROUP_BASE, width=120,
+    key='company.fr', label='Opiekun FR', kind=KIND_TEXT, source=SOURCE_SYSTEM, group=GROUP_BASE, width=150,
     getter=lambda ctx: ' | '.join(
         p for p in (user_display(ctx.company.fr_resp), getattr(ctx.company.fr_resp, 'phone_number', '')) if p
     ),
+    help='Imię i telefon osoby z FR. To inna osoba niż opiekun firmy.',
 )
 COMPANY_OPIEKUN = ColumnDef(
     key='company.opiekun', label='Opiekun', kind=KIND_USER, source=SOURCE_CUSTOM, group=GROUP_BASE, width=120,
@@ -125,18 +134,27 @@ COMPANY_OPIEKUN = ColumnDef(
 COMPANY_DAYS = ColumnDef(
     key='company.days', label='Dni', kind=KIND_TEXT, source=SOURCE_COMPUTED, group=GROUP_BASE, width=72,
     getter=_days_label,
+    help='Których dni targów dotyczy stoisko: dzień 1, dzień 2 albo oba.',
+)
+# Numer pochodzi z mapy hali. Zapis z arkusza zmieniał sam numer i zostawiał stary metraż.
+_STAND_NUMBER_HELP = (
+    'Numer stoiska z mapy hali. W arkuszu tylko podgląd — '
+    'zmiana numeru zostawiłaby przy firmie stary metraż.'
 )
 STAND_DAY1 = ColumnDef(
     key='stand.day1', label='Stoisko\ndzień 1', kind=KIND_TEXT, source=SOURCE_SYSTEM, group=GROUP_BASE,
     width=72, getter=lambda ctx: _stand_number(ctx, 'day1'),
+    help=_STAND_NUMBER_HELP,
 )
 STAND_DAY2 = ColumnDef(
     key='stand.day2', label='Stoisko\ndzień 2', kind=KIND_TEXT, source=SOURCE_SYSTEM, group=GROUP_BASE,
     width=72, getter=lambda ctx: _stand_number(ctx, 'day2'),
+    help=_STAND_NUMBER_HELP,
 )
 STAND_SIZE = ColumnDef(
-    key='stand.size', label='Rozmiar\nstoiska', kind=KIND_TEXT, source=SOURCE_SYSTEM, group=GROUP_BASE,
-    width=72, getter=_stand_size,
+    key='stand.size', label='Rozmiar\nstoiska', kind=KIND_SELECT, source=SOURCE_SYSTEM, group=GROUP_BASE,
+    width=100, getter=stand_size_code, setter=set_stand_size, options=STAND_SIZE_OPTIONS,
+    help='Metraż stoiska: 4, 6, 8 albo 12 m².',
 )
 STAGES_SUMMARY = ColumnDef(
     key='company.stages', label='Etapy 1–5', kind=KIND_TEXT, source=SOURCE_COMPUTED, group=GROUP_STATUS,
@@ -199,6 +217,7 @@ def _rejection_notes(ctx: RowContext) -> str:
 COMPANY_STAGE = ColumnDef(
     key='company.stage', label='Bieżący\netap', kind=KIND_SELECT, source=SOURCE_SYSTEM,
     group=GROUP_STATUS, width=140, options=_STAGE_CHOICES, getter=_current_stage,
+    help='Który etap formularza jest teraz otwarty: 1 firma, 2 wyposażenie, 3 warsztaty, 4 katalog, 5 finał.',
 )
 COMPANY_OVERDUE = ColumnDef(
     key='company.overdue', label='Po\nterminie', kind=KIND_TEXT, source=SOURCE_COMPUTED,
@@ -208,10 +227,12 @@ COMPANY_OVERDUE = ColumnDef(
 COMPANY_RESIGNED = ColumnDef(
     key='company.resigned', label='Firma\nrezygnuje', kind=KIND_BOOL, source=SOURCE_COMPUTED,
     group=GROUP_STATUS, width=72, getter=lambda ctx: ctx.resigned, highlight='truthy',
+    help='Zaproszenie tej firmy jest oznaczone jako rezygnacja.',
 )
 COMPANY_REJECTIONS = ColumnDef(
     key='company.rejections', label='Uwagi do poprawek', kind=KIND_LONGTEXT, source=SOURCE_COMPUTED,
     group=GROUP_STATUS, width=220, getter=_rejection_notes,
+    help='Komentarz opiekuna FR przy etapie odesłanym do poprawy.',
 )
 
 # Pakiet + etapy w osobnej grupie STATUSY — bez drugiego paska INFORMACJE BAZOWE na końcu LG.

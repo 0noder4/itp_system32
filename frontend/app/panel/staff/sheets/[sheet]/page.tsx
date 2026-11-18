@@ -20,6 +20,19 @@ function readTabFromUrl(): string | null {
   return new URLSearchParams(window.location.search).get("tab");
 }
 
+function readIntParam(name: string): number | null {
+  if (typeof window === "undefined") return null;
+  const raw = new URLSearchParams(window.location.search).get(name);
+  if (!raw) return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
+
+function readColFromUrl(): string | null {
+  if (typeof window === "undefined") return null;
+  return new URLSearchParams(window.location.search).get("col");
+}
+
 export default function SheetPage() {
   const { t } = useTranslation();
   const navItems = useStaffNav();
@@ -28,11 +41,17 @@ export default function SheetPage() {
   const { data: catalog, error, isLoading } = useSWR<SheetCatalogEntry[]>("/api/sheets/", fetcher);
   const sheet = catalog?.find((s) => s.key === sheetKey);
   const [tabKey, setTabKey] = React.useState<string | null>(null);
+  const [focusCompanyId, setFocusCompanyId] = React.useState<number | null>(null);
+  const [focusUserId, setFocusUserId] = React.useState<number | null>(null);
+  const [focusColumnKey, setFocusColumnKey] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     if (!sheet || tabKey) return;
     const fromUrl = readTabFromUrl();
     setTabKey(sheet.tabs.some((tab) => tab.key === fromUrl) ? fromUrl : (sheet.tabs[0]?.key ?? null));
+    setFocusCompanyId(readIntParam("company"));
+    setFocusUserId(readIntParam("user"));
+    setFocusColumnKey(readColFromUrl());
   }, [sheet, tabKey]);
 
   const selectTab = (key: string) => {
@@ -75,6 +94,9 @@ export default function SheetPage() {
                 tabKey={tabKey}
                 tabs={sheet.tabs}
                 mineFilter={sheet.key === "opiekun" && !sheet.scoped}
+                focusCompanyId={focusCompanyId}
+                focusUserId={focusUserId}
+                focusColumnKey={focusColumnKey}
               />
             </div>
             {sheet.tabs.length > 1 && (

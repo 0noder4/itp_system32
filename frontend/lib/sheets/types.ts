@@ -18,6 +18,15 @@ export interface SheetOption {
   label: string;
 }
 
+export type SheetListSchema = "delegates" | "pdi" | "facilitators" | "jobs";
+
+export interface SheetEditPart {
+  key: string;
+  label: string;
+  kind: SheetColumnKind;
+  options: SheetOption[];
+}
+
 export interface SheetColumn {
   key: string;
   label: string;
@@ -25,6 +34,16 @@ export interface SheetColumn {
   source: SheetColumnSource;
   group: string;
   editable: boolean;
+  /** Whether a comment on this column may propose a change (becomes a draft). */
+  proposable?: boolean;
+  /** Admin / LG / FR may save a draft for this form column (not for file_link). */
+  can_draft?: boolean;
+  /** Admin / LG / FR may commit into the company form (incl. graphics upload). */
+  can_commit?: boolean;
+  /** Structured list editor (people, equipment, jobs). */
+  list_schema?: SheetListSchema;
+  /** Separate form fields behind one displayed cell (e.g. name, surname, phone). */
+  edit_parts?: SheetEditPart[];
   options: SheetOption[];
   width: number;
   aggregate: "sum" | "count_true" | null;
@@ -42,6 +61,8 @@ export interface SheetColumn {
 export interface SheetFileValue {
   url: string;
   name: string;
+  /** Storage path of a sheet draft. Absent on the live form file. */
+  path?: string;
 }
 
 export type SheetCellValue =
@@ -90,6 +111,8 @@ export interface SheetMatrixMeta {
   day: string;
   editable: boolean;
   edit_tab: string;
+  /** care.slot column meta for montage comment proposals (lives on Główny). */
+  comment_column?: SheetColumn;
   own_build_total: number;
   placed_count: number;
   placements: Record<string, MatrixPlacement[]>;
@@ -109,6 +132,18 @@ export interface SheetTabPayload {
   rows: SheetRow[];
   /** Fill colours keyed by `${companyId}|${columnKey}`. */
   cell_styles?: Record<string, string>;
+  /** Draft flags: `${companyId}|${columnKey}` → true. */
+  drafts?: Record<string, boolean>;
+  /** Form override flags after commit: `${companyId}|${columnKey}` → true. */
+  form_overrides?: Record<string, boolean>;
+  /** Live form value behind a draft, keyed like `drafts`. */
+  form_values?: Record<string, SheetCellValue>;
+  /** Values of edit_parts, keyed by `${companyId}|${columnKey}`. */
+  part_values?: Record<string, Record<string, SheetCellValue>>;
+  /** Structured list payloads for list_schema columns. */
+  structured?: Record<string, Record<string, unknown>[]>;
+  /** Comment counts: `c:{companyId}|{col}` or `u:{userId}|{col}`. */
+  comment_counts?: Record<string, number>;
   /** Montage schedule metadata (assign/clear via edit_tab cells). */
   matrix?: SheetMatrixMeta;
   generated_at: string;
@@ -121,15 +156,25 @@ export interface SheetCatalogEntry {
   tabs: { key: string; title: string }[];
 }
 
+export type SheetCellChangeMode = "edit" | "draft" | "commit";
+
 export interface SheetCellChangeRequest {
   company_id: number;
   column_key: string;
-  value: SheetCellValue;
-  base: SheetCellValue;
+  value: SheetCellValue | Record<string, unknown>[];
+  base: SheetCellValue | Record<string, unknown>[] | null;
+  mode?: SheetCellChangeMode;
 }
 
 export interface SheetCellsResponse {
-  applied: { company_id: number; column_key: string; value: SheetCellValue }[];
+  applied: {
+    company_id: number;
+    column_key: string;
+    value: SheetCellValue;
+    mode?: SheetCellChangeMode;
+    draft?: boolean;
+    form_override?: boolean;
+  }[];
   conflicts: {
     company_id: number;
     column_key: string;

@@ -16,6 +16,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import QuerySet
 
 from companies.models import Company
+from users.models import STAFF_ROLE_FR, STAFF_ROLE_LG
 
 KIND_TEXT = 'text'
 KIND_LONGTEXT = 'longtext'
@@ -40,7 +41,7 @@ SOURCE_SYSTEM = 'system'
 SOURCE_COMPUTED = 'computed'
 SOURCE_EXTRA = 'extra'
 SOURCE_CUSTOM = 'custom'
-# staff = editable bool on StaffMeal (row is a user, not a company)
+# staff = editable value on StaffMeal (row is a user, not a company)
 SOURCE_STAFF = 'staff'
 SOURCES = frozenset({SOURCE_SYSTEM, SOURCE_COMPUTED, SOURCE_EXTRA, SOURCE_CUSTOM, SOURCE_STAFF})
 EDITABLE_SOURCES = frozenset({SOURCE_EXTRA, SOURCE_CUSTOM, SOURCE_STAFF})
@@ -128,6 +129,11 @@ class ColumnDef:
     max_length: int = 2000
     # How build_tab_payload paints row.tones for this column (None = no automatic colour).
     tone: str | None = None
+    # When set, draft/commit store a JSON list; the grid still shows getter text.
+    # Schema id for the frontend editor (delegates, pdi, facilitators, equipment, jobs).
+    list_schema: str | None = None
+    # Read structured list for the editor (company → list[dict]).
+    list_reader: Callable[[Company], list] | None = None
 
     def __post_init__(self):
         if self.kind not in KINDS:
@@ -157,12 +163,30 @@ class ColumnDef:
             raise ValueError(f'{self.key}: custom column needs a setter')
         if self.source in (SOURCE_EXTRA, SOURCE_STAFF) and (self.getter or self.setter):
             raise ValueError(f'{self.key}: {self.source} column has no getter/setter')
+        if self.source == SOURCE_COMPUTED and self.setter is not None:
+            raise ValueError(f'{self.key}: computed column cannot have a setter')
+        if self.list_schema and self.source != SOURCE_SYSTEM:
+            raise ValueError(f'{self.key}: list_schema only on system columns')
+        if bool(self.list_schema) != bool(self.list_reader):
+            raise ValueError(f'{self.key}: list_schema and list_reader go together')
+        if self.list_schema and self.setter is None:
+            raise ValueError(f'{self.key}: list column needs a setter')
         if self.tone is not None and self.tone not in TONE_RULES:
             raise ValueError(f'{self.key}: unknown tone {self.tone!r}')
 
     @property
     def is_editable_source(self) -> bool:
         return self.source in EDITABLE_SOURCES
+
+    @property
+    def is_form_writable(self) -> bool:
+        return self.source == SOURCE_SYSTEM and self.setter is not None
+
+    @property
+    def is_proposable(self) -> bool:
+        return self.is_editable_source or (
+            self.is_form_writable and not self.list_schema and self.kind != KIND_FILE
+        )
 
     def resolve_options(self) -> tuple[Option, ...]:
         return self.options() if callable(self.options) else self.options
@@ -177,6 +201,17 @@ class ColumnDef:
 
     def editable_by(self, user) -> bool:
         return self.is_editable_source and user.has_staff_role(*self.edit_roles)
+
+    def _form_writer_roles(self, user) -> bool:
+        if getattr(user, 'type', None) == 'admin':
+            return True
+        return user.has_staff_role(STAFF_ROLE_LG, STAFF_ROLE_FR)
+
+    def can_draft(self, user) -> bool:
+        return self.is_form_writable and self._form_writer_roles(user)
+
+    def can_commit(self, user) -> bool:
+        return self.is_form_writable and self._form_writer_roles(user)
 
 
 @dataclass(frozen=True)

@@ -29,6 +29,7 @@ from .extras import (
     CARE_CAR_REGISTRATION,
     CARE_COMMENT,
     CARE_DRIVER,
+    CARE_FIRE_CERT_CHECKED,
     CARE_LOGO_APPROVED,
     CARE_PICKUP,
     CARE_PICKUP_TIME,
@@ -40,6 +41,7 @@ from .extras import (
     FINAL_D2_AM,
     FINAL_D2_PM,
     FINAL_WELCOME,
+    LG_EXTRA_ORDERS,
     MAIL1_EXTRA,
     MAIL1_LOGO,
     MAIL1_SENT,
@@ -57,6 +59,7 @@ from .extras import (
     MONTAGE_DATES,
     STAFF_MEAL_DAY1,
     STAFF_MEAL_DAY2,
+    STAFF_MEAL_NOTE,
     STAFF_NAME,
     WELCOME_ALL_READY,
     WELCOME_BADGES_COUNT,
@@ -69,13 +72,21 @@ from .extras import (
 from .form_columns import (
     COMPANY_EMAIL,
     DELEGATES,
+    EQUIPMENT_PAID,
+    EQUIPMENT_TV_MOUNT,
     LUNCH_DAY1,
     LUNCH_DAY2,
+    PACKAGE_BIN,
+    PACKAGE_FRIEZE,
+    PACKAGE_HANGER,
+    PACKAGE_LIGHTS,
+    PACKAGE_SOCKETS,
     PDI_EMAILS,
     PDI_EXTRA_TICKETS,
     PDI_TICKETS,
     SIGN_FIRE_CERT,
     SIGN_VISUAL,
+    STAND_BROUGHT,
     STAND_COMPOSITION,
     STAND_OWN_BUILD,
 )
@@ -85,13 +96,16 @@ _FIRM_PREFETCH = (
     'finaldata__lunches',
     'finaldata__pdis__pdiattendees',
     'finaldata__pdis__exhibitors',
+    'stand_details__equipment_selections__equipment_item',
 )
 
 _BUILD_COLUMNS = (
     STAND_OWN_BUILD,
     STAND_COMPOSITION,
+    STAND_BROUGHT,
     SIGN_VISUAL,
     SIGN_FIRE_CERT,
+    CARE_FIRE_CERT_CHECKED,
     CARE_BUILD_SIZE,
     CARE_CAR_REGISTRATION,
     CARE_CAR_MAKE,
@@ -102,23 +116,32 @@ _BUILD_COLUMNS = (
     CARE_PICKUP,
     CARE_PICKUP_TIME,
     CARE_BUILD_TONE,
-    CARE_LOGO_APPROVED,
     CARE_COMMENT,
 )
 
 _MAIL_COLUMNS = (
     MAIL1_SENT,
+    PACKAGE_LIGHTS,
+    PACKAGE_SOCKETS,
+    PACKAGE_BIN,
+    PACKAGE_HANGER,
+    PACKAGE_FRIEZE,
+    # equipment.qty.* wstawiane w visible_columns, tuż przed montażem TV
+    EQUIPMENT_TV_MOUNT,
+    EQUIPMENT_PAID,
+    LG_EXTRA_ORDERS,
     MAIL1_STANDARD,
     MAIL1_EXTRA,
     MAIL1_LOGO,
+    CARE_LOGO_APPROVED,
     LUNCH_DAY1,
     LUNCH_DAY2,
     MAIL2_SENT,
+    DELEGATES,
     PDI_TICKETS,
     PDI_EXTRA_TICKETS,
     PDI_EMAILS,
     MAIL3_SENT,
-    DELEGATES,
     MAIL3_HR,
     MAIL3_COURIER,
     MAIL3_ARRIVAL,
@@ -135,16 +158,35 @@ _MAIL_COLUMNS = (
 )
 
 
-def _matrix_column(key: str, label: str, width: int = 220) -> ColumnDef:
+_SLOT_HELP = (
+    'Firmy z własną zabudową, które tego dnia przyjeżdżają w tym przedziale. '
+    'W jednym przedziale najwyżej 5 firm. Dzień i slot wpisuje się na zakładce Główny. '
+    'Odbiór zabudowy jest w kolumnach Kiedy odbiór i Godzina odbioru.'
+)
+_NO_SLOT_HELP = (
+    'Firma ma ten dzień montażu, ale slot jest pusty, spoza listy 14–16, 16–18, 18–20, 20–22, '
+    'albo w przedziale jest już 5 firm.'
+)
+
+
+def _matrix_column(key: str, label: str, width: int = 220, help: str = '') -> ColumnDef:
     return ColumnDef(
         key=key, label=label, kind=KIND_LONGTEXT, source=SOURCE_COMPUTED,
-        getter=lambda ctx: '', width=width,
+        getter=lambda ctx: '', width=width, help=help,
     )
 
 
 MATRIX_COLUMNS = (
-    _matrix_column('matrix.pos', 'l.p.', 56),
-    *(_matrix_column(f'matrix.slot.{slot}', slot, 240) for slot in (*ARRIVAL_SLOTS, 'NO')),
+    _matrix_column('matrix.pos', 'l.p.', 56, help='Numer miejsca w przedziale godzin.'),
+    *(
+        _matrix_column(
+            f'matrix.slot.{slot}',
+            'Bez godziny' if slot == 'NO' else slot,
+            240,
+            help=_NO_SLOT_HELP if slot == 'NO' else _SLOT_HELP,
+        )
+        for slot in (*ARRIVAL_SLOTS, 'NO')
+    ),
 )
 
 
@@ -206,7 +248,7 @@ OPIEKUN_SHEET = SheetDef(
         TabDef(
             key='obiady_besciakow',
             title='Obiady Beściaków',
-            columns=(STAFF_NAME, STAFF_MEAL_DAY1, STAFF_MEAL_DAY2),
+            columns=(STAFF_NAME, STAFF_MEAL_NOTE, STAFF_MEAL_DAY1, STAFF_MEAL_DAY2),
             row_source=ROW_STAFF,
             frozen_columns=1,
         ),

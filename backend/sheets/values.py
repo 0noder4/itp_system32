@@ -41,12 +41,25 @@ def present(column: ColumnDef, value: Any) -> str:
     return str(value)
 
 
+def public_file_name(storage_name: str) -> str:
+    """Basename shown in the sheet. Backup copies are stored as {32hex}_{original}."""
+    base = os.path.basename(storage_name or '')
+    if (
+        (storage_name or '').startswith(('sheet_file_backups/', 'sheet_file_drafts/'))
+        and len(base) > 33
+        and base[32] == '_'
+        and all(c in '0123456789abcdef' for c in base[:32])
+    ):
+        return base[33:] or base
+    return base
+
+
 def serialize(value: Any) -> Any:
     """Convert model values to JSON-friendly cell values."""
     if isinstance(value, FieldFile):
         if not value:
             return None
-        return {'url': value.url, 'name': os.path.basename(value.name)}
+        return {'url': value.url, 'name': public_file_name(value.name)}
     if isinstance(value, datetime.datetime):
         return value.isoformat()
     if isinstance(value, datetime.date):

@@ -690,6 +690,31 @@ class Settings(models.Model):
         verbose_name="termin etapu 5",
         help_text="Globalny termin dla etapu 5 (Inne dane)"
     )
+    mail_1_send_by = models.DateField(
+        default=datetime.date(2027, 2, 25),
+        verbose_name="termin wysyłki maila 1",
+        help_text="Do kiedy wysłać Mail #1 (potwierdzenie zamówienia). Widać w nagłówku grupy w arkuszu.",
+    )
+    mail_2_send_by = models.DateField(
+        default=datetime.date(2027, 2, 27),
+        verbose_name="termin wysyłki maila 2",
+        help_text="Do kiedy wysłać Mail #2 (zaproszenie na galę PDI). Widać w nagłówku grupy w arkuszu.",
+    )
+    mail_3_send_by = models.DateField(
+        default=datetime.date(2027, 3, 3),
+        verbose_name="termin wysyłki maila 3",
+        help_text="Do kiedy wysłać Mail #3 (informator i parking). Widać w nagłówku grupy w arkuszu.",
+    )
+    mail_4_send_by = models.DateField(
+        default=datetime.date(2027, 3, 5),
+        verbose_name="termin wysyłki maila 4",
+        help_text="Do kiedy wysłać Mail #4 (osobiste zaproszenie na PDI). Widać w nagłówku grupy w arkuszu.",
+    )
+    mail_5_send_by = models.DateField(
+        default=datetime.date(2027, 3, 9),
+        verbose_name="termin wysyłki maila 5",
+        help_text="Kiedy wysłać Mail #5 (powitanie na targach). Widać w nagłówku grupy w arkuszu.",
+    )
     day1_date = models.DateField(
         null=True,
         blank=True,

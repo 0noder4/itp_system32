@@ -13,6 +13,25 @@ export type UpdateOverviewEntry = {
 
 export const updateOverviews: readonly UpdateOverviewEntry[] = [
   {
+    releaseDate: "2026-11-18",
+    highlights: [
+      "Arkusze: komentarze w komórkach z @oznaczeniem osób — dzwonek powiadomień w nagłówku staff.",
+      "Propozycje zmian: zaproponuj wersję roboczą w komentarzu; FR/LG zapisuje ją do bazy albo odrzuca (status w toku / zaakceptowane / niezaakceptowane).",
+      "Wersje robocze w siatce: widać, że komórka ma draft; można przywrócić wartość z formularza firmy.",
+      "Edycja bogatszych pól z arkusza: listy (delegaci, PDI…), pliki grafik oraz złożone dane (np. imię i telefon) w osobnym oknie.",
+      "Ustawienia arkusza: kolejność kolumn per zakładka oraz synchronizacja układu z domyślnym.",
+      "Montaż: komentarze i propozycje slotu przyjazdu z harmonogramu trafiają do tej samej komórki co na Głównym.",
+    ],
+    worthChecking: [
+      "Arkusze → Główny → róg komórki / komentarze → napisz z @osobą → sprawdź dzwonek w nagłówku.",
+      "Arkusze → zaproponuj wersję roboczą → FR/LG: status → Zapisz do bazy / odrzuć; odśwież siatkę.",
+      "Arkusze → komórka z draftem → przywróć / zapisz; otwórz edycję listy albo pliku graficznego.",
+      "Arkusze → Ustawienia → zmień kolejność kolumn → synchronizuj układ.",
+      "Arkusze → Opiekun → Montaż → komentarz przy firmie w slocie → propozycja godziny → zapis na Głównym.",
+      "Po zalogowaniu → przegląd aktualizacji → data 18.11.2026.",
+    ],
+  },
+  {
     releaseDate: "2026-11-15",
     highlights: [
       "Arkusze Opiekuna: zakładki montażu (harmonogram slotów z kolorami i przypisywaniem firm), Welcome packi, Obiady Beściaków, tony statusu zabudowy oraz stopki SUMA / DZIEŃ 1 / DZIEŃ 2.",

@@ -36,13 +36,6 @@ backups/*.log
 
 # ignore vscode specific
 .vscode/
-
-# ignore cursor rules
-.cursor/
-.cursorrules
-
-# ignore vscode specific
-.vscode/
 frontend/package-lock.json
 
 # Local private notes (not committed)
@@ -50,3 +43,6 @@ private_notes/
 
 # Local deploy image tarballs (not committed)
 deploy-tars/
+
+# Local Graphify knowledge graph
+graphify-out/

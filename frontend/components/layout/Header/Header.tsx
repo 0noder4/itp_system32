@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { LanguageSelector } from "@/components/layout/LanguageSelector/LanguageSelector";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import { HeaderUserCard } from "@/components/layout/HeaderUserCard";
+import { StaffNotificationsBell } from "@/components/layout/StaffNotificationsBell";
 import { ACCENT_COLOR, STAFF_ACCENT_COLOR } from "@/lib/colors";
 
 export interface NavigationItem {
@@ -119,8 +120,9 @@ export function Header({ navigationItems }: HeaderProps) {
             </nav>
           )}
 
-          {/* Right side: Theme Toggle, Language Selector and User Menu */}
+          {/* Right side: notifications (staff), Theme, Language, User */}
           <div className="flex items-center gap-3">
+            {isStaff && <StaffNotificationsBell accentColor={accentColor} />}
             <ThemeToggle accentColor={accentColor} />
             <LanguageSelector accentColor={accentColor} />
 

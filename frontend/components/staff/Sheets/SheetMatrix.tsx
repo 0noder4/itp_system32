@@ -3,7 +3,13 @@
 import React from "react";
 import { toast } from "sonner";
 import { apiClient } from "@/lib/api";
+import { getUserType, hasStaffRole } from "@/lib/auth";
 import { displayText, toTsv } from "@/lib/sheets/format";
+import {
+  MATRIX_COMMENT_COLUMN,
+  commentCountKey,
+  type CommentTarget,
+} from "@/lib/sheets/comments";
 import { sheetToneInk, toneBackground } from "@/lib/sheets/tones";
 import type {
   MatrixCandidate,
@@ -15,6 +21,10 @@ import type {
 } from "@/lib/sheets/types";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import {
+  CommentCornerButton,
+  SheetCellCommentsDialog,
+} from "./SheetCellComments";
 
 const SLOT_KEYS = ["14-16", "16-18", "18-20", "20-22", "NO"] as const;
 
@@ -49,12 +59,16 @@ export function SheetMatrix({
   rows,
   meta,
   sheetKey,
+  tabKey,
+  commentCounts = {},
   onChanged,
 }: {
   columns: SheetColumn[];
   rows: SheetRow[];
   meta: SheetMatrixMeta | undefined;
   sheetKey: string;
+  tabKey: string;
+  commentCounts?: Record<string, number>;
   onChanged: () => void;
 }) {
   const [anchor, setAnchor] = React.useState<{ r: number; c: number } | null>(null);
@@ -63,6 +77,9 @@ export function SheetMatrix({
   const [busy, setBusy] = React.useState(false);
   const busyRef = React.useRef(false);
   const rootRef = React.useRef<HTMLDivElement>(null);
+  const [commentTarget, setCommentTarget] = React.useState<CommentTarget | null>(null);
+  const [commentCurrentValue, setCommentCurrentValue] = React.useState<string | null>(null);
+  const [commentsOpen, setCommentsOpen] = React.useState(false);
 
   const selected = (r: number, c: number) => {
     if (!anchor || !focus) return false;
@@ -180,6 +197,11 @@ export function SheetMatrix({
   }
 
   const editable = Boolean(meta?.editable);
+  const commentColumn = meta?.comment_column ?? null;
+  const commentTabKey = meta?.edit_tab ?? tabKey;
+  const canCommit =
+    getUserType() === "admin" || hasStaffRole("lg") || hasStaffRole("fr");
+  const commentEditable = Boolean(commentColumn?.proposable);
   const candidates = meta?.candidates ?? [];
   const placed = meta?.placed_count ?? 0;
   const ownTotal = meta?.own_build_total ?? 0;
@@ -274,7 +296,29 @@ export function SheetMatrix({
                         {text || (editable && slot ? (
                           <span className="text-muted-foreground/70">+ przypisz</span>
                         ) : null)}
-                        {isPicker && meta && (
+                        {placement && (
+                          <CommentCornerButton
+                            count={
+                              commentCounts[
+                                commentCountKey({
+                                  kind: "company",
+                                  companyId: placement.company_id,
+                                  columnKey: MATRIX_COMMENT_COLUMN,
+                                })
+                              ] ?? 0
+                            }
+                            onClick={() => {
+                              setCommentTarget({
+                                kind: "company",
+                                companyId: placement.company_id,
+                                columnKey: MATRIX_COMMENT_COLUMN,
+                              });
+                              setCommentCurrentValue(placement.slot || null);
+                              setCommentsOpen(true);
+                            }}
+                          />
+                        )}
+                        {isPicker && picker && meta && (
                           <div
                             className="absolute left-0 top-full z-30 mt-1 w-64 rounded-md border bg-background p-2 text-left shadow-md"
                             onMouseDown={(e) => e.stopPropagation()}
@@ -312,7 +356,7 @@ export function SheetMatrix({
                             ) : (
                               <div className="max-h-56 space-y-1 overflow-auto">
                                 <p className="mb-1 text-xs text-muted-foreground">
-                                  Wybierz firmę do slotu {slot}:
+                                  Wybierz firmę do slotu {picker.slot}:
                                 </p>
                                 {candidates.map((candidate) => (
                                   <button
@@ -320,7 +364,7 @@ export function SheetMatrix({
                                     type="button"
                                     disabled={busy}
                                     className="flex w-full items-start gap-2 rounded px-2 py-1 text-left text-xs hover:bg-muted"
-                                    onClick={() => assignCandidate(candidate, slot)}
+                                    onClick={() => assignCandidate(candidate, picker.slot)}
                                   >
                                     <span
                                       className="mt-0.5 h-3 w-3 shrink-0 rounded-sm border"
@@ -408,6 +452,19 @@ export function SheetMatrix({
           </aside>
         )}
       </div>
+      <SheetCellCommentsDialog
+        open={commentsOpen}
+        onOpenChange={setCommentsOpen}
+        target={commentTarget}
+        sheetKey={sheetKey}
+        tabKey={commentTabKey}
+        title={commentTarget ? `Montaż · ${commentTarget.columnKey}` : "Montaż"}
+        column={commentColumn}
+        columnEditable={commentEditable}
+        currentValue={commentCurrentValue}
+        canCommit={canCommit}
+        onChanged={onChanged}
+      />
     </div>
   );
 }

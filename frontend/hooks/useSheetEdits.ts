@@ -6,6 +6,7 @@ import { apiClient } from "@/lib/api";
 import { useTranslation } from "@/lib/i18n";
 import {
   cellId,
+  type SheetCellChangeMode,
   type SheetCellChangeRequest,
   type SheetCellValue,
   type SheetCellsResponse,
@@ -18,6 +19,7 @@ export interface CellEdit {
   companyId: number;
   columnKey: string;
   value: SheetCellValue;
+  mode?: SheetCellChangeMode;
 }
 
 interface HistoryEntry {
@@ -25,6 +27,7 @@ interface HistoryEntry {
   columnKey: string;
   before: SheetCellValue;
   after: SheetCellValue;
+  mode: SheetCellChangeMode;
 }
 
 interface QueuedChange {
@@ -32,6 +35,7 @@ interface QueuedChange {
   columnKey: string;
   value: SheetCellValue;
   base: SheetCellValue;
+  mode: SheetCellChangeMode;
 }
 
 const FLUSH_DELAY_MS = 300;
@@ -52,7 +56,12 @@ interface Options {
  * errors, and undo/redo that keeps working after autosave (undo = a normal write of
  * the previous value, checked against the value we wrote).
  */
-export function useSheetEdits({ cellsUrl, getServerValue, onServerValues, columnLabel }: Options) {
+export function useSheetEdits({
+  cellsUrl,
+  getServerValue,
+  onServerValues,
+  columnLabel,
+}: Options) {
   const { t } = useTranslation();
   const [overlay, setOverlay] = React.useState<Map<string, SheetCellValue>>(() => new Map());
   const [status, setStatus] = React.useState<SaveStatus>("idle");
@@ -66,7 +75,13 @@ export function useSheetEdits({ cellsUrl, getServerValue, onServerValues, column
   const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const retryRef = React.useRef(0);
 
-  const optionsRef = React.useRef({ getServerValue, onServerValues, columnLabel, cellsUrl, t });
+  const optionsRef = React.useRef({
+    getServerValue,
+    onServerValues,
+    columnLabel,
+    cellsUrl,
+    t,
+  });
   optionsRef.current = { getServerValue, onServerValues, columnLabel, cellsUrl, t };
 
   const updateOverlay = React.useCallback((fn: (map: Map<string, SheetCellValue>) => void) => {
@@ -100,6 +115,7 @@ export function useSheetEdits({ cellsUrl, getServerValue, onServerValues, column
       column_key: c.columnKey,
       value: c.value,
       base: c.base,
+      mode: c.mode,
     }));
     const opts = optionsRef.current;
 
@@ -187,12 +203,18 @@ export function useSheetEdits({ cellsUrl, getServerValue, onServerValues, column
   }, [flush]);
 
   const enqueue = React.useCallback(
-    (companyId: number, columnKey: string, value: SheetCellValue, expectedBase: SheetCellValue) => {
+    (
+      companyId: number,
+      columnKey: string,
+      value: SheetCellValue,
+      expectedBase: SheetCellValue,
+      mode: SheetCellChangeMode
+    ) => {
       const id = cellId(companyId, columnKey);
       const queued = queueRef.current.get(id);
       const inflight = inflightRef.current.get(id);
       const base = queued ? queued.base : inflight ? inflight.value : expectedBase;
-      queueRef.current.set(id, { companyId, columnKey, value, base });
+      queueRef.current.set(id, { companyId, columnKey, value, base, mode: queued?.mode ?? mode });
     },
     []
   );
@@ -208,14 +230,15 @@ export function useSheetEdits({ cellsUrl, getServerValue, onServerValues, column
         }
       });
       for (const e of entries) {
-        if (direction === "undo") enqueue(e.companyId, e.columnKey, e.before, e.after);
-        else if (direction === "redo") enqueue(e.companyId, e.columnKey, e.after, e.before);
+        if (direction === "undo") enqueue(e.companyId, e.columnKey, e.before, e.after, e.mode);
+        else if (direction === "redo") enqueue(e.companyId, e.columnKey, e.after, e.before, e.mode);
         else
           enqueue(
             e.companyId,
             e.columnKey,
             e.after,
-            optionsRef.current.getServerValue(e.companyId, e.columnKey)
+            optionsRef.current.getServerValue(e.companyId, e.columnKey),
+            e.mode
           );
       }
       setStatus("saving");
@@ -230,11 +253,13 @@ export function useSheetEdits({ cellsUrl, getServerValue, onServerValues, column
       for (const edit of edits) {
         const before = currentValue(edit.companyId, edit.columnKey);
         if (sameValue(before, edit.value)) continue;
+        const mode = edit.mode ?? "edit";
         entries.push({
           companyId: edit.companyId,
           columnKey: edit.columnKey,
           before,
           after: edit.value,
+          mode,
         });
       }
       if (entries.length === 0) return;

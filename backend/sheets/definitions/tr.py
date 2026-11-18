@@ -4,6 +4,13 @@ from __future__ import annotations
 from companies.models import STATUS_MAIN, STATUS_PARTENER
 from users.models import STAFF_ROLE_FR, STAFF_ROLE_LG, STAFF_ROLE_TR
 
+from ..form_writes import (
+    _ensure_workshop,
+    make_attr_setter,
+    read_facilitators,
+    set_workshop_decision,
+    write_facilitators,
+)
 from ..registry import (
     KIND_BOOL,
     KIND_LONGTEXT,
@@ -66,13 +73,17 @@ def _facilitator_descriptions(ctx: RowContext) -> str:
 def _system(key, label, attr, kind=KIND_TEXT, group=GROUP_FORM, width=160, default='', **kwargs):
     return ColumnDef(
         key=f'workshop.{key}', label=label, kind=kind, source=SOURCE_SYSTEM, group=group, width=width,
-        getter=_workshop_attr(attr, default), source_fields=(f'Workshop.{attr}',), **kwargs,
+        getter=_workshop_attr(attr, default),
+        setter=make_attr_setter(_ensure_workshop, attr),
+        source_fields=(f'Workshop.{attr}',),
+        **kwargs,
     )
 
 
 WORKSHOP_DECISION = ColumnDef(
     key='workshop.decision', label='Prowadzi warsztat?', kind=KIND_SELECT, source=SOURCE_SYSTEM,
-    group=GROUP_FORM, width=130, getter=_decision, source_fields=('Workshop.workshop',),
+    group=GROUP_FORM, width=130, getter=_decision, setter=set_workshop_decision,
+    source_fields=('Workshop.workshop',),
     options=(('yes', 'tak'), ('no', 'nie'), ('undecided', 'brak decyzji')),
 )
 WORKSHOP_TITLE = _system('title', 'Nazwa warsztatu', 'title', width=220)
@@ -96,13 +107,15 @@ WORKSHOP_PHONE_SAME = _system(
 )
 WORKSHOP_FACILITATORS = ColumnDef(
     key='workshop.facilitators', label='Prowadzący', kind=KIND_LONGTEXT, source=SOURCE_SYSTEM,
-    group=GROUP_FORM, width=240, getter=_facilitators,
+    group=GROUP_FORM, width=240, getter=_facilitators, setter=write_facilitators,
+    list_schema='facilitators', list_reader=read_facilitators,
     source_fields=('WorkshopFacilitator.name', 'WorkshopFacilitator.surname', 'WorkshopFacilitator.phone_number'),
 )
 WORKSHOP_FACILITATOR_DESCRIPTIONS = ColumnDef(
     key='workshop.facilitator_descriptions', label='Opis prowadzących', kind=KIND_LONGTEXT, source=SOURCE_SYSTEM,
     group=GROUP_FORM, width=240, getter=_facilitator_descriptions,
     source_fields=('WorkshopFacilitator.description',),
+    help='Opisy z listy prowadzących (edycja w kolumnie „Prowadzący”).',
 )
 WORKSHOP_NOTES = _system('notes', 'Uwagi firmy', 'notes', kind=KIND_LONGTEXT, width=220)
 

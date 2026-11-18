@@ -128,6 +128,19 @@ class SettingsAdmin(admin.ModelAdmin):
             'fields': ('stage_1_deadline', 'stage_2_deadline', 'stage_3_deadline', 'stage_4_deadline', 'stage_5_deadline',),
             'description': 'Set global deadlines for each form stage. Deadlines are informational only and do not block form access. Leave blank if no deadline is needed for a stage.'
         }),
+        ('Mail send deadlines', {
+            'fields': (
+                'mail_1_send_by',
+                'mail_2_send_by',
+                'mail_3_send_by',
+                'mail_4_send_by',
+                'mail_5_send_by',
+            ),
+            'description': (
+                'Calendar dates shown on MAIL groups in the sheets. '
+                'Staff with FR or LG (and admin) can also change them in sheet settings.'
+            ),
+        }),
         ('Job Fair Dates', {
             'fields': ('day1_date', 'day2_date', 'edition_number',),
             'description': 'Set the dates for the job fair days and the edition number shown in the app name / browser title (e.g. System 33). Format for dates: YYYY-MM-DD (e.g., 2025-03-10)'

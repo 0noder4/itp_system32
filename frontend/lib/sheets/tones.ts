@@ -9,13 +9,14 @@ const TONE_LIGHT: Record<SheetTone, string> = {
 };
 
 /**
- * Dark-mode fills — muted, not washed-out white/green. Pair with {@link sheetToneInk}.
+ * Dark-mode fills — mid tones with clear hue (not coal-black).
+ * Pair with {@link sheetToneInk} (near-white).
  */
 const TONE_DARK: Record<SheetTone, string> = {
-  na: "#3f3f46",
-  todo: "#27272a",
-  warn: "#9a3412",
-  ok: "#14532d",
+  na: "#71717a",
+  todo: "#52525b",
+  warn: "#c2410c",
+  ok: "#15803d",
 };
 
 export function isSheetTone(value: string | undefined): value is SheetTone {
@@ -46,9 +47,9 @@ export function toneLegendSwatch(tone: SheetTone): string {
   return TONE_LIGHT[tone];
 }
 
-/** Ink on tone fills: dark on pastel (light), light on muted (dark). */
+/** Ink on tone fills: dark on pastel (light), near-white on mid tones (dark). */
 export function sheetToneInk(): string {
-  return "light-dark(#0f172a, #f4f4f5)";
+  return "light-dark(#0f172a, #fafafa)";
 }
 
 /**

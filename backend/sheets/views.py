@@ -4,10 +4,12 @@ from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from users.permissions import IsAdmin
+from users.permissions import HasStaffRole, IsAdmin
 
+from . import comments as sheet_comments
 from .definitions import CATALOG
 from .definitions.common import user_display
+from .mail_deadlines import deadlines_payload, update_deadlines
 from .models import SheetCellChange, SheetLayoutDefault
 from .registry import ROW_STAFF
 from .service import (
@@ -18,7 +20,10 @@ from .service import (
     build_tab_payload,
     company_queryset,
     parse_changes,
+    discard_drafts,
+    restore_form_overrides,
     staff_cell_history,
+    upload_cell_file,
     visible_columns,
 )
 from .values import present
@@ -58,12 +63,122 @@ class SheetCatalogView(APIView):
         ])
 
 
-def _clean_hidden_by_tab(raw) -> dict[str, list[str]] | None:
-    """Validate hidden_by_tab payload; None means omit / leave unchanged."""
+class SheetCommentsView(APIView):
+    """GET/POST /api/sheets/comments/ — thread for one cell."""
+
+    permission_classes = [IsAuthenticated, HasAnyStaffRole]
+
+    def get(self, request):
+        try:
+            items = sheet_comments.list_comments(
+                request.user,
+                company_id=request.query_params.get('company_id'),
+                staff_user_id=request.query_params.get('staff_user_id'),
+                column_key=request.query_params.get('column_key') or '',
+            )
+        except SheetPermissionError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_403_FORBIDDEN)
+        except SheetValidationError as exc:
+            return Response({'errors': exc.errors}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(items)
+
+    def post(self, request):
+        try:
+            created = sheet_comments.create_comment(request.user, request.data if isinstance(request.data, dict) else {})
+        except SheetPermissionError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_403_FORBIDDEN)
+        except SheetValidationError as exc:
+            return Response({'errors': exc.errors}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(created, status=status.HTTP_201_CREATED)
+
+
+class SheetCommentDetailView(APIView):
+    """PATCH/DELETE /api/sheets/comments/<id>/."""
+
+    permission_classes = [IsAuthenticated, HasAnyStaffRole]
+
+    def patch(self, request, comment_id: int):
+        try:
+            updated = sheet_comments.update_comment(
+                request.user,
+                comment_id,
+                request.data if isinstance(request.data, dict) else {},
+            )
+        except SheetPermissionError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_403_FORBIDDEN)
+        except SheetValidationError as exc:
+            return Response({'errors': exc.errors}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(updated)
+
+    def delete(self, request, comment_id: int):
+        try:
+            sheet_comments.delete_comment(request.user, comment_id)
+        except SheetPermissionError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_403_FORBIDDEN)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class SheetCommentApplyView(APIView):
+    """POST /api/sheets/comments/<id>/apply/ — write proposed_value into the cell."""
+
+    permission_classes = [IsAuthenticated, HasAnyStaffRole]
+
+    def post(self, request, comment_id: int):
+        try:
+            result = sheet_comments.apply_proposed_change(request.user, comment_id)
+        except SheetPermissionError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_403_FORBIDDEN)
+        except SheetValidationError as exc:
+            return Response({'errors': exc.errors}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(result)
+
+
+class SheetStaffUsersView(APIView):
+    """GET /api/sheets/staff-users/?q= — autocomplete for @mentions."""
+
+    permission_classes = [IsAuthenticated, HasAnyStaffRole]
+
+    def get(self, request):
+        try:
+            items = sheet_comments.search_staff_users(request.user, request.query_params.get('q') or '')
+        except SheetPermissionError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_403_FORBIDDEN)
+        return Response(items)
+
+
+class SheetNotificationsView(APIView):
+    """GET /api/sheets/notifications/ — own mention notifications."""
+
+    permission_classes = [IsAuthenticated, HasAnyStaffRole]
+
+    def get(self, request):
+        return Response(sheet_comments.list_notifications(request.user))
+
+
+class SheetNotificationsReadView(APIView):
+    """POST /api/sheets/notifications/read/ — mark as read."""
+
+    permission_classes = [IsAuthenticated, HasAnyStaffRole]
+
+    def post(self, request):
+        data = request.data if isinstance(request.data, dict) else {}
+        try:
+            result = sheet_comments.mark_notifications_read(
+                request.user,
+                ids=data.get('ids'),
+                all_unread=bool(data.get('all')),
+            )
+        except SheetValidationError as exc:
+            return Response({'errors': exc.errors}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(result)
+
+
+def _clean_tab_key_lists(raw, field_name: str) -> dict[str, list[str]] | None:
+    """Validate {tab: [column keys]}; None means omit / leave unchanged."""
     if raw is None:
         return None
     if not isinstance(raw, dict):
-        raise ValueError('hidden_by_tab musi być obiektem')
+        raise ValueError(f'{field_name} musi być obiektem')
     cleaned: dict[str, list[str]] = {}
     for tab_key, keys in raw.items():
         if not isinstance(tab_key, str) or not tab_key or len(tab_key) > 50:
@@ -83,14 +198,47 @@ def _clean_hidden_by_tab(raw) -> dict[str, list[str]] | None:
     return cleaned
 
 
+def _merge_tab_map(previous: dict, incoming: dict[str, list[str]] | None, merge_tab) -> dict:
+    if incoming is None:
+        return previous
+    if isinstance(merge_tab, str) and merge_tab and merge_tab in incoming:
+        return {**previous, merge_tab: incoming[merge_tab]}
+    return incoming
+
+
+class MailDeadlinesView(APIView):
+    """
+    GET  /api/sheets/mail-deadlines/ — dates for MAIL #1–#5 (any staff).
+    PUT  /api/sheets/mail-deadlines/ — set them (admin, FR, LG).
+    Body: {"dates": {"1": "2027-02-25", ... "5": "2027-03-09"}}
+    """
+
+    def get_permissions(self):
+        if self.request.method == 'PUT':
+            return [IsAuthenticated(), HasStaffRole('fr', 'lg')()]
+        return [IsAuthenticated(), HasAnyStaffRole()]
+
+    def get(self, request):
+        return Response(deadlines_payload())
+
+    def put(self, request):
+        try:
+            payload = update_deadlines(request.data)
+        except ValueError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(payload)
+
+
 class SheetLayoutDefaultView(APIView):
     """
-    GET  /api/sheets/<sheet>/layout/ — default column widths + hidden_by_tab (any staff).
-    PUT  /api/sheets/<sheet>/layout/ — publish widths (and optional hidden) as default (admin only).
+    GET  /api/sheets/<sheet>/layout/ — default widths, hidden columns and column order (any staff).
+    PUT  /api/sheets/<sheet>/layout/ — publish that layout as default (admin only).
     Body PUT: {
       "column_widths": {"company.name": 180, ...},
       "hidden_by_tab": {"firmy": ["stand.day2", ...]},  # optional; merges per tab when merge_hidden_tab set
-      "merge_hidden_tab": "firmy"  # optional: only replace that tab's hidden list in existing JSON
+      "merge_hidden_tab": "firmy",  # optional: only replace that tab's hidden list
+      "column_order_by_tab": {"firmy": ["stand.day2", ...]},  # optional; keys after the pinned first column
+      "merge_order_tab": "firmy"  # optional: only replace that tab's order
     }
     """
 
@@ -108,12 +256,14 @@ class SheetLayoutDefaultView(APIView):
             return Response({
                 'column_widths': {},
                 'hidden_by_tab': {},
+                'column_order_by_tab': {},
                 'updated_at': None,
                 'updated_by': None,
             })
         return Response({
             'column_widths': layout.column_widths or {},
             'hidden_by_tab': layout.hidden_by_tab or {},
+            'column_order_by_tab': layout.column_order_by_tab or {},
             'updated_at': layout.updated_at.isoformat() if layout.updated_at else None,
             'updated_by': user_display(layout.updated_by) if layout.updated_by_id else None,
         })
@@ -135,31 +285,30 @@ class SheetLayoutDefaultView(APIView):
             if 40 <= width <= 800:
                 cleaned[key] = width
         try:
-            hidden_incoming = _clean_hidden_by_tab(request.data.get('hidden_by_tab'))
+            hidden_incoming = _clean_tab_key_lists(request.data.get('hidden_by_tab'), 'hidden_by_tab')
+            order_incoming = _clean_tab_key_lists(request.data.get('column_order_by_tab'), 'column_order_by_tab')
         except ValueError as exc:
             return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
         existing = SheetLayoutDefault.objects.filter(sheet_key=sheet_key).first()
         previous_hidden = (existing.hidden_by_tab or {}) if existing else {}
-        merge_tab = request.data.get('merge_hidden_tab')
-        if hidden_incoming is None:
-            hidden_final = previous_hidden
-        elif isinstance(merge_tab, str) and merge_tab and merge_tab in hidden_incoming:
-            hidden_final = {**previous_hidden, merge_tab: hidden_incoming[merge_tab]}
-        else:
-            hidden_final = hidden_incoming
+        previous_order = (existing.column_order_by_tab or {}) if existing else {}
+        hidden_final = _merge_tab_map(previous_hidden, hidden_incoming, request.data.get('merge_hidden_tab'))
+        order_final = _merge_tab_map(previous_order, order_incoming, request.data.get('merge_order_tab'))
 
         layout, _ = SheetLayoutDefault.objects.update_or_create(
             sheet_key=sheet_key,
             defaults={
                 'column_widths': cleaned,
                 'hidden_by_tab': hidden_final,
+                'column_order_by_tab': order_final,
                 'updated_by': request.user,
             },
         )
         return Response({
             'column_widths': layout.column_widths,
             'hidden_by_tab': layout.hidden_by_tab or {},
+            'column_order_by_tab': layout.column_order_by_tab or {},
             'updated_at': layout.updated_at.isoformat(),
             'updated_by': user_display(request.user),
         })
@@ -203,7 +352,8 @@ class SheetTabView(APIView):
 class SheetCellsView(APIView):
     """
     PATCH /api/sheets/<sheet>/<tab>/cells/
-    Body: {"changes": [{"company_id", "column_key", "value", "base"}]}
+    Body: {"changes": [{"company_id", "column_key", "value", "base", "mode"?}]}
+    mode: edit (default) | draft | commit
     `base` = value the client saw before editing; a mismatch is reported as a conflict.
     """
 
@@ -220,6 +370,95 @@ class SheetCellsView(APIView):
         except SheetValidationError as exc:
             return Response({'errors': exc.errors}, status=status.HTTP_400_BAD_REQUEST)
         # Conflicts are per cell and the rest of the batch is applied, hence 200 + `conflicts` list.
+        return Response(result)
+
+
+class SheetCellsRestoreView(APIView):
+    """POST .../cells/restore/ — restore form fields from SheetCellFormOverride.previous_value."""
+
+    permission_classes = [IsAuthenticated, HasAnyStaffRole]
+
+    def post(self, request, sheet_key, tab_key):
+        sheet, tab = _resolve(request.user, sheet_key, tab_key)
+        if tab is None:
+            return Response({'detail': 'Nie znaleziono arkusza.'}, status=status.HTTP_404_NOT_FOUND)
+        data = request.data if isinstance(request.data, dict) else {}
+        cells = data.get('cells')
+        try:
+            result = restore_form_overrides(sheet, tab, request.user, cells)
+        except SheetPermissionError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_403_FORBIDDEN)
+        except SheetValidationError as exc:
+            return Response({'errors': exc.errors}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(result)
+
+
+class SheetCellsDiscardView(APIView):
+    """POST .../cells/discard/ — delete sheet drafts and leave the company form as it is."""
+
+    permission_classes = [IsAuthenticated, HasAnyStaffRole]
+
+    def post(self, request, sheet_key, tab_key):
+        sheet, tab = _resolve(request.user, sheet_key, tab_key)
+        if tab is None:
+            return Response({'detail': 'Nie znaleziono arkusza.'}, status=status.HTTP_404_NOT_FOUND)
+        data = request.data if isinstance(request.data, dict) else {}
+        try:
+            result = discard_drafts(sheet, tab, request.user, data.get('cells'))
+        except SheetPermissionError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_403_FORBIDDEN)
+        except SheetValidationError as exc:
+            return Response({'errors': exc.errors}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(result)
+
+
+class SheetCellsFileView(APIView):
+    """
+    POST .../cells/file/ — multipart upload for form graphics columns.
+    Body: company_id, column_key, file?, mode=draft|commit, draft_path?
+    """
+
+    permission_classes = [IsAuthenticated, HasAnyStaffRole]
+
+    def post(self, request, sheet_key, tab_key):
+        sheet, tab = _resolve(request.user, sheet_key, tab_key)
+        if tab is None:
+            return Response({'detail': 'Nie znaleziono arkusza.'}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            company_id = int(request.data.get('company_id'))
+        except (TypeError, ValueError):
+            return Response(
+                {'errors': [{'detail': 'Podaj company_id.'}]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        column_key = request.data.get('column_key') or ''
+        if not isinstance(column_key, str) or not column_key.strip():
+            return Response(
+                {'errors': [{'detail': 'Podaj column_key.'}]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        mode = request.data.get('mode') or 'commit'
+        if not isinstance(mode, str):
+            mode = 'commit'
+        draft_path = request.data.get('draft_path') or ''
+        if not isinstance(draft_path, str):
+            draft_path = ''
+        uploaded = request.FILES.get('file')
+        try:
+            result = upload_cell_file(
+                sheet,
+                tab,
+                request.user,
+                company_id,
+                column_key.strip(),
+                uploaded,
+                mode=mode.strip(),
+                draft_path=draft_path.strip(),
+            )
+        except SheetPermissionError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_403_FORBIDDEN)
+        except SheetValidationError as exc:
+            return Response({'errors': exc.errors}, status=status.HTTP_400_BAD_REQUEST)
         return Response(result)
 
 

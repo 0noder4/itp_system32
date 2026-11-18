@@ -16,16 +16,17 @@ export const GROUP_HEADER_BG: Record<string, string> = {
   "WYKŁADZINA (z formularza)": "#D8B4FE",
   "PRZYJAZD (z formularza)": "#7DD3FC",
   "OBIADY (z formularza)": "#FDE047",
-  "DELEGACI I PDI (z formularza)": "#FCA5A5",
+  "DELEGACI NA TARGI (z formularza)": "#FCA5A5",
+  "GALA PDI (Mail #2)": "#FB7185",
   "KATALOG (z formularza)": "#86EFAC",
   "ROZLICZENIE (wyliczane)": "#FCD34D",
   "OPIEKUN (edytowalne)": "#FDA4AF",
   "WŁASNA ZABUDOWA": "#FDBA74",
-  "MAIL #1 · do 25.02": "#FDE68A",
-  "MAIL #2 · do 27.02": "#FCA5A5",
-  "MAIL #3 · do 03.03": "#93C5FD",
-  "MAIL #4 · do 05.03": "#C4B5FD",
-  "MAIL #5 · 09.03": "#86EFAC",
+  "MAIL #1": "#FDE68A",
+  "MAIL #2": "#FCA5A5",
+  "MAIL #3": "#93C5FD",
+  "MAIL #4": "#C4B5FD",
+  "MAIL #5": "#86EFAC",
   "FINAŁ NZS": "#6EE7B7",
   "WELCOME PACKI": "#F9A8D4",
   "OBIADY BEŚCIAKÓW": "#FDE047",
@@ -36,6 +37,15 @@ export const GROUP_HEADER_BG: Record<string, string> = {
 };
 
 const FALLBACK_HEADER = "#94A3B8";
+
+/** Group titles may append " · do 25.02". Colour stays on the stable name. */
+function paletteHex(group: string): string {
+  if (!group) return FALLBACK_HEADER;
+  const direct = GROUP_HEADER_BG[group];
+  if (direct) return direct;
+  const base = group.split(" · ")[0]?.trim() ?? "";
+  return GROUP_HEADER_BG[base] ?? FALLBACK_HEADER;
+}
 
 /** Blend hex toward white (0–1). Used for column-title row under the group band. */
 export function lightenHex(hex: string, amount: number): string {
@@ -52,8 +62,7 @@ export function lightenHex(hex: string, amount: number): string {
 }
 
 export function sheetGroupSolidBg(group: string): string {
-  if (!group) return FALLBACK_HEADER;
-  return GROUP_HEADER_BG[group] ?? FALLBACK_HEADER;
+  return paletteHex(group);
 }
 
 export function sheetGroupColumnSolidBg(group: string): string {
@@ -62,25 +71,25 @@ export function sheetGroupColumnSolidBg(group: string): string {
 
 /**
  * Theme-aware opaque fill — sticky panes must not use translucent Tailwind fills.
- * Dark mode uses a lower pastel share so header bands stay muted (not neon).
+ * Dark mode keeps a solid pastel share so group bands stay distinguishable (not muddy).
  */
 function themeMix(hex: string, lightShare: number, darkShare?: number): string {
-  const dark = darkShare ?? Math.max(12, Math.round(lightShare * 0.4));
+  const dark = darkShare ?? Math.max(28, Math.round(lightShare * 0.75));
   return `light-dark(color-mix(in oklch, ${hex} ${lightShare}%, var(--background)), color-mix(in oklch, ${hex} ${dark}%, var(--background)))`;
 }
 
-/** Dark ink on light bands, light ink on muted dark bands. */
+/** Dark ink on light bands, near-white ink on coloured dark bands. */
 export function sheetGroupHeaderInk(): string {
-  return "light-dark(#0f172a, #f4f4f5)";
+  return "light-dark(#0f172a, #fafafa)";
 }
 
 export function sheetGroupHeaderBg(group: string): string {
-  if (!group) return themeMix(FALLBACK_HEADER, 45, 28);
-  return themeMix(GROUP_HEADER_BG[group] ?? FALLBACK_HEADER, 55, 32);
+  if (!group) return themeMix(FALLBACK_HEADER, 45, 42);
+  return themeMix(paletteHex(group), 55, 50);
 }
 
 /** Softer tint for the column-name row under a coloured group band. */
 export function sheetGroupColumnBg(group: string): string {
-  if (!group) return themeMix(FALLBACK_HEADER, 22, 16);
-  return themeMix(GROUP_HEADER_BG[group] ?? FALLBACK_HEADER, 32, 20);
+  if (!group) return themeMix(FALLBACK_HEADER, 22, 30);
+  return themeMix(paletteHex(group), 32, 38);
 }

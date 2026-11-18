@@ -2,9 +2,11 @@ from django.contrib import admin
 
 from .models import (
     SheetCellChange,
+    SheetCellComment,
     SheetCellStyle,
     SheetCellValue,
     SheetLayoutDefault,
+    SheetNotification,
     StaffMeal,
     StaffMealChange,
 )
@@ -52,3 +54,22 @@ class SheetCellStyleAdmin(admin.ModelAdmin):
     list_filter = ('column_key', 'bg_color')
     search_fields = ('company__name', 'column_key')
     raw_id_fields = ('company', 'updated_by')
+
+
+@admin.register(SheetCellComment)
+class SheetCellCommentAdmin(admin.ModelAdmin):
+    list_display = (
+        'id', 'company', 'staff_user', 'column_key', 'sheet_key', 'tab_key',
+        'author', 'status', 'created_at',
+    )
+    list_filter = ('status', 'sheet_key', 'column_key')
+    search_fields = ('body', 'company__name', 'column_key')
+    raw_id_fields = ('company', 'staff_user', 'author')
+    filter_horizontal = ('mentions',)
+
+
+@admin.register(SheetNotification)
+class SheetNotificationAdmin(admin.ModelAdmin):
+    list_display = ('id', 'recipient', 'comment', 'created_at', 'read_at')
+    list_filter = ('read_at',)
+    raw_id_fields = ('recipient', 'comment')

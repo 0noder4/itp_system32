@@ -16,15 +16,20 @@ from .common import (
     STATUS_COLUMNS,
 )
 from .extras import (
+    CARE_ARRIVAL_DAY,
+    CARE_BUILD_SIZE,
     CARE_CAR_MAKE,
     CARE_CAR_REGISTRATION,
     CARE_COLUMNS,
     CARE_DRIVER,
+    CARE_FIRE_CERT_CHECKED,
     CARE_LOGO_APPROVED,
     CARE_PICKUP,
+    CARE_PICKUP_TIME,
     CARE_SLOT,
     CARE_SLOT_LOAD,
     LG_EXTRA_ORDERS,
+    MAIL1_LOGO,
 )
 from .form_columns import (
     ARRIVAL_DAY1,
@@ -67,7 +72,6 @@ from .form_columns import (
     STAND_COMPOSITION,
     STAND_OWN_BUILD,
     STAND_POWER_ACK,
-    STAND_TYPE,
 )
 
 # Główny: kto i gdzie — zamrożone (kolejność jak A–H w Masterze, bez pakietu).
@@ -103,12 +107,12 @@ LG_SHEET = SheetDef(
             prefetch_related=_STAND_PREFETCH,
             columns=(
                 *_GLOWNY_PIN,
-                STAND_TYPE,
                 STAND_OWN_BUILD,
                 STAND_COMPOSITION,
                 STAND_BROUGHT,
                 SIGN_VISUAL,
                 SIGN_FIRE_CERT,
+                CARE_FIRE_CERT_CHECKED,
                 PACKAGE_LIGHTS,
                 PACKAGE_SOCKETS,
                 PACKAGE_BIN,
@@ -158,10 +162,10 @@ LG_SHEET = SheetDef(
             select_related=_STAND_SELECT,
             columns=(
                 *_PLACE,
-                STAND_TYPE,
                 STAND_OWN_BUILD,
                 SIGN_TEXT,
                 SIGN_LOGO,
+                MAIL1_LOGO,
                 CARE_LOGO_APPROVED,
             ),
         ),
@@ -178,14 +182,17 @@ LG_SHEET = SheetDef(
             columns=(
                 *_PLACE,
                 STAND_OWN_BUILD,
-                ARRIVAL_DAY1,
-                ARRIVAL_DAY2,
+                CARE_BUILD_SIZE,
+                CARE_ARRIVAL_DAY,
+                CARE_SLOT,
+                CARE_SLOT_LOAD,
                 CARE_CAR_REGISTRATION,
                 CARE_CAR_MAKE,
                 CARE_DRIVER,
-                CARE_SLOT,
-                CARE_SLOT_LOAD,
+                ARRIVAL_DAY1,
+                ARRIVAL_DAY2,
                 CARE_PICKUP,
+                CARE_PICKUP_TIME,
             ),
         ),
         TabDef(
