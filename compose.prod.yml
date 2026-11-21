@@ -104,7 +104,7 @@ services:
     volumes:
       - staticfiles:/app/staticfiles
       - mediafiles:/app/mediafiles
-      - backups:/backups
+      - ./backups/paczki:/backups
     networks:
       - internal
     depends_on:
@@ -164,7 +164,7 @@ services:
       DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-noreply@targipracy.org.pl}
       BACKUP_ALERT_EMAIL: ${BACKUP_ALERT_EMAIL:-}
     volumes:
-      - backups:/backups
+      - ./backups/paczki:/backups
       - mediafiles:/mediafiles:ro
     networks:
       - internal
@@ -178,8 +178,6 @@ volumes:
   staticfiles:
     driver: local
   mediafiles:
-    driver: local
-  backups:
     driver: local
 
 networks:

@@ -155,7 +155,7 @@ docker compose -f compose.prod.yml ps
   - **Bezpiecznik dysku:** przed każdym przebiegiem skrypt sprawdza minimalny zapas miejsca (`BACKUP_MIN_FREE_GB=5`, dla mediów dodatkowo + rozmiar `mediafiles`).
 - Raz dziennie w nocy (`02:45` `Europe/Warsaw`) kontener `scheduler` generuje również paczkę ratunkową `.xlsx` (4 pliki per zespół + 1 zbiorczy) do `/backups/exports/` (`EXPORT_RETENTION_DAYS=7`).
 - **Alerty e-mail (wyłącznie przy błędzie):** w razie niepowodzenia backupu lub eksportu `.xlsx` system wysyła powiadomienie przez SMTP na adres `Settings.system_admin_email` ustawiony w Django Admin.
-- Backupy są zapisywane lokalnie na VPS (wolumen Docker `backups`), dlatego do czasu wdrożenia automatycznego off-site nie mogą być traktowane jako jedyne źródło odtwarzania.
+- Backupy na produkcji zapisywane są bezpośrednio do katalogu `./backups/paczki/` na VPS (montowanego jako `/backups` w kontenerach `backup` i `scheduler`), dzięki czemu można je pobierać bezpośrednio przez SFTP, jednak do czasu wdrożenia automatycznego off-site nie mogą być traktowane jako jedyne źródło odtwarzania.
 
 Przykładowe ręczne uruchomienie backupu przed wdrożeniem (`pre-deploy`):
 

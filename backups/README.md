@@ -119,8 +119,8 @@ Skrypt `restore.sh` przed nadpisaniem danych weryfikuje sumy/archiwum, wymaga po
 ## Szybkie wydobycie danych dla zespołu (gdy produkcja nie działa)
 
 ### Scenariusz A: Gotowe pliki `.xlsx` i grafiki `mediafiles` (1–2 minuty, bez odtwarzania bazy)
-1. Pobierz przez MobaXterm SFTP z wolumenu `backups` (lub skopiuj na hosta przez kontener `backup`) najnowszy folder `/backups/exports/YYYYMMDD_HHMMSS/` — zawiera od razu gotowe `lg.xlsx`, `fr.xlsx`, `tr.xlsx`, `opiekun.xlsx` i `wszystkie-arkusze.xlsx`.
-2. Jeśli zespół potrzebuje również logotypów/załączników, pobierz najnowsze `mediafiles_*.tar.gz` i rozpakuj lokalnie w 7-Zip.
+1. Pobierz przez MobaXterm SFTP z folderu `backups/paczki/exports/` na VPS najnowszy podfolder `YYYYMMDD_HHMMSS/` — zawiera od razu gotowe `lg.xlsx`, `fr.xlsx`, `tr.xlsx`, `opiekun.xlsx` i `wszystkie-arkusze.xlsx`.
+2. Jeśli zespół potrzebuje również logotypów/załączników, pobierz z `backups/paczki/` najnowsze `mediafiles_*.tar.gz` i rozpakuj lokalnie w 7-Zip.
 
 ### Scenariusz B: Odtworzenie kopii lokalnie na Twoim komputerze (`compose.yml`)
 Gdy potrzebujesz stanu bazy ze starszego dnia albo pełnego interfejsu aplikacji na `localhost:3000`:

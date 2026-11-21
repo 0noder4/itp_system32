@@ -31,6 +31,8 @@ backups/*.sql.gz
 backups/*.tar.gz
 backups/*.log
 backups/exports/
+backups/paczki/
+backups/.admin_email
 
 # ignore cursor rules
 .cursor/
