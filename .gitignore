@@ -28,7 +28,9 @@ __pycache__/
 *.sql.gz
 backups/*.sql
 backups/*.sql.gz
+backups/*.tar.gz
 backups/*.log
+backups/exports/
 
 # ignore cursor rules
 .cursor/

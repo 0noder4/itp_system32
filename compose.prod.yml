@@ -95,9 +95,16 @@ services:
       BACKEND_BASE_URL: ${BACKEND_BASE_URL}
       NOTIFICATIONS_HOUR: ${NOTIFICATIONS_HOUR:-9}
       NOTIFICATIONS_MINUTE: ${NOTIFICATIONS_MINUTE:-0}
+      EMERGENCY_EXPORT_ENABLED: ${EMERGENCY_EXPORT_ENABLED:-true}
+      EMERGENCY_EXPORT_HOUR: ${EMERGENCY_EXPORT_HOUR:-2}
+      EMERGENCY_EXPORT_MINUTE: ${EMERGENCY_EXPORT_MINUTE:-45}
+      EXPORT_RETENTION_DAYS: ${EXPORT_RETENTION_DAYS:-7}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
+      EMERGENCY_EXPORT_DIR: /backups/exports
     volumes:
       - staticfiles:/app/staticfiles
       - mediafiles:/app/mediafiles
+      - backups:/backups
     networks:
       - internal
     depends_on:
@@ -125,24 +132,40 @@ services:
       start_period: 40s
 
   backup:
+    image: itp_system32-backup:latest
     build:
       context: ./backups
       dockerfile: Dockerfile
     container_name: ${PROJECT_NAME}_backup
     restart: unless-stopped
     environment:
+      PROJECT_NAME: ${PROJECT_NAME:-itp_system32}
       DATABASE_HOST: ${DATABASE_HOST:-db}
       DATABASE_NAME: ${DATABASE_NAME}
       DATABASE_USER: root
       DATABASE_PASSWORD: ${DATABASE_ROOT_PASSWORD}
       DATABASE_PORT: ${DATABASE_PORT:-3306}
       BACKUP_DIR: /backups
+      MEDIA_DIR: /mediafiles
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
-      BACKUP_SCHEDULE: ${BACKUP_SCHEDULE:-0 2 * * *}
+      BACKUP_SCHEDULE: ${BACKUP_SCHEDULE:-0 */6 * * *}
+      MEDIA_BACKUP_ENABLED: ${MEDIA_BACKUP_ENABLED:-true}
+      MEDIA_BACKUP_SCHEDULE: ${MEDIA_BACKUP_SCHEDULE:-30 2 * * *}
+      MEDIA_BACKUP_RETENTION_DAYS: ${MEDIA_BACKUP_RETENTION_DAYS:-14}
+      BACKUP_MIN_FREE_GB: ${BACKUP_MIN_FREE_GB:-5}
       BACKUP_ON_START: ${BACKUP_ON_START:-false}
-      TZ: ${TZ:-UTC}
+      TZ: ${TZ:-Europe/Warsaw}
+      EMAIL_HOST: ${EMAIL_HOST:-}
+      EMAIL_PORT: ${EMAIL_PORT:-587}
+      EMAIL_HOST_USER: ${EMAIL_HOST_USER:-}
+      EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD:-}
+      EMAIL_USE_TLS: ${EMAIL_USE_TLS:-}
+      EMAIL_USE_SSL: ${EMAIL_USE_SSL:-}
+      DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-noreply@targipracy.org.pl}
+      BACKUP_ALERT_EMAIL: ${BACKUP_ALERT_EMAIL:-}
     volumes:
       - backups:/backups
+      - mediafiles:/mediafiles:ro
     networks:
       - internal
     depends_on:

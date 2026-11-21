@@ -5,6 +5,9 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     default-mysql-client \
     gzip \
+    tar \
+    util-linux \
+    python3 \
     curl \
     ca-certificates \
     tzdata && \
@@ -15,22 +18,27 @@ RUN curl -f -L https://github.com/aptible/supercronic/releases/download/v0.2.26/
     chmod +x /usr/local/bin/supercronic && \
     test -x /usr/local/bin/supercronic || (echo "Failed to install supercronic" && exit 1)
 
-# Create backup directory with proper permissions
-RUN mkdir -p /backups && \
-    chmod 755 /backups
+# Create backup directories with proper permissions
+RUN mkdir -p /backups /backups/exports && \
+    chmod 755 /backups && \
+    chmod 775 /backups/exports
 
-# Copy backup script
+# Copy backup, restore, alert, and entrypoint scripts
 COPY backup.sh /usr/local/bin/backup.sh
-RUN chmod +x /usr/local/bin/backup.sh
-
-# Copy entrypoint script
+COPY restore.sh /usr/local/bin/restore.sh
+COPY send_alert_email.py /usr/local/bin/send_alert_email.py
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+RUN sed -i 's/\r$//' \
+        /usr/local/bin/backup.sh \
+        /usr/local/bin/restore.sh \
+        /usr/local/bin/send_alert_email.py \
+        /usr/local/bin/docker-entrypoint.sh && \
+    chmod +x \
+        /usr/local/bin/backup.sh \
+        /usr/local/bin/restore.sh \
+        /usr/local/bin/send_alert_email.py \
+        /usr/local/bin/docker-entrypoint.sh
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["/usr/local/bin/supercronic", "/etc/crontab"]
-
-
-
-
-
