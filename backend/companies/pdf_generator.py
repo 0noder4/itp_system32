@@ -567,7 +567,7 @@ class OrderSummaryPDFGenerator:
                 ])
             
             if stand_details.sc_details:
-                details_label = self._t("Self Construction Details:", "Szczegóły własnej zabudowy:")
+                details_label = self._t("Construction dimensions:", "Wymiary zabudowy:")
                 stand_info_data.append([
                     Paragraph(details_label, self.bold_label_style),
                     Paragraph(stand_details.sc_details, self.normal_style)

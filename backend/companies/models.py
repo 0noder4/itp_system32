@@ -420,7 +420,7 @@ class StandDetails(models.Model):
         verbose_name="potwierdzenie: moc elektryczna w etapie 5",
         help_text="Firma przyjmuje do wiadomości, że moc elektryczną należy podać w etapie 5.",
     )
-    sc_details = models.CharField(max_length=255, verbose_name="z czego się składa własna zabudowa", blank=True)
+    sc_details = models.CharField(max_length=255, verbose_name="wymiary własnej zabudowy", blank=True)
     brought_equipment = models.TextField(blank=True, verbose_name="sprzęt przywożony przez firmę")
     name_sign_text = models.CharField(max_length=255, verbose_name="napis na fryz", blank=True)
     logo_sign_file = models.FileField(upload_to='logos', verbose_name="Logotyp na fryz", blank=True)

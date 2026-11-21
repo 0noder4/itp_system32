@@ -198,9 +198,13 @@ CARE_SLOT_LOAD = ColumnDef(
     group=GROUP_BUILD, width=110, getter=_slot_load, highlight='over_five',
     help='Ile firm ma ten sam przedział godzin. Kolor ostrzega, gdy jest ich więcej niż 5.',
 )
-CARE_BUILD_SIZE = _extra(
-    'care.build_size', 'Wymiary zabudowy', width=150, group=GROUP_BUILD,
-    help='Wymiary własnej zabudowy, np. 200x50x250 cm. Osobno od rozmiaru stoiska z pakietu.',
+# Dawniej care.build_size = ręczne wymiary; wymiary są w stand.composition (formularz).
+CARE_COMPOSITION = _extra(
+    'care.composition', 'Z czego składa się zabudowa', kind=KIND_LONGTEXT, width=220, group=GROUP_BUILD,
+    help=(
+        'Jakie części zabudowy albo całość firma przywozi na stanowisko '
+        '(ścianki, roll-upy, baner, lady…). Wymiary są w kolumnie Wymiary zabudowy.'
+    ),
 )
 CARE_PICKUP = _extra(
     'care.pickup', 'Kiedy odbiór', kind=KIND_LONGTEXT, width=180, group=GROUP_BUILD,
@@ -248,7 +252,7 @@ CARE_COLUMNS = (
     CARE_ARRIVAL_DAY,
     CARE_SLOT,
     CARE_SLOT_LOAD,
-    CARE_BUILD_SIZE,
+    CARE_COMPOSITION,
     CARE_PICKUP,
     CARE_PICKUP_TIME,
     CARE_BUILD_TONE,

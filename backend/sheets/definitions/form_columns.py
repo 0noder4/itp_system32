@@ -455,10 +455,14 @@ STAND_OWN_BUILD = ColumnDef(
     source_fields=('StandDetails.stand_type',),
     help='Tak, gdy firma stawia własną zabudowę, a nie stoisko ITP.',
 )
+# Klucz historyczny stand.composition — w formularzu sc_details trzyma wymiary (dł.×szer.×wys.).
 STAND_COMPOSITION = _system(
-    'stand.composition', 'Z czego składa się zabudowa', _stand_details, 'sc_details',
+    'stand.composition', 'Wymiary zabudowy', _stand_details, 'sc_details',
     'StandDetails.sc_details', kind=KIND_LONGTEXT, width=220,
-    help='Opis własnej zabudowy z formularza, np. rollupy i ścianki. Obok jest plik wizualizacji.',
+    help=(
+        'Wymiary własnej zabudowy z formularza firmy (długość × szerokość × wysokość). '
+        'To nie jest rozmiar pakietu stoiska. Skład (części / całość) jest w osobnej kolumnie.'
+    ),
 )
 STAND_BROUGHT = _system(
     'stand.brought_equipment', 'Sprzęt, który przywożą', _stand_details, 'brought_equipment',

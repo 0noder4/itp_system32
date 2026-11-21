@@ -241,7 +241,7 @@ class ExportService:
             'Dzień 1 - Numer stoiska', 'Dzień 1 - Rozmiar stoiska',
             'Dzień 2 - Numer stoiska', 'Dzień 2 - Rozmiar stoiska',
             # Stand Details (Stage 2)
-            'Typ stanowiska', 'Szczegóły zabudowy', 'Tekst na fryzie',
+            'Typ stanowiska', 'Wymiary zabudowy', 'Tekst na fryzie',
             'Wizualizacja zabudowy', 'Przywóz własnego sprzętu',
             'Wykładzina - wybór', 'Wykładzina - kolor',
         ]
@@ -384,11 +384,11 @@ class ExportService:
                 # Self-construction specific fields (only for 'self_construction' type)
                 if sd.stand_type == 'self_construction':
                     base_data.update({
-                        'Szczegóły zabudowy': sd.sc_details or '',
+                        'Wymiary zabudowy': sd.sc_details or '',
                     })
                 else:
                     base_data.update({
-                        'Szczegóły zabudowy': '',
+                        'Wymiary zabudowy': '',
                     })
 
                 if company.status in (STATUS_MAIN, STATUS_PARTENER):
@@ -438,7 +438,7 @@ class ExportService:
             # No stand_details, initialize stand detail fields
             base_data.update({
                 'Typ stanowiska': '',
-                'Szczegóły zabudowy': '',
+                'Wymiary zabudowy': '',
                 'Tekst na fryzie': '',
                 'Wizualizacja zabudowy': '',
                 'Przywóz własnego sprzętu': '',

@@ -17,7 +17,7 @@ from .common import (
 )
 from .extras import (
     CARE_ARRIVAL_DAY,
-    CARE_BUILD_SIZE,
+    CARE_COMPOSITION,
     CARE_CAR_MAKE,
     CARE_CAR_REGISTRATION,
     CARE_COLUMNS,
@@ -109,6 +109,7 @@ LG_SHEET = SheetDef(
                 *_GLOWNY_PIN,
                 STAND_OWN_BUILD,
                 STAND_COMPOSITION,
+                CARE_COMPOSITION,
                 STAND_BROUGHT,
                 SIGN_VISUAL,
                 SIGN_FIRE_CERT,
@@ -182,7 +183,8 @@ LG_SHEET = SheetDef(
             columns=(
                 *_PLACE,
                 STAND_OWN_BUILD,
-                CARE_BUILD_SIZE,
+                STAND_COMPOSITION,
+                CARE_COMPOSITION,
                 CARE_ARRIVAL_DAY,
                 CARE_SLOT,
                 CARE_SLOT_LOAD,
