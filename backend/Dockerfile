@@ -56,8 +56,9 @@ ENV PYTHONUNBUFFERED=1
 # Copy application code
 COPY . .
 
-# Make entrypoint script executable
-RUN chmod +x /app/docker-entrypoint.sh /app/docker-entrypoint-notifications.sh
+# Normalize line endings and make entrypoint scripts executable
+RUN sed -i 's/\r$//' /app/docker-entrypoint.sh /app/docker-entrypoint-notifications.sh \
+    && chmod +x /app/docker-entrypoint.sh /app/docker-entrypoint-notifications.sh
 
 # Expose the application port
 EXPOSE 8000
@@ -106,15 +107,15 @@ RUN useradd -m -r -u 1001 appuser
 ENV DJANGO_SETTINGS_MODULE=backend.settings
 ENV DEBUG=False
 
-# Create staticfiles and mediafiles directories
-RUN mkdir -p /app/staticfiles /app/mediafiles
+# Create staticfiles, mediafiles, and backup export directories
+RUN mkdir -p /app/staticfiles /app/mediafiles /backups/exports
 
 # Collect static files before switching user (requires root for file creation)
 # Use a minimal settings to avoid needing database connection during build
 RUN DJANGO_SECRET_KEY=dummy python manage.py collectstatic --noinput || true
 
 # Set proper ownership for directories
-RUN chown -R appuser:appuser /app/staticfiles /app/mediafiles /app
+RUN chown -R appuser:appuser /app/staticfiles /app/mediafiles /app /backups/exports
 
 # Switch to non-root user
 USER appuser
