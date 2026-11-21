@@ -50,6 +50,7 @@ export function buildStyledXlsxPayload(
   options?: {
     onlyCells?: Set<string>;
     cellStyles?: Record<string, string>;
+    customGroupColors?: Record<string, string>;
     includeGroupRow?: boolean;
     /** Match grid freeze; clamped to exported column count. */
     freezeCols?: number;
@@ -60,6 +61,7 @@ export function buildStyledXlsxPayload(
   const dataRows = scoped.rows;
   const onlyCells = options?.onlyCells;
   const cellStyles = options?.cellStyles ?? {};
+  const customGroupColors = options?.customGroupColors;
   const hasGroups = cols.some((col) => Boolean(col.group));
   const includeGroupRow = options?.includeGroupRow !== false && hasGroups;
   const freezeColsRaw = options?.freezeCols ?? 1;
@@ -70,12 +72,12 @@ export function buildStyledXlsxPayload(
 
   if (includeGroupRow) {
     textRows.push(cols.map((col) => col.group || ""));
-    fills.push(cols.map((col) => sheetGroupSolidBg(col.group || "")));
+    fills.push(cols.map((col) => sheetGroupSolidBg(col.group || "", customGroupColors)));
     bold.push(cols.map(() => true));
   }
 
   textRows.push(cols.map((col) => flatColumnLabel(col.label)));
-  fills.push(cols.map((col) => sheetGroupColumnSolidBg(col.group || "")));
+  fills.push(cols.map((col) => sheetGroupColumnSolidBg(col.group || "", customGroupColors)));
   bold.push(cols.map(() => true));
 
   for (const row of dataRows) {

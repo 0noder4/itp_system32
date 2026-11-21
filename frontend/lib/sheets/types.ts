@@ -27,6 +27,13 @@ export interface SheetEditPart {
   options: SheetOption[];
 }
 
+export interface SheetCustomGroup {
+  id: number;
+  name: string;
+  color: string;
+  can_delete?: boolean;
+}
+
 export interface SheetColumn {
   key: string;
   label: string;
@@ -34,6 +41,12 @@ export interface SheetColumn {
   source: SheetColumnSource;
   group: string;
   editable: boolean;
+  is_custom?: boolean;
+  hidden_for_all?: boolean;
+  multiple_files?: boolean;
+  edit_roles?: string[];
+  raw_group?: string;
+  can_delete?: boolean;
   /** Whether a comment on this column may propose a change (becomes a draft). */
   proposable?: boolean;
   /** Admin / LG / FR may save a draft for this form column (not for file_link). */
@@ -59,10 +72,13 @@ export interface SheetColumn {
 }
 
 export interface SheetFileValue {
+  id?: string;
   url: string;
   name: string;
-  /** Storage path of a sheet draft. Absent on the live form file. */
+  /** Storage path of a sheet draft or custom media file. Absent on the live form file. */
   path?: string;
+  size?: number;
+  content_type?: string;
 }
 
 export type SheetCellValue =
@@ -70,7 +86,8 @@ export type SheetCellValue =
   | number
   | boolean
   | null
-  | SheetFileValue;
+  | SheetFileValue
+  | SheetFileValue[];
 
 export interface SheetRow {
   company_id: number;
@@ -127,8 +144,10 @@ export interface SheetTabPayload {
     frozen_columns: number;
     view?: "grid" | "matrix";
     row_source?: "company" | "staff";
+    can_manage_columns?: boolean;
   };
   columns: SheetColumn[];
+  custom_groups?: SheetCustomGroup[];
   rows: SheetRow[];
   /** Fill colours keyed by `${companyId}|${columnKey}`. */
   cell_styles?: Record<string, string>;

@@ -53,7 +53,7 @@ function asPartColumn(part: SheetEditPart): SheetColumn {
 
 function seedFieldValue(kind: SheetColumn["kind"] | undefined, value: SheetCellValue | undefined): string {
   if (kind === "bool") return value === true ? "true" : "false";
-  if (value === null || value === undefined || isFileValue(value)) return "";
+  if (value === null || value === undefined || isFileValue(value) || Array.isArray(value)) return "";
   return String(value);
 }
 
@@ -198,14 +198,14 @@ export function SheetCellCommentsDialog({
           const mapped: Record<string, string | number | boolean | null> = {};
           for (const part of editParts) {
             const coerced = coerceInput(asPartColumn(part), proposedParts[part.key] ?? "");
-            mapped[part.key] = isFileValue(coerced) ? null : coerced;
+            mapped[part.key] = isFileValue(coerced) || Array.isArray(coerced) ? null : coerced;
           }
           proposedValue = mapped;
         } else {
           const coerced = column
             ? coerceInput(column, proposedDraft)
             : coerceProposedInput(proposedDraft);
-          proposedValue = isFileValue(coerced) ? null : coerced;
+          proposedValue = isFileValue(coerced) || Array.isArray(coerced) ? null : coerced;
         }
       }
       await apiClient.post("/api/sheets/comments/", {
@@ -405,6 +405,7 @@ export function SheetCellCommentsDialog({
     if (val === null || val === undefined || val === "") return "—";
     if (column) return displayText(column, val) || "—";
     if (typeof val === "boolean") return val ? "tak" : "nie";
+    if (Array.isArray(val)) return val.map((f) => f.name).filter(Boolean).join(", ") || "—";
     if (typeof val === "object") return val.name || "—";
     return String(val);
   };

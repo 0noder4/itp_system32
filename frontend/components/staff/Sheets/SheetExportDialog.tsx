@@ -16,7 +16,8 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { getFileUrl } from "@/components/staff/StageViewer/utils";
-import { displayText, downloadCsv, isFileValue } from "@/lib/sheets/format";
+import { applyColumnGroupOverrides, applyColumnOrder } from "@/lib/sheets/columnOrder";
+import { displayText, downloadCsv, extractFiles } from "@/lib/sheets/format";
 import { flatColumnLabel } from "@/lib/sheets/columnWidths";
 import { buildCsvMatrix, buildStyledXlsxPayload } from "@/lib/sheets/xlsxExport";
 import type { SheetColumn, SheetRow, SheetTabPayload } from "@/lib/sheets/types";
@@ -36,6 +37,7 @@ interface SheetExportDialogProps {
   /** Frozen columns on the active tab (as shown in the grid). */
   currentFrozenColumns?: number;
   cellStyles?: Record<string, string>;
+  customGroupColors?: Record<string, string>;
   getSelectedCells: () => { companyId: number; columnKey: string }[];
 }
 
@@ -49,15 +51,50 @@ function readHiddenColumns(sheetKey: string, tabKey: string): Set<string> {
   }
 }
 
-/** Drop locally hidden columns and recompute freeze against the visible prefix. */
-function withHiddenColumns(payload: SheetTabPayload, hidden: Set<string>): SheetTabPayload {
-  if (hidden.size === 0) return payload;
-  const full = payload.columns;
-  const columns = full.filter((col, index) => index === 0 || !hidden.has(col.key));
+function readOrderColumns(sheetKey: string, tabKey: string): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(`sheets:order:${sheetKey}:${tabKey}`);
+    const parsed = raw ? (JSON.parse(raw) as unknown) : [];
+    return Array.isArray(parsed) ? parsed.filter((k): k is string => typeof k === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function readGroupOverrides(sheetKey: string, tabKey: string): Record<string, string> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(`sheets:groups:${sheetKey}:${tabKey}`);
+    const parsed = raw ? (JSON.parse(raw) as unknown) : {};
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    const out: Record<string, string> = {};
+    for (const [k, v] of Object.entries(parsed)) {
+      if (typeof v === "string") out[k] = v;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+/** Drop globally/locally hidden columns, apply local layout, and recompute freeze. */
+function withLocalTabLayout(
+  payload: SheetTabPayload,
+  hidden: Set<string>,
+  order: string[],
+  groupOverrides: Record<string, string>
+): SheetTabPayload {
+  const withGroups = applyColumnGroupOverrides(payload.columns, groupOverrides);
+  const full = applyColumnOrder(withGroups, order);
+  const columns = full.filter(
+    (col, index) => index === 0 || (!col.hidden_for_all && !hidden.has(col.key))
+  );
   const defined = payload.tab.frozen_columns ?? 1;
   let frozen = 0;
   for (let i = 0; i < full.length && i < defined; i++) {
-    if (i === 0 || !hidden.has(full[i].key)) frozen += 1;
+    const col = full[i];
+    if (i === 0 || (col && !col.hidden_for_all && !hidden.has(col.key))) frozen += 1;
   }
   return {
     ...payload,
@@ -86,16 +123,17 @@ function collectMedia(
       if (col.kind !== "file_link") continue;
       const id = `${row.company_id}|${col.key}`;
       if (onlyCells && !onlyCells.has(id)) continue;
-      const value = row.cells[col.key];
-      if (!isFileValue(value) || !value.url) continue;
-      const dedupe = `${value.url}::${value.name}`;
-      if (seen.has(dedupe)) continue;
-      seen.add(dedupe);
-      const safeName = (value.name || "plik").replace(/[\\/:*?"<>|]+/g, "_");
-      out.push({
-        url: value.url,
-        filename: `${firm}__${flatColumnLabel(col.label).replace(/\s+/g, "_")}__${safeName}`,
-      });
+      for (const value of extractFiles(row.cells[col.key])) {
+        if (!value.url) continue;
+        const dedupe = `${value.url}::${value.name}`;
+        if (seen.has(dedupe)) continue;
+        seen.add(dedupe);
+        const safeName = (value.name || "plik").replace(/[\\/:*?"<>|]+/g, "_");
+        out.push({
+          url: value.url,
+          filename: `${firm}__${flatColumnLabel(col.label).replace(/\s+/g, "_")}__${safeName}`,
+        });
+      }
     }
   }
   return out;
@@ -200,6 +238,7 @@ export function SheetExportDialog({
   currentRows,
   currentFrozenColumns = 1,
   cellStyles = {},
+  customGroupColors = {},
   getSelectedCells,
 }: SheetExportDialogProps) {
   const { t } = useTranslation();
@@ -255,7 +294,14 @@ export function SheetExportDialog({
         });
       } else {
         const { data } = await apiClient.get<SheetTabPayload>(`/api/sheets/${sheetKey}/${tab}/`);
-        payloads.push(withHiddenColumns(data, readHiddenColumns(sheetKey, tab)));
+        payloads.push(
+          withLocalTabLayout(
+            data,
+            readHiddenColumns(sheetKey, tab),
+            readOrderColumns(sheetKey, tab),
+            readGroupOverrides(sheetKey, tab)
+          )
+        );
       }
     }
     return payloads;
@@ -288,6 +334,7 @@ export function SheetExportDialog({
           const payload = buildStyledXlsxPayload(currentColumns, currentRows, {
             onlyCells,
             cellStyles,
+            customGroupColors,
             includeGroupRow: false,
             freezeCols: currentFrozenColumns,
           });
@@ -313,6 +360,14 @@ export function SheetExportDialog({
           return;
         }
         const tabPayloads = await loadTabPayloads();
+        const mergedGroupColors: Record<string, string> = { ...customGroupColors };
+        for (const payload of tabPayloads) {
+          for (const grp of payload.custom_groups ?? []) {
+            if (grp.color && !mergedGroupColors[grp.name]) {
+              mergedGroupColors[grp.name] = grp.color;
+            }
+          }
+        }
         const separate = tabCombine === "separate" && tabPayloads.length > 1;
 
         if (separate) {
@@ -327,6 +382,7 @@ export function SheetExportDialog({
             const sheets = tabPayloads.map((payload) => {
               const styled = buildStyledXlsxPayload(payload.columns, payload.rows, {
                 cellStyles: payload.cell_styles ?? {},
+                customGroupColors: mergedGroupColors,
                 includeGroupRow: true,
                 freezeCols: payload.tab.frozen_columns,
               });
@@ -369,6 +425,7 @@ export function SheetExportDialog({
             const freezeCols = freezeSource?.tab.frozen_columns ?? 1;
             const payload = buildStyledXlsxPayload(merged.columns, merged.rows, {
               cellStyles: merged.cellStyles,
+              customGroupColors: mergedGroupColors,
               includeGroupRow: true,
               freezeCols,
             });

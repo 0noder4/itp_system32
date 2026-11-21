@@ -36,15 +36,40 @@ export const GROUP_HEADER_BG: Record<string, string> = {
   "USTALENIA TR (edytowalne)": "#F9A8D4",
 };
 
+export const CUSTOM_GROUP_PALETTE = [
+  "#FDBA74",
+  "#FCD34D",
+  "#93C5FD",
+  "#A5B4FC",
+  "#6EE7B7",
+  "#C4B5FD",
+  "#F9A8D4",
+  "#7DD3FC",
+  "#FCA5A5",
+  "#67E8F9",
+] as const;
+
 const FALLBACK_HEADER = "#94A3B8";
 
+function hashGroupIndex(name: string): number {
+  let hash = 0;
+  for (let i = 0; i < name.length; i += 1) {
+    hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+  }
+  return hash % CUSTOM_GROUP_PALETTE.length;
+}
+
 /** Group titles may append " · do 25.02". Colour stays on the stable name. */
-function paletteHex(group: string): string {
+function paletteHex(group: string, customColors?: Record<string, string>): string {
   if (!group) return FALLBACK_HEADER;
+  const custom = customColors?.[group];
+  if (custom) return custom;
   const direct = GROUP_HEADER_BG[group];
   if (direct) return direct;
   const base = group.split(" · ")[0]?.trim() ?? "";
-  return GROUP_HEADER_BG[base] ?? FALLBACK_HEADER;
+  if (base && customColors?.[base]) return customColors[base]!;
+  if (base && GROUP_HEADER_BG[base]) return GROUP_HEADER_BG[base]!;
+  return CUSTOM_GROUP_PALETTE[hashGroupIndex(base || group)] ?? FALLBACK_HEADER;
 }
 
 /** Blend hex toward white (0–1). Used for column-title row under the group band. */
@@ -61,12 +86,12 @@ export function lightenHex(hex: string, amount: number): string {
   return `#${parts.join("").toUpperCase()}`;
 }
 
-export function sheetGroupSolidBg(group: string): string {
-  return paletteHex(group);
+export function sheetGroupSolidBg(group: string, customColors?: Record<string, string>): string {
+  return paletteHex(group, customColors);
 }
 
-export function sheetGroupColumnSolidBg(group: string): string {
-  return lightenHex(sheetGroupSolidBg(group), 0.45);
+export function sheetGroupColumnSolidBg(group: string, customColors?: Record<string, string>): string {
+  return lightenHex(sheetGroupSolidBg(group, customColors), 0.45);
 }
 
 /**
@@ -83,13 +108,13 @@ export function sheetGroupHeaderInk(): string {
   return "light-dark(#0f172a, #fafafa)";
 }
 
-export function sheetGroupHeaderBg(group: string): string {
+export function sheetGroupHeaderBg(group: string, customColors?: Record<string, string>): string {
   if (!group) return themeMix(FALLBACK_HEADER, 45, 42);
-  return themeMix(paletteHex(group), 55, 50);
+  return themeMix(paletteHex(group, customColors), 55, 50);
 }
 
 /** Softer tint for the column-name row under a coloured group band. */
-export function sheetGroupColumnBg(group: string): string {
+export function sheetGroupColumnBg(group: string, customColors?: Record<string, string>): string {
   if (!group) return themeMix(FALLBACK_HEADER, 22, 30);
-  return themeMix(paletteHex(group), 32, 38);
+  return themeMix(paletteHex(group, customColors), 32, 38);
 }

@@ -5,6 +5,8 @@ from .models import (
     SheetCellComment,
     SheetCellStyle,
     SheetCellValue,
+    SheetCustomColumn,
+    SheetCustomGroup,
     SheetLayoutDefault,
     SheetNotification,
     StaffMeal,
@@ -73,3 +75,19 @@ class SheetNotificationAdmin(admin.ModelAdmin):
     list_display = ('id', 'recipient', 'comment', 'created_at', 'read_at')
     list_filter = ('read_at',)
     raw_id_fields = ('recipient', 'comment')
+
+
+@admin.register(SheetCustomGroup)
+class SheetCustomGroupAdmin(admin.ModelAdmin):
+    list_display = ('sheet_key', 'tab_key', 'name', 'color', 'created_by', 'created_at')
+    list_filter = ('sheet_key', 'tab_key')
+    search_fields = ('name', 'sheet_key', 'tab_key')
+    raw_id_fields = ('created_by',)
+
+
+@admin.register(SheetCustomColumn)
+class SheetCustomColumnAdmin(admin.ModelAdmin):
+    list_display = ('sheet_key', 'tab_key', 'key', 'label', 'group', 'kind', 'hidden_for_all', 'position')
+    list_filter = ('sheet_key', 'tab_key', 'kind', 'hidden_for_all')
+    search_fields = ('key', 'label', 'group')
+    raw_id_fields = ('created_by', 'updated_by')

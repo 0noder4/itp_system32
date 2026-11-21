@@ -11,6 +11,7 @@ from django.db.models.fields.files import FieldFile
 from .registry import (
     KIND_BOOL,
     KIND_DATE,
+    KIND_FILE,
     KIND_LONGTEXT,
     KIND_NUMBER,
     KIND_SELECT,
@@ -32,6 +33,13 @@ def present(column: ColumnDef, value: Any) -> str:
         return ''
     if value is True:
         return 'tak'
+    if isinstance(value, list):
+        names = [
+            str(item.get('name') or '')
+            for item in value
+            if isinstance(item, dict) and item.get('name')
+        ]
+        return ', '.join(names)
     if isinstance(value, dict):
         return str(value.get('name') or '')
     if column.kind in (KIND_SELECT, KIND_USER):
@@ -42,10 +50,10 @@ def present(column: ColumnDef, value: Any) -> str:
 
 
 def public_file_name(storage_name: str) -> str:
-    """Basename shown in the sheet. Backup copies are stored as {32hex}_{original}."""
+    """Basename shown in the sheet. Backup/draft/custom copies are stored as {32hex}_{original}."""
     base = os.path.basename(storage_name or '')
     if (
-        (storage_name or '').startswith(('sheet_file_backups/', 'sheet_file_drafts/'))
+        (storage_name or '').startswith(('sheet_file_backups/', 'sheet_file_drafts/', 'sheet_custom_media/'))
         and len(base) > 33
         and base[32] == '_'
         and all(c in '0123456789abcdef' for c in base[:32])
@@ -60,6 +68,20 @@ def serialize(value: Any) -> Any:
         if not value:
             return None
         return {'url': value.url, 'name': public_file_name(value.name)}
+    if isinstance(value, list):
+        from django.core.files.storage import default_storage
+
+        out = []
+        for item in value:
+            if not isinstance(item, dict):
+                out.append(item)
+                continue
+            entry = dict(item)
+            path = entry.get('path')
+            if isinstance(path, str) and path.startswith('sheet_custom_media/'):
+                entry['url'] = default_storage.url(path)
+            out.append(entry)
+        return out
     if isinstance(value, datetime.datetime):
         return value.isoformat()
     if isinstance(value, datetime.date):
@@ -152,6 +174,9 @@ def normalize(column: ColumnDef, raw: Any) -> Any:
             except ValueError:
                 continue
         raise CellValueError('Oczekiwano godziny (GG:MM).')
+
+    if kind == KIND_FILE:
+        raise CellValueError('Pliki zapisuje się przez okno załączników.')
 
     raise CellValueError('Tej kolumny nie można edytować.')
 

@@ -508,7 +508,8 @@ class OpiekunLgFrTests(SheetsApiBase):
         self.assertLess(keys.index('care.slot'), keys.index('arrival.day1'))
         self.assertLess(keys.index('care.pickup'), keys.index('care.pickup_time'))
         self.assertEqual(cols['care.arrival_day']['label'], 'Dzień montażu')
-        self.assertEqual(cols['care.build_size']['label'], 'Wymiary zabudowy')
+        self.assertEqual(cols['stand.composition']['label'], 'Wymiary zabudowy')
+        self.assertEqual(cols['care.composition']['label'], 'Z czego składa się zabudowa')
         self.assertEqual(cols['arrival.day1']['label'], 'Wejście\ndzień 1')
         self.assertIn('montażu', cols['arrival.day1']['help'])
         self.assertIn('Bez godziny', cols['care.slot']['help'])
@@ -516,6 +517,8 @@ class OpiekunLgFrTests(SheetsApiBase):
             col['key']: col
             for col in self.as_user(self.fr).get('/api/sheets/lg/glowny/').data['columns']
         }
+        self.assertEqual(glowny['stand.composition']['label'], 'Wymiary zabudowy')
+        self.assertEqual(glowny['care.composition']['label'], 'Z czego składa się zabudowa')
         self.assertEqual(glowny['stand.brought_equipment']['label'], 'Sprzęt, który przywożą')
         self.assertEqual(glowny['stand.power_ack']['label'], 'Zapowiedź\nmocy')
         self.assertEqual(glowny['power.total']['label'], 'Łączna moc (W)')
@@ -2199,3 +2202,471 @@ class FormFileUploadTests(SheetsApiBase):
             format='multipart',
         )
         self.assertEqual(denied.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class SheetCustomColumnsAndLayoutTests(SheetsApiBase):
+    def setUp(self):
+        super().setUp()
+        self.admin = make_user('custom-admin', type_='admin')
+        self.lg = make_user('custom-lg', roles=['lg'])
+        self.partner.opiekun = self.opiekun
+        self.partner.save(update_fields=['opiekun'])
+
+    def test_permissions_and_tab_restrictions(self):
+        col_url = '/api/sheets/lg/glowny/columns/'
+        grp_url = '/api/sheets/lg/glowny/groups/'
+
+        self.assertEqual(
+            self.as_user(self.opiekun).post(
+                '/api/sheets/opiekun/glowny/columns/', {'label': 'X'}, format='json'
+            ).status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+        self.assertEqual(
+            self.as_user(self.tr).post('/api/sheets/tr/warsztaty/columns/', {'label': 'X'}, format='json').status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+        self.assertEqual(
+            self.as_user(self.opiekun).post(
+                '/api/sheets/opiekun/glowny/groups/', {'name': 'Kat'}, format='json'
+            ).status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+        # Matrix and staff tabs disallow custom columns/groups
+        self.assertEqual(
+            self.as_user(self.admin).post('/api/sheets/opiekun/montaz_1/columns/', {'label': 'X'}, format='json').status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+        self.assertEqual(
+            self.as_user(self.admin).post('/api/sheets/opiekun/obiady_besciakow/columns/', {'label': 'X'}, format='json').status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+        for idx, actor in enumerate((self.admin, self.fr, self.lg)):
+            resp = self.as_user(actor).post(
+                col_url,
+                {
+                    'label': f'Kolumna {idx}',
+                    'kind': 'text',
+                    'help': f'Podpowiedź {idx}',
+                },
+                format='json',
+            )
+            self.assertEqual(resp.status_code, status.HTTP_201_CREATED, resp.data)
+            self.assertTrue(resp.data['column']['is_custom'])
+            self.assertEqual(resp.data['column']['help'], f'Podpowiedź {idx}')
+
+        grp_resp = self.as_user(self.lg).post(
+            grp_url,
+            {'name': 'DODATKOWE', 'color': '#93C5FD'},
+            format='json',
+        )
+        self.assertEqual(grp_resp.status_code, status.HTTP_201_CREATED, grp_resp.data)
+        self.assertEqual(grp_resp.data['color'], '#93C5FD')
+
+    def test_tab_isolation_and_default_category_positioning(self):
+        # Create one column in INFORMACJE BAZOWE, one in STOISKO, and two in a new category
+        c_base = self.as_user(self.fr).post(
+            '/api/sheets/lg/glowny/columns/',
+            {'label': 'W bazowych', 'group': 'INFORMACJE BAZOWE', 'kind': 'text'},
+            format='json',
+        )
+        self.assertEqual(c_base.status_code, 201, c_base.data)
+        c_build = self.as_user(self.lg).post(
+            '/api/sheets/lg/glowny/columns/',
+            {'label': 'W zabudowie', 'group': 'WŁASNA ZABUDOWA', 'kind': 'longtext'},
+            format='json',
+        )
+        self.assertEqual(c_build.status_code, 201, c_build.data)
+        c_new1 = self.as_user(self.admin).post(
+            '/api/sheets/lg/glowny/columns/',
+            {'label': 'Nowa 1', 'group': 'EXTRA GRUPA', 'group_color': '#6EE7B7', 'kind': 'text'},
+            format='json',
+        )
+        self.assertEqual(c_new1.status_code, 201, c_new1.data)
+        c_new2 = self.as_user(self.admin).post(
+            '/api/sheets/lg/glowny/columns/',
+            {'label': 'Nowa 2', 'group': 'EXTRA GRUPA', 'kind': 'text'},
+            format='json',
+        )
+        self.assertEqual(c_new2.status_code, 201, c_new2.data)
+
+        lg_payload = self.as_user(self.lg).get('/api/sheets/lg/glowny/').data
+        lg_keys = [c['key'] for c in lg_payload['columns']]
+        self.assertEqual(lg_keys[0], 'company.name')
+        self.assertEqual(lg_keys[1], c_base.data['column']['key'])
+        build_idx = lg_keys.index(c_build.data['column']['key'])
+        self.assertEqual(lg_keys[build_idx + 1], 'care.composition')
+        new1_idx = lg_keys.index(c_new1.data['column']['key'])
+        self.assertEqual(lg_keys[new1_idx + 1], c_new2.data['column']['key'])
+        self.assertEqual(lg_payload['custom_groups'], [
+            {
+                'id': lg_payload['custom_groups'][0]['id'],
+                'name': 'EXTRA GRUPA',
+                'color': '#6EE7B7',
+                'can_delete': False,
+            },
+        ])
+
+        # Isolation: lg/glowny columns must NOT leak into opiekun/glowny
+        op_payload = self.as_user(self.opiekun).get('/api/sheets/opiekun/glowny/').data
+        op_keys = {c['key'] for c in op_payload['columns']}
+        self.assertNotIn(c_base.data['column']['key'], op_keys)
+        self.assertNotIn(c_new1.data['column']['key'], op_keys)
+
+    def test_edit_roles_metadata_update_and_hide_for_all(self):
+        created = self.as_user(self.fr).post(
+            '/api/sheets/opiekun/glowny/columns/',
+            {'label': 'Uwagi FR', 'group': 'OPIEKUN (edytowalne)', 'kind': 'text'},
+            format='json',
+        )
+        self.assertEqual(created.status_code, 201, created.data)
+        col_key = created.data['column']['key']
+
+        # Opiekun cannot write when not in edit_roles
+        denied_edit = self.patch(
+            self.opiekun,
+            [{'company_id': self.partner.id, 'column_key': col_key, 'value': 'test', 'base': None}],
+            url='/api/sheets/opiekun/glowny/cells/',
+        )
+        self.assertEqual(denied_edit.status_code, status.HTTP_403_FORBIDDEN)
+
+        # Update metadata: allow opiekun, switch text -> longtext, change label and help
+        updated = self.as_user(self.lg).patch(
+            f'/api/sheets/opiekun/glowny/columns/{col_key}/',
+            {
+                'label': 'Dłuższe uwagi',
+                'help': 'Nowy dymek',
+                'kind': 'longtext',
+                'edit_roles': ['opiekun'],
+            },
+            format='json',
+        )
+        self.assertEqual(updated.status_code, 200, updated.data)
+        self.assertEqual(updated.data['column']['kind'], 'longtext')
+        self.assertEqual(updated.data['column']['help'], 'Nowy dymek')
+        self.assertIn('opiekun', updated.data['column']['edit_roles'])
+
+        # Switching text/longtext <-> file_link is rejected
+        bad_kind = self.as_user(self.lg).patch(
+            f'/api/sheets/opiekun/glowny/columns/{col_key}/',
+            {'kind': 'file_link'},
+            format='json',
+        )
+        self.assertEqual(bad_kind.status_code, status.HTTP_400_BAD_REQUEST)
+
+        # Now opiekun can write
+        ok_edit = self.patch(
+            self.opiekun,
+            [{'company_id': self.partner.id, 'column_key': col_key, 'value': 'Wpis testowy', 'base': None}],
+            url='/api/sheets/opiekun/glowny/cells/',
+        )
+        self.assertEqual(ok_edit.status_code, 200, ok_edit.data)
+
+        # Hide for all: opiekun stops seeing the column, managers still see it with hidden_for_all=True
+        hidden_resp = self.as_user(self.fr).patch(
+            f'/api/sheets/opiekun/glowny/columns/{col_key}/',
+            {'hidden_for_all': True},
+            format='json',
+        )
+        self.assertEqual(hidden_resp.status_code, 200, hidden_resp.data)
+        op_after_hide = self.as_user(self.opiekun).get('/api/sheets/opiekun/glowny/').data
+        self.assertNotIn(col_key, {c['key'] for c in op_after_hide['columns']})
+
+        fr_after_hide = self.as_user(self.fr).get('/api/sheets/opiekun/glowny/').data
+        fr_col = next(c for c in fr_after_hide['columns'] if c['key'] == col_key)
+        self.assertTrue(fr_col['hidden_for_all'])
+
+        # Unhide for all: value preserved
+        self.assertEqual(
+            self.as_user(self.admin).patch(
+                f'/api/sheets/opiekun/glowny/columns/{col_key}/',
+                {'hidden_for_all': False},
+                format='json',
+            ).status_code,
+            200,
+        )
+        op_after_unhide = self.as_user(self.opiekun).get('/api/sheets/opiekun/glowny/').data
+        self.assertIn(col_key, {c['key'] for c in op_after_unhide['columns']})
+        partner_row = next(r for r in op_after_unhide['rows'] if r['company_id'] == self.partner.id)
+        self.assertEqual(partner_row['cells'][col_key], 'Wpis testowy')
+
+    def test_custom_media_upload_delete_history_and_emergency_export(self):
+        import tempfile
+        from django.core.files.storage import default_storage
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        from .emergency_export import build_emergency_xlsx_files
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with self.settings(MEDIA_ROOT=tmpdir):
+                created = self.as_user(self.lg).post(
+                    '/api/sheets/lg/glowny/columns/',
+                    {'label': 'Pliki stoiska', 'group': 'MEDIA', 'kind': 'file_link'},
+                    format='json',
+                )
+                self.assertEqual(created.status_code, 201, created.data)
+                col_key = created.data['column']['key']
+                self.assertTrue(created.data['column']['multiple_files'])
+
+                # Text PATCH on media column is rejected
+                bad_patch = self.patch(
+                    self.lg,
+                    [{'company_id': self.partner.id, 'column_key': col_key, 'value': 'abc', 'base': None}],
+                    url='/api/sheets/lg/glowny/cells/',
+                )
+                self.assertEqual(bad_patch.status_code, status.HTTP_400_BAD_REQUEST)
+
+                # Bad extension rejected
+                bad_ext = self.as_user(self.lg).post(
+                    '/api/sheets/lg/glowny/cells/media/',
+                    {
+                        'company_id': self.partner.id,
+                        'column_key': col_key,
+                        'files': [SimpleUploadedFile('virus.exe', b'MZ', content_type='application/octet-stream')],
+                    },
+                    format='multipart',
+                )
+                self.assertEqual(bad_ext.status_code, status.HTTP_400_BAD_REQUEST)
+
+                # Upload 2 valid files
+                f1 = SimpleUploadedFile('rzut.png', b'png-bytes', content_type='image/png')
+                f2 = SimpleUploadedFile('spec.pdf', b'%PDF-1.4', content_type='application/pdf')
+                up = self.as_user(self.lg).post(
+                    '/api/sheets/lg/glowny/cells/media/',
+                    {'company_id': self.partner.id, 'column_key': col_key, 'files': [f1, f2]},
+                    format='multipart',
+                )
+                self.assertEqual(up.status_code, 200, up.data)
+                self.assertEqual(len(up.data['value']), 2)
+                path1 = up.data['value'][0]['path']
+                path2 = up.data['value'][1]['path']
+                id1 = up.data['value'][0]['id']
+                self.assertTrue(default_storage.exists(path1))
+                self.assertTrue(default_storage.exists(path2))
+
+                # Emergency export works with custom text + media columns
+                files = build_emergency_xlsx_files()
+                self.assertIn('lg.xlsx', files)
+
+                # History shows file names
+                hist = self.as_user(self.lg).get(
+                    '/api/sheets/lg/glowny/history/',
+                    {'company_id': self.partner.id, 'column_key': col_key},
+                )
+                self.assertEqual(hist.status_code, 200, hist.data)
+                self.assertIn('rzut.png', hist.data[0]['new'])
+                self.assertIn('spec.pdf', hist.data[0]['new'])
+
+                # Delete first file and verify disk cleanup
+                removed = self.as_user(self.fr).delete(
+                    '/api/sheets/lg/glowny/cells/media/',
+                    {'company_id': self.partner.id, 'column_key': col_key, 'file_id': id1},
+                    format='json',
+                )
+                self.assertEqual(removed.status_code, 200, removed.data)
+                self.assertEqual(len(removed.data['value']), 1)
+                self.assertFalse(default_storage.exists(path1))
+                self.assertTrue(default_storage.exists(path2))
+
+    def test_layout_default_column_groups_and_wide_xlsx_post(self):
+        url = '/api/sheets/fr/layout/'
+        put = self.as_user(self.admin).put(
+            url,
+            {
+                'column_widths': {'company.name': 180},
+                'column_groups_by_tab': {'dane': {'company.email': 'KONTAKT'}},
+                'merge_groups_tab': 'dane',
+            },
+            format='json',
+        )
+        self.assertEqual(put.status_code, 200, put.data)
+        self.assertEqual(put.data['column_groups_by_tab']['dane'], {'company.email': 'KONTAKT'})
+
+        got = self.as_user(self.fr).get(url)
+        self.assertEqual(got.status_code, 200)
+        self.assertEqual(got.data['column_groups_by_tab']['dane'], {'company.email': 'KONTAKT'})
+
+        wide_row = [f'Kol {i}' for i in range(95)]
+        xlsx_resp = self.as_user(self.lg).post(
+            '/api/sheets/lg/glowny/xlsx/',
+            {'rows': [wide_row, ['val'] * 95]},
+            format='json',
+        )
+        self.assertEqual(xlsx_resp.status_code, 200)
+
+    def test_custom_column_delete_permissions_and_cleanup(self):
+        import tempfile
+        from django.core.files.storage import default_storage
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        from .models import (
+            SheetCellChange,
+            SheetCellComment,
+            SheetCellStyle,
+            SheetCellValue,
+            SheetCustomColumn,
+            SheetLayoutDefault,
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with self.settings(MEDIA_ROOT=tmpdir):
+                created = self.as_user(self.fr).post(
+                    '/api/sheets/lg/glowny/columns/',
+                    {'label': 'Pliki FR', 'group': '', 'kind': 'file_link'},
+                    format='json',
+                )
+                self.assertEqual(created.status_code, 201, created.data)
+                col_key = created.data['column']['key']
+                self.assertTrue(created.data['column']['can_delete'])
+
+                # Flag check across roles: creator FR = True, other staff LG = False, admin = True
+                fr_col = next(
+                    c for c in self.as_user(self.fr).get('/api/sheets/lg/glowny/').data['columns']
+                    if c['key'] == col_key
+                )
+                lg_col = next(
+                    c for c in self.as_user(self.lg).get('/api/sheets/lg/glowny/').data['columns']
+                    if c['key'] == col_key
+                )
+                admin_col = next(
+                    c for c in self.as_user(self.admin).get('/api/sheets/lg/glowny/').data['columns']
+                    if c['key'] == col_key
+                )
+                self.assertTrue(fr_col['can_delete'])
+                self.assertFalse(lg_col['can_delete'])
+                self.assertTrue(admin_col['can_delete'])
+
+                # Upload media file, style, comment and put key into SheetLayoutDefault
+                f1 = SimpleUploadedFile('zalacznik.pdf', b'%PDF-1.4', content_type='application/pdf')
+                up = self.as_user(self.fr).post(
+                    '/api/sheets/lg/glowny/cells/media/',
+                    {'company_id': self.partner.id, 'column_key': col_key, 'files': [f1]},
+                    format='multipart',
+                )
+                self.assertEqual(up.status_code, 200, up.data)
+                stored_path = up.data['value'][0]['path']
+                self.assertTrue(default_storage.exists(stored_path))
+
+                SheetCellStyle.objects.create(company=self.partner, column_key=col_key, bg_color='#FEF08A')
+                SheetCellComment.objects.create(
+                    company=self.partner,
+                    column_key=col_key,
+                    sheet_key='lg',
+                    tab_key='glowny',
+                    author=self.fr,
+                    body='Komentarz do usunięcia',
+                )
+                SheetLayoutDefault.objects.create(
+                    sheet_key='lg',
+                    column_widths={col_key: 200, 'company.name': 180},
+                    hidden_by_tab={'glowny': [col_key]},
+                    column_order_by_tab={'glowny': [col_key, 'company.email']},
+                    column_groups_by_tab={'glowny': {col_key: 'INFORMACJE BAZOWE'}},
+                )
+
+                # Non-creator staff (lg) cannot delete FR's column
+                denied_lg = self.as_user(self.lg).delete(f'/api/sheets/lg/glowny/columns/{col_key}/')
+                self.assertEqual(denied_lg.status_code, status.HTTP_403_FORBIDDEN)
+                self.assertTrue(SheetCustomColumn.objects.filter(key=col_key).exists())
+
+                # Opiekun cannot delete columns
+                op_col = self.as_user(self.fr).post(
+                    '/api/sheets/opiekun/glowny/columns/',
+                    {'label': 'Dla testu opiekuna', 'kind': 'text'},
+                    format='json',
+                )
+                op_key = op_col.data['column']['key']
+                denied_op = self.as_user(self.opiekun).delete(f'/api/sheets/opiekun/glowny/columns/{op_key}/')
+                self.assertEqual(denied_op.status_code, status.HTTP_403_FORBIDDEN)
+
+                # Admin CAN delete staff-created column and all its artifacts/storage/layout entries
+                deleted_admin = self.as_user(self.admin).delete(f'/api/sheets/lg/glowny/columns/{col_key}/')
+                self.assertEqual(deleted_admin.status_code, 200, deleted_admin.data)
+                self.assertFalse(SheetCustomColumn.objects.filter(key=col_key).exists())
+                self.assertFalse(SheetCellValue.objects.filter(column_key=col_key).exists())
+                self.assertFalse(SheetCellStyle.objects.filter(column_key=col_key).exists())
+                self.assertFalse(SheetCellComment.objects.filter(column_key=col_key).exists())
+                self.assertFalse(SheetCellChange.objects.filter(column_key=col_key).exists())
+                self.assertFalse(default_storage.exists(stored_path))
+
+                layout = SheetLayoutDefault.objects.get(sheet_key='lg')
+                self.assertNotIn(col_key, layout.column_widths)
+                self.assertEqual(layout.hidden_by_tab['glowny'], [])
+                self.assertEqual(layout.column_order_by_tab['glowny'], ['company.email'])
+                self.assertEqual(layout.column_groups_by_tab['glowny'], {})
+
+                # Staff creator (lg) can delete their own column
+                own_lg = self.as_user(self.lg).post(
+                    '/api/sheets/lg/glowny/columns/',
+                    {'label': 'Własna LG', 'kind': 'text'},
+                    format='json',
+                )
+                own_lg_key = own_lg.data['column']['key']
+                self.assertEqual(
+                    self.as_user(self.lg).delete(f'/api/sheets/lg/glowny/columns/{own_lg_key}/').status_code,
+                    200,
+                )
+                self.assertFalse(SheetCustomColumn.objects.filter(key=own_lg_key).exists())
+
+    def test_custom_group_delete_permissions_and_preserves_column_data(self):
+        from .models import SheetCellValue, SheetCustomColumn, SheetCustomGroup
+
+        grp_resp = self.as_user(self.fr).post(
+            '/api/sheets/lg/glowny/groups/',
+            {'name': 'KATEGORIA FR', 'color': '#FDBA74'},
+            format='json',
+        )
+        self.assertEqual(grp_resp.status_code, 201, grp_resp.data)
+        grp_id = grp_resp.data['id']
+        self.assertTrue(grp_resp.data['can_delete'])
+
+        col_resp = self.as_user(self.fr).post(
+            '/api/sheets/lg/glowny/columns/',
+            {'label': 'Pole w grupie', 'group': 'KATEGORIA FR', 'kind': 'text'},
+            format='json',
+        )
+        self.assertEqual(col_resp.status_code, 201, col_resp.data)
+        col_key = col_resp.data['column']['key']
+        save_cell = self.patch(
+            self.fr,
+            [{'company_id': self.partner.id, 'column_key': col_key, 'value': 'Zachowana wartość', 'base': None}],
+            url='/api/sheets/lg/glowny/cells/',
+        )
+        self.assertEqual(save_cell.status_code, 200, save_cell.data)
+
+        # Creator FR = True, other staff LG = False, Admin = True
+        fr_grps = self.as_user(self.fr).get('/api/sheets/lg/glowny/').data['custom_groups']
+        lg_grps = self.as_user(self.lg).get('/api/sheets/lg/glowny/').data['custom_groups']
+        admin_grps = self.as_user(self.admin).get('/api/sheets/lg/glowny/').data['custom_groups']
+        self.assertTrue(next(g for g in fr_grps if g['id'] == grp_id)['can_delete'])
+        self.assertFalse(next(g for g in lg_grps if g['id'] == grp_id)['can_delete'])
+        self.assertTrue(next(g for g in admin_grps if g['id'] == grp_id)['can_delete'])
+
+        # Another staff member cannot delete FR's category
+        denied = self.as_user(self.lg).delete(f'/api/sheets/lg/glowny/groups/{grp_id}/')
+        self.assertEqual(denied.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertTrue(SheetCustomGroup.objects.filter(id=grp_id).exists())
+
+        # Admin deletes FR's category -> columns move to ungrouped (''), cell data stays intact
+        deleted = self.as_user(self.admin).delete(f'/api/sheets/lg/glowny/groups/{grp_id}/')
+        self.assertEqual(deleted.status_code, 200, deleted.data)
+        self.assertFalse(SheetCustomGroup.objects.filter(id=grp_id).exists())
+        cc = SheetCustomColumn.objects.get(key=col_key)
+        self.assertEqual(cc.group, '')
+        cell = SheetCellValue.objects.get(company=self.partner, column_key=col_key)
+        self.assertEqual(cell.value, 'Zachowana wartość')
+
+        # Staff creator (lg) can delete their own category
+        own_grp = self.as_user(self.lg).post(
+            '/api/sheets/lg/glowny/groups/',
+            {'name': 'KATEGORIA LG', 'color': '#93C5FD'},
+            format='json',
+        )
+        own_id = own_grp.data['id']
+        self.assertEqual(
+            self.as_user(self.lg).delete(f'/api/sheets/lg/glowny/groups/{own_id}/').status_code,
+            200,
+        )
+        self.assertFalse(SheetCustomGroup.objects.filter(id=own_id).exists())

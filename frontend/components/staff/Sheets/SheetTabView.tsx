@@ -20,14 +20,14 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useSheetEdits, type CellEdit } from "@/hooks/useSheetEdits";
-import { compareCells, displayText } from "@/lib/sheets/format";
+import { compareCells, displayText, extractFiles } from "@/lib/sheets/format";
 import { SHEET_CELL_COLORS, cellStyleId } from "@/lib/sheets/cellColors";
 import {
   MATRIX_COMMENT_COLUMN,
   type CommentTarget,
   targetFromRow,
 } from "@/lib/sheets/comments";
-import { applyColumnOrder } from "@/lib/sheets/columnOrder";
+import { applyColumnGroupOverrides, applyColumnOrder } from "@/lib/sheets/columnOrder";
 import { cellId, type SheetCellsResponse, type SheetCellValue, type SheetColumn, type SheetRow, type SheetTabPayload } from "@/lib/sheets/types";
 import { SheetGrid, type SheetGridHandle, type SheetSort } from "./SheetGrid";
 import { SheetMatrix } from "./SheetMatrix";
@@ -42,6 +42,7 @@ import {
 } from "./SheetCellComments";
 import { SheetCellEditDialog } from "./SheetCellEditDialog";
 import { SheetFormListDialog } from "./SheetFormListDialog";
+import { SheetMediaCellDialog } from "./SheetMediaCellDialog";
 import { cn } from "@/lib/utils";
 
 const POLL_INTERVAL_MS = 15000;
@@ -66,6 +67,8 @@ const hiddenStorageKey = (sheet: string, tab: string) => `sheets:hidden:${sheet}
 const hiddenSeededKey = (sheet: string, tab: string) => `sheets:hidden-seeded:${sheet}:${tab}`;
 const orderStorageKey = (sheet: string, tab: string) => `sheets:order:${sheet}:${tab}`;
 const orderSeededKey = (sheet: string, tab: string) => `sheets:order-seeded:${sheet}:${tab}`;
+const groupsStorageKey = (sheet: string, tab: string) => `sheets:groups:${sheet}:${tab}`;
+const groupsSeededKey = (sheet: string, tab: string) => `sheets:groups-seeded:${sheet}:${tab}`;
 
 function storedBaselines(
   data: SheetTabPayload | undefined,
@@ -134,6 +137,30 @@ function hasLocalOrder(sheet: string, tab: string): boolean {
   return (
     window.localStorage.getItem(orderStorageKey(sheet, tab)) != null ||
     window.localStorage.getItem(orderSeededKey(sheet, tab)) === "1"
+  );
+}
+
+function readGroups(sheet: string, tab: string): Record<string, string> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(groupsStorageKey(sheet, tab));
+    const parsed = raw ? (JSON.parse(raw) as unknown) : {};
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    const out: Record<string, string> = {};
+    for (const [k, v] of Object.entries(parsed)) {
+      if (typeof v === "string") out[k] = v;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+function hasLocalGroups(sheet: string, tab: string): boolean {
+  if (typeof window === "undefined") return false;
+  return (
+    window.localStorage.getItem(groupsStorageKey(sheet, tab)) != null ||
+    window.localStorage.getItem(groupsSeededKey(sheet, tab)) === "1"
   );
 }
 
@@ -237,6 +264,13 @@ export function SheetTabView({
   const [sort, setSort] = React.useState<SheetSort | null>(null);
   const [hidden, setHidden] = React.useState<Set<string>>(() => readHidden(sheetKey, tabKey));
   const [columnOrder, setColumnOrder] = React.useState<string[]>(() => readOrder(sheetKey, tabKey));
+  const [groupOverrides, setGroupOverrides] = React.useState<Record<string, string>>(() =>
+    readGroups(sheetKey, tabKey)
+  );
+  const [mediaCell, setMediaCell] = React.useState<{
+    companyId: number;
+    column: SheetColumn;
+  } | null>(null);
   const [wrapLongtext, setWrapLongtext] = React.useState(() => readWrap(sheetKey, tabKey));
   const [frozenOverride, setFrozenOverride] = React.useState<number | null>(() => readFrozen(sheetKey, tabKey));
   const [freezeEditing, setFreezeEditing] = React.useState(false);
@@ -524,6 +558,8 @@ export function SheetTabView({
   React.useEffect(() => {
     setHidden(readHidden(sheetKey, tabKey));
     setColumnOrder(readOrder(sheetKey, tabKey));
+    setGroupOverrides(readGroups(sheetKey, tabKey));
+    setMediaCell(null);
     setWrapLongtext(readWrap(sheetKey, tabKey));
     setFrozenOverride(readFrozen(sheetKey, tabKey));
   }, [sheetKey, tabKey]);
@@ -561,11 +597,25 @@ export function SheetTabView({
     window.localStorage.setItem(orderSeededKey(sheetKey, tabKey), "1");
   }, [sheetKey, tabKey]);
 
-  // Seed hidden columns and column order from the sheet default when this browser has no local preference.
+  const persistGroups = React.useCallback(
+    (next: Record<string, string>) => {
+      setGroupOverrides(next);
+      if (Object.keys(next).length === 0) {
+        window.localStorage.removeItem(groupsStorageKey(sheetKey, tabKey));
+      } else {
+        window.localStorage.setItem(groupsStorageKey(sheetKey, tabKey), JSON.stringify(next));
+      }
+      window.localStorage.setItem(groupsSeededKey(sheetKey, tabKey), "1");
+    },
+    [sheetKey, tabKey]
+  );
+
+  // Seed hidden columns, column order and group overrides from the sheet default when this browser has no local preference.
   React.useEffect(() => {
     const needHidden = !hasLocalHidden(sheetKey, tabKey);
     const needOrder = !hasLocalOrder(sheetKey, tabKey);
-    if (!needHidden && !needOrder) return;
+    const needGroups = !hasLocalGroups(sheetKey, tabKey);
+    if (!needHidden && !needOrder && !needGroups) return;
     let cancelled = false;
     void (async () => {
       try {
@@ -573,6 +623,7 @@ export function SheetTabView({
           column_widths?: Record<string, number>;
           hidden_by_tab?: Record<string, string[]>;
           column_order_by_tab?: Record<string, string[]>;
+          column_groups_by_tab?: Record<string, Record<string, string>>;
         }>(`/api/sheets/${sheetKey}/layout/`);
         if (cancelled) return;
         if (needHidden) {
@@ -592,6 +643,14 @@ export function SheetTabView({
           }
           window.localStorage.setItem(orderSeededKey(sheetKey, tabKey), "1");
         }
+        if (needGroups) {
+          const fromGroups = layout.column_groups_by_tab?.[tabKey];
+          if (fromGroups && Object.keys(fromGroups).length > 0) {
+            setGroupOverrides(fromGroups);
+            window.localStorage.setItem(groupsStorageKey(sheetKey, tabKey), JSON.stringify(fromGroups));
+          }
+          window.localStorage.setItem(groupsSeededKey(sheetKey, tabKey), "1");
+        }
       } catch {
         /* ignore — layout optional */
       }
@@ -609,17 +668,6 @@ export function SheetTabView({
     if (!data) return;
     setCellStyles(data.cell_styles ?? {});
   }, [data?.generated_at]); // eslint-disable-line react-hooks/exhaustive-deps -- sync fills when tab payload refreshes
-
-  const toggleHidden = (key: string) => {
-    setHidden((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      window.localStorage.setItem(hiddenStorageKey(sheetKey, tabKey), JSON.stringify([...next]));
-      window.localStorage.setItem(hiddenSeededKey(sheetKey, tabKey), "1");
-      return next;
-    });
-  };
 
   const applyFillColor = async (bgColor: string) => {
     const cells = gridRef.current?.getSelectedCells() ?? [];
@@ -658,12 +706,30 @@ export function SheetTabView({
   };
 
   const allColumns = data?.columns;
+  const withCustomGroups = React.useMemo(
+    () => applyColumnGroupOverrides(allColumns ?? [], groupOverrides),
+    [allColumns, groupOverrides]
+  );
   const orderedAll = React.useMemo(
-    () => applyColumnOrder(allColumns ?? [], columnOrder),
-    [allColumns, columnOrder],
+    () => applyColumnOrder(withCustomGroups, columnOrder),
+    [withCustomGroups, columnOrder]
   );
   const columns = React.useMemo(
-    () => orderedAll.filter((col, index) => index === 0 || !hidden.has(col.key)),
+    () =>
+      orderedAll.filter(
+        (col, index) => index === 0 || (!col.hidden_for_all && !hidden.has(col.key))
+      ),
+    [orderedAll, hidden]
+  );
+  const customGroupColors = React.useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const grp of data?.custom_groups ?? []) {
+      if (grp.color) map[grp.name] = grp.color;
+    }
+    return map;
+  }, [data?.custom_groups]);
+  const hiddenCount = React.useMemo(
+    () => orderedAll.slice(1).filter((col) => !col.hidden_for_all && hidden.has(col.key)).length,
     [orderedAll, hidden]
   );
   // Freeze = visible columns that still fall inside the tab's defined frozen prefix
@@ -672,7 +738,8 @@ export function SheetTabView({
   const frozenColumns = React.useMemo(() => {
     let n = 0;
     for (let i = 0; i < orderedAll.length && i < definedFrozen; i++) {
-      if (i === 0 || !hidden.has(orderedAll[i].key)) n += 1;
+      const col = orderedAll[i];
+      if (i === 0 || (col && !col.hidden_for_all && !hidden.has(col.key))) n += 1;
     }
     return Math.min(n, columns.length);
   }, [orderedAll, definedFrozen, hidden, columns.length]);
@@ -744,6 +811,7 @@ export function SheetTabView({
   const { undo, redo } = edits;
   React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (document.querySelector('[role="dialog"]')) return;
       if (!(event.ctrlKey || event.metaKey) || isTypingTarget(event.target)) return;
       const key = event.key.toLowerCase();
       if (key === "z" && !event.shiftKey) {
@@ -814,14 +882,16 @@ export function SheetTabView({
         currentRows={visibleRows}
         currentFrozenColumns={frozenColumns}
         cellStyles={cellStyles}
+        customGroupColors={customGroupColors}
         getSelectedCells={() => gridRef.current?.getSelectedCells() ?? []}
       />
       <SheetSettingsDialog
         sheetKey={sheetKey}
         tabKey={tabKey}
         columns={orderedAll}
+        customGroups={data.custom_groups ?? []}
+        canManageColumns={Boolean(data.tab.can_manage_columns)}
         hidden={hidden}
-        onToggleHidden={toggleHidden}
         onSetHidden={(keys) => {
           const next = new Set(keys);
           setHidden(next);
@@ -829,13 +899,18 @@ export function SheetTabView({
           window.localStorage.setItem(hiddenSeededKey(sheetKey, tabKey), "1");
         }}
         onReorder={persistOrder}
+        groupOverrides={groupOverrides}
+        onSetGroupOverrides={persistGroups}
         getColumnOrder={() => orderedAll.slice(1).map((col) => col.key)}
         getColumnWidths={() => gridRef.current?.getColumnWidths() ?? {}}
         applyColumnWidths={(widths) => gridRef.current?.setColumnWidths(widths)}
-        hiddenCount={hidden.size}
+        hiddenCount={hiddenCount}
         frozenColumns={definedFrozen}
         onOpenHistory={() => void openHistory()}
         onMailDeadlinesSaved={() => void mutate()}
+        onColumnsMutated={async () => {
+          await mutate();
+        }}
       />
     </>
   );
@@ -993,7 +1068,10 @@ export function SheetTabView({
       {!isMatrix && (
         <div className="flex items-start gap-2">
           <div className="min-w-0 flex-1">
-            <SheetPreviewBar focus={previewFocus} />
+            <SheetPreviewBar
+              focus={previewFocus}
+              onOpenMediaCell={(row, column) => setMediaCell({ companyId: row.company_id, column })}
+            />
           </div>
           <div className="flex shrink-0 flex-col gap-1">
             <CommentOpenButton
@@ -1037,9 +1115,11 @@ export function SheetTabView({
           sheetKey={sheetKey}
           tabKey={tabKey}
           cellStyles={cellStyles}
+          customGroupColors={customGroupColors}
           wrapLongtext={wrapLongtext}
           commentCounts={data.comment_counts ?? {}}
           onOpenComments={openComments}
+          onOpenMediaCell={(row, column) => setMediaCell({ companyId: row.company_id, column })}
           onFocusChange={setPreviewFocus}
         />
         )}
@@ -1195,6 +1275,33 @@ export function SheetTabView({
         }
         onCommit={(changes) => void commitCell(changes)}
       />
+      {(() => {
+        const mediaCol = mediaCell
+          ? (orderedAll.find((c) => c.key === mediaCell.column.key) ?? mediaCell.column)
+          : null;
+        const mediaRow = mediaCell
+          ? data.rows.find((r) => r.company_id === mediaCell.companyId)
+          : undefined;
+        const mediaFiles =
+          mediaCol && mediaRow ? extractFiles(mediaRow.cells[mediaCol.key]) : [];
+        return (
+          <SheetMediaCellDialog
+            open={Boolean(mediaCell && mediaCol && mediaRow)}
+            onOpenChange={(next) => {
+              if (!next) setMediaCell(null);
+            }}
+            sheetKey={sheetKey}
+            tabKey={tabKey}
+            companyId={mediaCell?.companyId ?? null}
+            companyName={mediaCell ? companyName(mediaCell.companyId) : ""}
+            column={mediaCol}
+            files={mediaFiles}
+            onChanged={async () => {
+              await mutate();
+            }}
+          />
+        );
+      })()}
     </div>
   );
 }

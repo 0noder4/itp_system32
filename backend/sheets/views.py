@@ -13,17 +13,26 @@ from .mail_deadlines import deadlines_payload, update_deadlines
 from .models import SheetCellChange, SheetLayoutDefault
 from .registry import ROW_STAFF
 from .service import (
+    SheetNotFoundError,
     SheetPermissionError,
     SheetValidationError,
     apply_cell_styles,
     apply_changes,
     build_tab_payload,
+    can_manage_custom_columns,
     company_queryset,
-    parse_changes,
+    create_custom_column,
+    create_custom_group,
+    delete_custom_column,
+    delete_custom_group,
+    delete_custom_media,
     discard_drafts,
+    parse_changes,
     restore_form_overrides,
     staff_cell_history,
+    update_custom_column,
     upload_cell_file,
+    upload_custom_media,
     visible_columns,
 )
 from .values import present
@@ -198,7 +207,30 @@ def _clean_tab_key_lists(raw, field_name: str) -> dict[str, list[str]] | None:
     return cleaned
 
 
-def _merge_tab_map(previous: dict, incoming: dict[str, list[str]] | None, merge_tab) -> dict:
+def _clean_tab_group_maps(raw, field_name: str) -> dict[str, dict[str, str]] | None:
+    """Validate {tab: {column_key: group_name}}; None means omit / leave unchanged."""
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise ValueError(f'{field_name} musi być obiektem')
+    cleaned: dict[str, dict[str, str]] = {}
+    for tab_key, mapping in raw.items():
+        if not isinstance(tab_key, str) or not tab_key or len(tab_key) > 50:
+            continue
+        if not isinstance(mapping, dict):
+            continue
+        out: dict[str, str] = {}
+        for col_key, group_name in mapping.items():
+            if not isinstance(col_key, str) or not col_key or len(col_key) > 100:
+                continue
+            if not isinstance(group_name, str) or len(group_name) > 120:
+                continue
+            out[col_key] = group_name.strip()
+        cleaned[tab_key] = out
+    return cleaned
+
+
+def _merge_tab_map(previous: dict, incoming: dict | None, merge_tab) -> dict:
     if incoming is None:
         return previous
     if isinstance(merge_tab, str) and merge_tab and merge_tab in incoming:
@@ -257,6 +289,7 @@ class SheetLayoutDefaultView(APIView):
                 'column_widths': {},
                 'hidden_by_tab': {},
                 'column_order_by_tab': {},
+                'column_groups_by_tab': {},
                 'updated_at': None,
                 'updated_by': None,
             })
@@ -264,6 +297,7 @@ class SheetLayoutDefaultView(APIView):
             'column_widths': layout.column_widths or {},
             'hidden_by_tab': layout.hidden_by_tab or {},
             'column_order_by_tab': layout.column_order_by_tab or {},
+            'column_groups_by_tab': layout.column_groups_by_tab or {},
             'updated_at': layout.updated_at.isoformat() if layout.updated_at else None,
             'updated_by': user_display(layout.updated_by) if layout.updated_by_id else None,
         })
@@ -287,14 +321,17 @@ class SheetLayoutDefaultView(APIView):
         try:
             hidden_incoming = _clean_tab_key_lists(request.data.get('hidden_by_tab'), 'hidden_by_tab')
             order_incoming = _clean_tab_key_lists(request.data.get('column_order_by_tab'), 'column_order_by_tab')
+            groups_incoming = _clean_tab_group_maps(request.data.get('column_groups_by_tab'), 'column_groups_by_tab')
         except ValueError as exc:
             return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
         existing = SheetLayoutDefault.objects.filter(sheet_key=sheet_key).first()
         previous_hidden = (existing.hidden_by_tab or {}) if existing else {}
         previous_order = (existing.column_order_by_tab or {}) if existing else {}
+        previous_groups = (existing.column_groups_by_tab or {}) if existing else {}
         hidden_final = _merge_tab_map(previous_hidden, hidden_incoming, request.data.get('merge_hidden_tab'))
         order_final = _merge_tab_map(previous_order, order_incoming, request.data.get('merge_order_tab'))
+        groups_final = _merge_tab_map(previous_groups, groups_incoming, request.data.get('merge_groups_tab'))
 
         layout, _ = SheetLayoutDefault.objects.update_or_create(
             sheet_key=sheet_key,
@@ -302,6 +339,7 @@ class SheetLayoutDefaultView(APIView):
                 'column_widths': cleaned,
                 'hidden_by_tab': hidden_final,
                 'column_order_by_tab': order_final,
+                'column_groups_by_tab': groups_final,
                 'updated_by': request.user,
             },
         )
@@ -309,6 +347,7 @@ class SheetLayoutDefaultView(APIView):
             'column_widths': layout.column_widths,
             'hidden_by_tab': layout.hidden_by_tab or {},
             'column_order_by_tab': layout.column_order_by_tab or {},
+            'column_groups_by_tab': layout.column_groups_by_tab or {},
             'updated_at': layout.updated_at.isoformat(),
             'updated_by': user_display(request.user),
         })
@@ -476,7 +515,19 @@ class SheetCellHistoryView(APIView):
         except (TypeError, ValueError):
             return Response({'detail': 'Podaj company_id.'}, status=status.HTTP_400_BAD_REQUEST)
         column_key = request.query_params.get('column_key') or ''
-        column = next((col for col in visible_columns(tab, request.user) if col.key == column_key), None)
+        column = next(
+            (
+                col
+                for col in visible_columns(
+                    tab,
+                    request.user,
+                    sheet_key=sheet.key,
+                    include_hidden_custom=can_manage_custom_columns(request.user),
+                )
+                if col.key == column_key
+            ),
+            None,
+        )
         if column is None:
             return Response({'detail': 'Nie znaleziono kolumny.'}, status=status.HTTP_404_NOT_FOUND)
         if tab.row_source == ROW_STAFF:
@@ -560,7 +611,7 @@ def _posted_matrix(payload) -> list[list[str]] | None:
     matrix: list[list[str]] = []
     width = None
     for row in rows:
-        if not isinstance(row, list) or not row or len(row) > 80:
+        if not isinstance(row, list) or not row or len(row) > 200:
             return None
         if width is None:
             width = len(row)
@@ -643,8 +694,8 @@ class SheetXlsxView(APIView):
         if tab is None:
             return Response({'detail': 'Nie znaleziono arkusza.'}, status=status.HTTP_404_NOT_FOUND)
         payload = build_tab_payload(sheet, tab, request.user)
-        columns = payload['columns']
-        defs = visible_columns(tab, request.user)
+        columns = [col for col in payload['columns'] if not col.get('hidden_for_all')]
+        defs = visible_columns(tab, request.user, sheet_key=sheet.key)
         matrix = [[col['label'] for col in columns]]
         for row in payload['rows']:
             matrix.append([present(col, row['cells'].get(col.key)) for col in defs])
@@ -678,3 +729,173 @@ class SheetXlsxView(APIView):
             )
         options = _posted_xlsx_options(request.data, matrix)
         return _xlsx_response(matrix, f'{sheet_key}-{tab_key}', **options)
+
+
+class SheetCustomColumnsView(APIView):
+    """POST /api/sheets/<sheet>/<tab>/columns/ — create a custom column (admin / FR / LG)."""
+
+    permission_classes = [IsAuthenticated, HasAnyStaffRole]
+
+    def post(self, request, sheet_key, tab_key):
+        sheet, tab = _resolve(request.user, sheet_key, tab_key)
+        if tab is None:
+            return Response({'detail': 'Nie znaleziono arkusza.'}, status=status.HTTP_404_NOT_FOUND)
+        data = request.data if isinstance(request.data, dict) else {}
+        try:
+            created = create_custom_column(sheet, tab, request.user, data)
+        except SheetPermissionError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_403_FORBIDDEN)
+        except SheetValidationError as exc:
+            return Response({'errors': exc.errors}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(created, status=status.HTTP_201_CREATED)
+
+
+class SheetCustomColumnDetailView(APIView):
+    """PATCH / DELETE /api/sheets/<sheet>/<tab>/columns/<col_key>/ — edit or delete a custom column."""
+
+    permission_classes = [IsAuthenticated, HasAnyStaffRole]
+
+    def patch(self, request, sheet_key, tab_key, column_key):
+        sheet, tab = _resolve(request.user, sheet_key, tab_key)
+        if tab is None:
+            return Response({'detail': 'Nie znaleziono arkusza.'}, status=status.HTTP_404_NOT_FOUND)
+        data = request.data if isinstance(request.data, dict) else {}
+        try:
+            updated = update_custom_column(sheet, tab, request.user, column_key, data)
+        except SheetPermissionError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_403_FORBIDDEN)
+        except SheetNotFoundError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_404_NOT_FOUND)
+        except SheetValidationError as exc:
+            return Response({'errors': exc.errors}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(updated)
+
+    def delete(self, request, sheet_key, tab_key, column_key):
+        sheet, tab = _resolve(request.user, sheet_key, tab_key)
+        if tab is None:
+            return Response({'detail': 'Nie znaleziono arkusza.'}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            result = delete_custom_column(sheet, tab, request.user, column_key)
+        except SheetPermissionError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_403_FORBIDDEN)
+        except SheetNotFoundError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_404_NOT_FOUND)
+        except SheetValidationError as exc:
+            return Response({'errors': exc.errors}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(result)
+
+
+class SheetCustomGroupsView(APIView):
+    """POST /api/sheets/<sheet>/<tab>/groups/ — create a custom column category."""
+
+    permission_classes = [IsAuthenticated, HasAnyStaffRole]
+
+    def post(self, request, sheet_key, tab_key):
+        sheet, tab = _resolve(request.user, sheet_key, tab_key)
+        if tab is None:
+            return Response({'detail': 'Nie znaleziono arkusza.'}, status=status.HTTP_404_NOT_FOUND)
+        data = request.data if isinstance(request.data, dict) else {}
+        try:
+            created = create_custom_group(sheet, tab, request.user, data)
+        except SheetPermissionError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_403_FORBIDDEN)
+        except SheetValidationError as exc:
+            return Response({'errors': exc.errors}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(created, status=status.HTTP_201_CREATED)
+
+
+class SheetCustomGroupDetailView(APIView):
+    """DELETE /api/sheets/<sheet>/<tab>/groups/<group_id>/ — delete a custom column category."""
+
+    permission_classes = [IsAuthenticated, HasAnyStaffRole]
+
+    def delete(self, request, sheet_key, tab_key, group_id):
+        sheet, tab = _resolve(request.user, sheet_key, tab_key)
+        if tab is None:
+            return Response({'detail': 'Nie znaleziono arkusza.'}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            result = delete_custom_group(sheet, tab, request.user, group_id)
+        except SheetPermissionError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_403_FORBIDDEN)
+        except SheetNotFoundError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_404_NOT_FOUND)
+        except SheetValidationError as exc:
+            return Response({'errors': exc.errors}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(result)
+
+
+class SheetCustomMediaView(APIView):
+    """POST / DELETE .../cells/media/ — upload or remove files in a custom file_link cell."""
+
+    permission_classes = [IsAuthenticated, HasAnyStaffRole]
+
+    def post(self, request, sheet_key, tab_key):
+        sheet, tab = _resolve(request.user, sheet_key, tab_key)
+        if tab is None:
+            return Response({'detail': 'Nie znaleziono arkusza.'}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            company_id = int(request.data.get('company_id'))
+        except (TypeError, ValueError):
+            return Response(
+                {'errors': [{'detail': 'Podaj company_id.'}]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        column_key = request.data.get('column_key') or ''
+        if not isinstance(column_key, str) or not column_key.strip():
+            return Response(
+                {'errors': [{'detail': 'Podaj column_key.'}]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        files = request.FILES.getlist('files') or request.FILES.getlist('file')
+        try:
+            result = upload_custom_media(
+                sheet,
+                tab,
+                request.user,
+                company_id,
+                column_key.strip(),
+                files,
+            )
+        except SheetPermissionError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_403_FORBIDDEN)
+        except SheetValidationError as exc:
+            return Response({'errors': exc.errors}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(result)
+
+    def delete(self, request, sheet_key, tab_key):
+        sheet, tab = _resolve(request.user, sheet_key, tab_key)
+        if tab is None:
+            return Response({'detail': 'Nie znaleziono arkusza.'}, status=status.HTTP_404_NOT_FOUND)
+        data = request.data if isinstance(request.data, dict) else {}
+        raw_company = data.get('company_id') if 'company_id' in data else request.query_params.get('company_id')
+        try:
+            company_id = int(raw_company)
+        except (TypeError, ValueError):
+            return Response(
+                {'errors': [{'detail': 'Podaj company_id.'}]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        column_key = data.get('column_key') or request.query_params.get('column_key') or ''
+        if not isinstance(column_key, str) or not column_key.strip():
+            return Response(
+                {'errors': [{'detail': 'Podaj column_key.'}]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        file_id = data.get('file_id') or request.query_params.get('file_id')
+        raw_clear = data.get('clear_all') if 'clear_all' in data else request.query_params.get('clear_all')
+        clear_all = str(raw_clear).lower() in ('1', 'true', 'yes') if raw_clear is not None else False
+        try:
+            result = delete_custom_media(
+                sheet,
+                tab,
+                request.user,
+                company_id,
+                column_key.strip(),
+                file_id=file_id if isinstance(file_id, str) else None,
+                clear_all=clear_all,
+            )
+        except SheetPermissionError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_403_FORBIDDEN)
+        except SheetValidationError as exc:
+            return Response({'errors': exc.errors}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(result)

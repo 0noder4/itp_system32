@@ -15,7 +15,7 @@ from .definitions.common import user_display
 from .definitions.extras import STAFF_MEAL_FIELDS
 from .edit_parts import edit_part_columns
 from .form_writes import normalize_form_value
-from .models import SheetCellComment, SheetCellDraft, SheetCellValue, SheetNotification, StaffMeal
+from .models import SheetCellComment, SheetCellDraft, SheetCellValue, SheetCustomColumn, SheetNotification, StaffMeal
 from .registry import EDITABLE_SOURCES, KIND_BOOL, ROW_COMPANY, ROW_STAFF, SOURCE_EXTRA, SOURCE_STAFF
 from .service import (
     CellChange,
@@ -23,6 +23,7 @@ from .service import (
     MODE_EDIT,
     SheetPermissionError,
     SheetValidationError,
+    _custom_column_def,
     _displayed_value,
     _opiekun_accounts,
     apply_changes,
@@ -110,7 +111,7 @@ def _resolve_sheet_tab(user, sheet_key: str, tab_key: str):
 
 
 def _column_on_tab(sheet, tab, user, column_key: str):
-    columns = {col.key: col for col in visible_columns(tab, user)}
+    columns = {col.key: col for col in visible_columns(tab, user, sheet_key=sheet.key)}
     col = columns.get(column_key)
     if col is None:
         raise SheetValidationError([{'detail': f'Kolumna {column_key} nie jest dostępna.'}])
@@ -359,6 +360,14 @@ def _current_company_db_value(comment: SheetCellComment):
     if tab is None:
         return None, None
     col = next((c for c in tab.columns if c.key == comment.column_key), None)
+    if col is None:
+        custom = SheetCustomColumn.objects.filter(
+            sheet_key=comment.sheet_key,
+            tab_key=comment.tab_key,
+            key=comment.column_key,
+        ).first()
+        if custom is not None:
+            col = _custom_column_def(custom)
     if col is None:
         return None, None
     if col.source == SOURCE_EXTRA:

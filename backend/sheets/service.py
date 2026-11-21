@@ -1,16 +1,25 @@
 """Reading sheet tabs and applying cell edits."""
 from __future__ import annotations
 
+import os
+import re
 import uuid
 from collections import Counter
 from dataclasses import dataclass
 from typing import Any
 
 from django.db import transaction
+from django.db.models import Max
 from django.utils import timezone
 
 from companies.models import Company, CompanyInvitation, Settings
-from users.models import STAFF_ROLE_OPIEKUN, User
+from users.models import (
+    ALL_STAFF_ROLES,
+    STAFF_ROLE_FR,
+    STAFF_ROLE_LG,
+    STAFF_ROLE_OPIEKUN,
+    User,
+)
 
 from .definitions.common import user_display
 from .mail_deadlines import decorate_mail_group, decorate_mail_help, mail_send_labels
@@ -34,12 +43,17 @@ from .models import (
     SheetCellFormOverride,
     SheetCellStyle,
     SheetCellValue,
+    SheetCustomColumn,
+    SheetCustomGroup,
+    SheetLayoutDefault,
     StaffMeal,
     StaffMealChange,
 )
 from .registry import (
     KIND_BOOL,
     KIND_FILE,
+    KIND_LONGTEXT,
+    KIND_TEXT,
     ROW_COMPANY,
     ROW_STAFF,
     SOURCE_CUSTOM,
@@ -85,15 +99,120 @@ class SheetPermissionError(Exception):
     pass
 
 
+class SheetNotFoundError(Exception):
+    pass
+
+
 class SheetValidationError(Exception):
     def __init__(self, errors: list[dict]):
         super().__init__('invalid cell changes')
         self.errors = errors
 
 
-def columns_for_write(tab: TabDef, user) -> dict[str, ColumnDef]:
+CUSTOM_COLUMN_KINDS = frozenset({KIND_TEXT, KIND_LONGTEXT, KIND_FILE})
+CUSTOM_GROUP_COLORS = frozenset({
+    '#FDBA74', '#FCD34D', '#93C5FD', '#A5B4FC', '#6EE7B7',
+    '#C4B5FD', '#F9A8D4', '#7DD3FC', '#FCA5A5', '#67E8F9', '#94A3B8',
+})
+_HEX_COLOR_RE = re.compile(r'^#[0-9A-Fa-f]{6}$')
+CUSTOM_MEDIA_EXTENSIONS = frozenset({
+    '.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.pdf',
+    '.mp4', '.mov', '.webm', '.zip',
+    '.doc', '.docx', '.xls', '.xlsx', '.pptx', '.txt', '.csv',
+})
+CUSTOM_MEDIA_MAX_BYTES = 15 * 1024 * 1024
+CUSTOM_MEDIA_MAX_FILES = 10
+
+
+def can_manage_custom_columns(user) -> bool:
+    if getattr(user, 'type', None) == 'admin':
+        return True
+    return user.has_staff_role(STAFF_ROLE_FR, STAFF_ROLE_LG)
+
+
+def can_delete_custom_item(user, created_by_id: int | None) -> bool:
+    """Admin can delete any custom item; FR/LG staff can delete only items they created."""
+    if getattr(user, 'type', None) == 'admin':
+        return True
+    if not can_manage_custom_columns(user):
+        return False
+    return created_by_id is not None and created_by_id == getattr(user, 'id', None)
+
+
+def _group_base(name: str) -> str:
+    return (name or '').split(' · ', 1)[0].strip()
+
+
+def _same_group_name(a: str, b: str) -> bool:
+    ga = (a or '').strip()
+    gb = (b or '').strip()
+    if not ga or not gb:
+        return False
+    if ga == gb:
+        return True
+    ba = _group_base(ga)
+    bb = _group_base(gb)
+    return bool(ba and ba == bb)
+
+
+def _custom_column_def(cc: SheetCustomColumn) -> ColumnDef:
+    extra_roles = {r for r in (cc.edit_roles or []) if r in ALL_STAFF_ROLES}
+    roles = frozenset({STAFF_ROLE_FR, STAFF_ROLE_LG}) | extra_roles
+    return ColumnDef(
+        key=cc.key,
+        label=cc.label,
+        kind=cc.kind,
+        source=SOURCE_EXTRA,
+        group=cc.group or '',
+        edit_roles=roles,
+        width=220 if cc.kind == KIND_LONGTEXT else 160,
+        help=cc.help_text or '',
+        is_custom=True,
+        hidden_for_all=bool(cc.hidden_for_all),
+        multiple_files=(cc.kind == KIND_FILE),
+        created_by_id=cc.created_by_id,
+    )
+
+
+def _insert_custom_columns(base_columns: list[ColumnDef], custom_cols: list[ColumnDef]) -> list[ColumnDef]:
+    if not custom_cols:
+        return base_columns
+    result = list(base_columns)
+    base_keys = {c.key for c in result}
+    after_pinned_count = 0
+    for col in custom_cols:
+        if col.group:
+            base_idx = next(
+                (
+                    i
+                    for i, existing in enumerate(result)
+                    if existing.key in base_keys and _same_group_name(existing.group, col.group)
+                ),
+                -1,
+            )
+            if base_idx == 0:
+                insert_at = min(len(result), 1 + after_pinned_count)
+                result.insert(insert_at, col)
+                after_pinned_count += 1
+                continue
+            if base_idx > 0:
+                result.insert(base_idx, col)
+                continue
+            last_group_idx = -1
+            for i in range(len(result) - 1, -1, -1):
+                if _same_group_name(result[i].group, col.group):
+                    last_group_idx = i
+                    break
+            if last_group_idx >= 0:
+                result.insert(last_group_idx + 1, col)
+                continue
+        result.append(col)
+    return result
+
+
+def columns_for_write(tab: TabDef, user, *, sheet_key: str | None = None) -> dict[str, ColumnDef]:
     """Visible columns plus form fields edited from a composite cell on this tab."""
-    visible = visible_columns(tab, user)
+    visible = visible_columns(tab, user, sheet_key=sheet_key)
     found = {col.key: col for col in visible}
     parts_by_key = edit_part_columns()
     for col in visible:
@@ -102,22 +221,34 @@ def columns_for_write(tab: TabDef, user) -> dict[str, ColumnDef]:
     return found
 
 
-def visible_columns(tab: TabDef, user) -> list[ColumnDef]:
+def visible_columns(
+    tab: TabDef,
+    user,
+    *,
+    sheet_key: str | None = None,
+    include_hidden_custom: bool = False,
+) -> list[ColumnDef]:
     from .definitions.form_columns import EQUIPMENT_QTY_INSERT_BEFORE, build_equipment_qty_columns
 
     columns = [c for c in tab.columns if c.visible_to(user)]
     # Dynamic quantity columns from EquipmentItem catalog for any tab that includes the marker.
-    if not any(c.key == EQUIPMENT_QTY_INSERT_BEFORE for c in columns):
-        return columns
-    qty_cols = [c for c in build_equipment_qty_columns() if c.visible_to(user)]
-    if not qty_cols:
-        return columns
-    result: list[ColumnDef] = []
-    for col in columns:
-        if col.key == EQUIPMENT_QTY_INSERT_BEFORE:
-            result.extend(qty_cols)
-        result.append(col)
-    return result
+    if any(c.key == EQUIPMENT_QTY_INSERT_BEFORE for c in columns):
+        qty_cols = [c for c in build_equipment_qty_columns() if c.visible_to(user)]
+        if qty_cols:
+            with_qty: list[ColumnDef] = []
+            for col in columns:
+                if col.key == EQUIPMENT_QTY_INSERT_BEFORE:
+                    with_qty.extend(qty_cols)
+                with_qty.append(col)
+            columns = with_qty
+
+    if sheet_key and tab.row_source == ROW_COMPANY and tab.view == VIEW_GRID:
+        qs = SheetCustomColumn.objects.filter(sheet_key=sheet_key, tab_key=tab.key).order_by('position', 'id')
+        if not (include_hidden_custom and can_manage_custom_columns(user)):
+            qs = qs.filter(hidden_for_all=False)
+        custom_cols = [_custom_column_def(cc) for cc in qs if _custom_column_def(cc).visible_to(user)]
+        columns = _insert_custom_columns(columns, custom_cols)
+    return columns
 
 
 def company_queryset(sheet: SheetDef, tab: TabDef, user):
@@ -187,14 +318,21 @@ def _shared_context(columns: list[ColumnDef]) -> dict:
     return shared
 
 
-def _tab_meta(tab: TabDef) -> dict:
-    return {
+def _tab_meta(tab: TabDef, user=None) -> dict:
+    meta = {
         'key': tab.key,
         'title': tab.title,
         'frozen_columns': tab.frozen_columns,
         'view': tab.view,
         'row_source': tab.row_source,
     }
+    if user is not None:
+        meta['can_manage_columns'] = (
+            can_manage_custom_columns(user)
+            and tab.row_source == ROW_COMPANY
+            and tab.view == VIEW_GRID
+        )
+    return meta
 
 
 def _on_day(company: Company, day: str) -> bool:
@@ -239,6 +377,14 @@ def column_meta(col: ColumnDef, user, mail_labels: dict[int, str] | None = None)
         meta['can_draft'] = True
     if col.can_commit(user):
         meta['can_commit'] = True
+    if col.is_custom:
+        meta['is_custom'] = True
+        meta['hidden_for_all'] = col.hidden_for_all
+        meta['edit_roles'] = sorted(col.edit_roles)
+        meta['raw_group'] = col.group
+        meta['can_delete'] = can_delete_custom_item(user, col.created_by_id)
+    if col.multiple_files:
+        meta['multiple_files'] = True
     parts = edit_part_columns().get(col.key, ())
     if col.is_proposable or (parts and all(part.is_proposable for part in parts)):
         meta['proposable'] = True
@@ -270,7 +416,12 @@ def build_tab_payload(sheet: SheetDef, tab: TabDef, user) -> dict:
         return _build_matrix_payload(sheet, tab, user)
     if tab.row_source == ROW_STAFF:
         return _build_staff_payload(sheet, tab, user)
-    columns = visible_columns(tab, user)
+    columns = visible_columns(
+        tab,
+        user,
+        sheet_key=sheet.key,
+        include_hidden_custom=can_manage_custom_columns(user),
+    )
     companies = list(company_queryset(sheet, tab, user))
     company_ids = [c.id for c in companies]
     column_keys = [col.key for col in columns]
@@ -382,10 +533,16 @@ def build_tab_payload(sheet: SheetDef, tab: TabDef, user) -> dict:
 
     from .comments import comment_counts_for_companies
 
+    custom_groups = [
+        _serialize_custom_group(grp, user)
+        for grp in SheetCustomGroup.objects.filter(sheet_key=sheet.key, tab_key=tab.key).order_by('id')
+    ]
+
     return {
         'sheet': {'key': sheet.key, 'title': sheet.title},
-        'tab': _tab_meta(tab),
+        'tab': _tab_meta(tab, user),
         'columns': _columns_meta(columns, user),
+        'custom_groups': custom_groups,
         'rows': rows,
         'cell_styles': styles,
         'drafts': draft_flags,
@@ -402,7 +559,7 @@ def apply_cell_styles(sheet: SheetDef, tab: TabDef, user, items: list[dict]) -> 
     """Set or clear background colours for cells visible on this tab."""
     if tab.row_source != ROW_COMPANY or tab.view != VIEW_GRID:
         raise SheetPermissionError('Ten widok nie ma ręcznego koloru komórek.')
-    columns = {c.key for c in visible_columns(tab, user)}
+    columns = {c.key for c in visible_columns(tab, user, sheet_key=sheet.key)}
     qs = company_queryset(sheet, tab, user)
     allowed_ids = set(qs.values_list('id', flat=True))
     applied = []
@@ -568,7 +725,7 @@ def _staff_stored(col, new_value) -> Any:
 
 
 def _build_staff_payload(sheet: SheetDef, tab: TabDef, user) -> dict:
-    columns = visible_columns(tab, user)
+    columns = visible_columns(tab, user, sheet_key=sheet.key)
     people = _opiekun_accounts(sheet, user)
     meals = {
         meal.user_id: meal
@@ -594,7 +751,7 @@ def _build_staff_payload(sheet: SheetDef, tab: TabDef, user) -> dict:
     column_keys = [col.key for col in columns]
     return {
         'sheet': {'key': sheet.key, 'title': sheet.title},
-        'tab': _tab_meta(tab),
+        'tab': _tab_meta(tab, user),
         'columns': _columns_meta(columns, user),
         'rows': rows,
         'cell_styles': {},
@@ -604,7 +761,7 @@ def _build_staff_payload(sheet: SheetDef, tab: TabDef, user) -> dict:
 
 
 def _apply_staff_changes(sheet: SheetDef, tab: TabDef, user, changes: list[CellChange]) -> dict:
-    columns = {c.key: c for c in visible_columns(tab, user)}
+    columns = {c.key: c for c in visible_columns(tab, user, sheet_key=sheet.key)}
     errors = []
     normalized: list[tuple[CellChange, ColumnDef, Any]] = []
     for change in changes:
@@ -681,7 +838,7 @@ def _apply_staff_changes(sheet: SheetDef, tab: TabDef, user, changes: list[CellC
 
 
 def staff_cell_history(sheet: SheetDef, tab: TabDef, user, user_id: int, column_key: str) -> list[dict]:
-    column = next((col for col in visible_columns(tab, user) if col.key == column_key), None)
+    column = next((col for col in visible_columns(tab, user, sheet_key=sheet.key) if col.key == column_key), None)
     if column is None or column.source != SOURCE_STAFF:
         return None
     if user_id not in {account.id for account in _opiekun_accounts(sheet, user)}:
@@ -711,7 +868,7 @@ def _build_matrix_payload(sheet: SheetDef, tab: TabDef, user) -> dict:
 
     index = int(tab.key.rsplit('_', 1)[-1]) - 1
     day_iso = MONTAGE_DATES[index].isoformat()
-    columns = visible_columns(tab, user)
+    columns = visible_columns(tab, user, sheet_key=sheet.key)
     companies = list(company_queryset(sheet, tab, user))
     extra_keys = (SLOT_KEY, 'care.arrival_day', 'care.car_make', 'care.car_registration')
     stored: dict[int, dict] = {}
@@ -822,7 +979,7 @@ def _build_matrix_payload(sheet: SheetDef, tab: TabDef, user) -> dict:
     ]
     return {
         'sheet': {'key': sheet.key, 'title': sheet.title},
-        'tab': _tab_meta(tab),
+        'tab': _tab_meta(tab, user),
         'columns': _columns_meta(columns, user),
         'rows': rows,
         'cell_styles': cell_styles,
@@ -940,7 +1097,7 @@ def apply_changes(sheet: SheetDef, tab: TabDef, user, changes: list[CellChange])
         return _apply_staff_changes(sheet, tab, user, changes)
     if tab.view == VIEW_MATRIX:
         raise SheetPermissionError('Harmonogram montażu jest tylko do odczytu.')
-    columns = columns_for_write(tab, user)
+    columns = columns_for_write(tab, user, sheet_key=sheet.key)
     errors = []
     normalized: list[tuple[CellChange, ColumnDef, Any]] = []
     for change in changes:
@@ -1190,7 +1347,7 @@ FILE_UPLOAD_EXTENSIONS: dict[str, frozenset[str]] = {
 FILE_UPLOAD_MAX_BYTES = 10 * 1024 * 1024
 
 
-_MANAGED_FILE_PREFIXES = ('sheet_file_drafts/', 'sheet_file_backups/')
+_MANAGED_FILE_PREFIXES = ('sheet_file_drafts/', 'sheet_file_backups/', 'sheet_custom_media/')
 
 
 def _managed_storage_path(
@@ -1351,7 +1508,7 @@ def upload_cell_file(
         raise SheetValidationError([{'detail': 'Nieobsługiwany mode.'}])
     if tab.row_source != ROW_COMPANY or tab.view != VIEW_GRID:
         raise SheetPermissionError('Upload pliku dostępny tylko w siatce firm.')
-    columns = columns_for_write(tab, user)
+    columns = columns_for_write(tab, user, sheet_key=sheet.key)
     col = columns.get(column_key)
     if col is None or col.kind != KIND_FILE or not col.can_commit(user):
         raise SheetPermissionError(f'Brak uprawnień do zapisu pliku w kolumnie {column_key}.')
@@ -1549,7 +1706,7 @@ def restore_form_overrides(sheet: SheetDef, tab: TabDef, user, cells: list[dict]
     """Restore previous_value into the form and clear override + draft. Admin / LG / FR."""
     if tab.row_source != ROW_COMPANY or tab.view != VIEW_GRID:
         raise SheetPermissionError('Przywracanie dostępne tylko w siatce firm.')
-    columns = columns_for_write(tab, user)
+    columns = columns_for_write(tab, user, sheet_key=sheet.key)
     qs = company_queryset(sheet, tab, user)
     allowed_ids = set(qs.values_list('id', flat=True))
 
@@ -1641,7 +1798,7 @@ def discard_drafts(sheet: SheetDef, tab: TabDef, user, cells: list[dict] | None)
     """Delete sheet drafts for the given cells. Does not change the company form."""
     if tab.row_source != ROW_COMPANY or tab.view != VIEW_GRID:
         raise SheetPermissionError('Usuwanie wersji roboczej jest dostępne tylko w siatce firm.')
-    columns = columns_for_write(tab, user)
+    columns = columns_for_write(tab, user, sheet_key=sheet.key)
     allowed_ids = set(company_queryset(sheet, tab, user).values_list('id', flat=True))
     if not isinstance(cells, list) or not cells:
         raise SheetValidationError([{'detail': 'Podaj cells z wersjami roboczymi do usunięcia.'}])
@@ -1692,3 +1849,533 @@ def discard_drafts(sheet: SheetDef, tab: TabDef, user, cells: list[dict] | None)
         _delete_storage_path(path)
         _cleanup_storage_dir(dir_path)
     return {'discarded': discarded}
+
+
+def _authorize_custom_tab(tab: TabDef, user) -> None:
+    if not can_manage_custom_columns(user):
+        raise SheetPermissionError('Brak uprawnień do zarządzania kolumnami.')
+    if tab.row_source != ROW_COMPANY or tab.view != VIEW_GRID:
+        raise SheetValidationError([{'detail': 'Własne kolumny są dostępne tylko na zakładkach z firmami.'}])
+
+
+def _clean_group_color(raw) -> str:
+    if raw is None or raw == '':
+        return ''
+    if not isinstance(raw, str):
+        raise SheetValidationError([{'detail': 'Kolor kategorii musi być tekstem.'}])
+    color = raw.strip().upper()
+    if not color:
+        return ''
+    if not _HEX_COLOR_RE.match(color):
+        raise SheetValidationError([{'detail': 'Kolor kategorii musi mieć format #RRGGBB.'}])
+    return color
+
+
+def _clean_custom_edit_roles(raw) -> list[str]:
+    if raw is None:
+        return [STAFF_ROLE_FR, STAFF_ROLE_LG]
+    if not isinstance(raw, list):
+        raise SheetValidationError([{'detail': 'edit_roles musi być listą ról.'}])
+    extras: list[str] = []
+    for item in raw:
+        if not isinstance(item, str) or item not in ALL_STAFF_ROLES:
+            raise SheetValidationError([{'detail': f'Nieznana rola: {item}'}])
+        if item not in (STAFF_ROLE_FR, STAFF_ROLE_LG) and item not in extras:
+            extras.append(item)
+    return [STAFF_ROLE_FR, STAFF_ROLE_LG, *extras]
+
+
+def _serialize_custom_group(grp: SheetCustomGroup, user=None) -> dict:
+    data: dict[str, Any] = {'id': grp.id, 'name': grp.name, 'color': grp.color}
+    if user is not None:
+        data['can_delete'] = can_delete_custom_item(user, grp.created_by_id)
+    return data
+
+
+def _ensure_custom_group(
+    sheet: SheetDef,
+    tab: TabDef,
+    user,
+    group_name: str,
+    group_color: str,
+) -> SheetCustomGroup | None:
+    if not group_name:
+        return None
+    static_groups = {col.group for col in tab.columns if col.group}
+    is_static = any(_same_group_name(sg, group_name) for sg in static_groups)
+    if group_color:
+        grp, created = SheetCustomGroup.objects.get_or_create(
+            sheet_key=sheet.key,
+            tab_key=tab.key,
+            name=group_name,
+            defaults={'color': group_color, 'created_by': user},
+        )
+        if not created and grp.color != group_color:
+            grp.color = group_color
+            grp.save(update_fields=['color'])
+        return grp
+    if not is_static:
+        grp, _ = SheetCustomGroup.objects.get_or_create(
+            sheet_key=sheet.key,
+            tab_key=tab.key,
+            name=group_name,
+            defaults={'color': '', 'created_by': user},
+        )
+        return grp
+    return None
+
+
+_MAIL_DECORATED_GROUP_RE = re.compile(r'^(MAIL #[1-5])\s+·\s+.*$')
+
+
+def _normalize_group_input(name: str) -> str:
+    cleaned = (name or '').strip()
+    match = _MAIL_DECORATED_GROUP_RE.match(cleaned)
+    return match.group(1) if match else cleaned
+
+
+def create_custom_group(sheet: SheetDef, tab: TabDef, user, data: dict) -> dict:
+    _authorize_custom_tab(tab, user)
+    if not isinstance(data, dict):
+        raise SheetValidationError([{'detail': 'Nieprawidłowe dane kategorii.'}])
+    raw_name = data.get('name')
+    if not isinstance(raw_name, str) or not raw_name.strip():
+        raise SheetValidationError([{'detail': 'Podaj nazwę kategorii.'}])
+    name = _normalize_group_input(raw_name)
+    if len(name) > 120:
+        raise SheetValidationError([{'detail': 'Nazwa kategorii może mieć maksymalnie 120 znaków.'}])
+    color = _clean_group_color(data.get('color'))
+    grp, created = SheetCustomGroup.objects.get_or_create(
+        sheet_key=sheet.key,
+        tab_key=tab.key,
+        name=name,
+        defaults={'color': color, 'created_by': user},
+    )
+    if not created and color and grp.color != color:
+        grp.color = color
+        grp.save(update_fields=['color'])
+    return _serialize_custom_group(grp, user)
+
+
+def create_custom_column(sheet: SheetDef, tab: TabDef, user, data: dict) -> dict:
+    _authorize_custom_tab(tab, user)
+    if not isinstance(data, dict):
+        raise SheetValidationError([{'detail': 'Nieprawidłowe dane kolumny.'}])
+    raw_label = data.get('label')
+    if not isinstance(raw_label, str) or not raw_label.strip():
+        raise SheetValidationError([{'detail': 'Podaj nazwę kolumny.'}])
+    label = raw_label.strip()
+    if len(label) > 120:
+        raise SheetValidationError([{'detail': 'Nazwa kolumny może mieć maksymalnie 120 znaków.'}])
+
+    raw_group = data.get('group', '')
+    if raw_group is None:
+        raw_group = ''
+    if not isinstance(raw_group, str):
+        raise SheetValidationError([{'detail': 'Nazwa kategorii musi być tekstem.'}])
+    group_name = _normalize_group_input(raw_group)
+    if len(group_name) > 120:
+        raise SheetValidationError([{'detail': 'Nazwa kategorii może mieć maksymalnie 120 znaków.'}])
+    group_color = _clean_group_color(data.get('group_color'))
+
+    raw_help = data.get('help')
+    if raw_help is None:
+        raw_help = data.get('help_text', '')
+    if raw_help is None:
+        raw_help = ''
+    if not isinstance(raw_help, str):
+        raise SheetValidationError([{'detail': 'Opis kolumny musi być tekstem.'}])
+    help_text = raw_help.strip()
+    if len(help_text) > 1000:
+        raise SheetValidationError([{'detail': 'Opis kolumny może mieć maksymalnie 1000 znaków.'}])
+
+    kind = data.get('kind') or KIND_TEXT
+    if not isinstance(kind, str) or kind not in CUSTOM_COLUMN_KINDS:
+        raise SheetValidationError([{'detail': 'Nieobsługiwany typ kolumny.'}])
+
+    edit_roles = _clean_custom_edit_roles(data.get('edit_roles'))
+
+    with transaction.atomic():
+        grp = _ensure_custom_group(sheet, tab, user, group_name, group_color)
+        max_pos = SheetCustomColumn.objects.filter(
+            sheet_key=sheet.key, tab_key=tab.key,
+        ).aggregate(m=Max('position'))['m']
+        next_pos = 0 if max_pos is None else max_pos + 1
+        cc = SheetCustomColumn.objects.create(
+            sheet_key=sheet.key,
+            tab_key=tab.key,
+            key=f'custom.{uuid.uuid4().hex[:10]}',
+            label=label,
+            group=group_name,
+            help_text=help_text,
+            kind=kind,
+            edit_roles=edit_roles,
+            position=next_pos,
+            created_by=user,
+            updated_by=user,
+        )
+
+    meta = column_meta(_custom_column_def(cc), user, mail_send_labels())
+    return {
+        'column': meta,
+        'group': _serialize_custom_group(grp, user) if grp else None,
+    }
+
+
+def update_custom_column(sheet: SheetDef, tab: TabDef, user, column_key: str, data: dict) -> dict:
+    _authorize_custom_tab(tab, user)
+    if not isinstance(data, dict):
+        raise SheetValidationError([{'detail': 'Nieprawidłowe dane kolumny.'}])
+    cc = SheetCustomColumn.objects.filter(
+        sheet_key=sheet.key, tab_key=tab.key, key=column_key,
+    ).first()
+    if cc is None:
+        raise SheetNotFoundError('Nie znaleziono własnej kolumny.')
+
+    grp = None
+    if 'label' in data:
+        raw_label = data['label']
+        if not isinstance(raw_label, str) or not raw_label.strip():
+            raise SheetValidationError([{'detail': 'Podaj nazwę kolumny.'}])
+        label = raw_label.strip()
+        if len(label) > 120:
+            raise SheetValidationError([{'detail': 'Nazwa kolumny może mieć maksymalnie 120 znaków.'}])
+        cc.label = label
+
+    group_color = _clean_group_color(data.get('group_color')) if 'group_color' in data else ''
+    if 'group' in data:
+        raw_group = data['group']
+        if raw_group is None:
+            raw_group = ''
+        if not isinstance(raw_group, str):
+            raise SheetValidationError([{'detail': 'Nazwa kategorii musi być tekstem.'}])
+        group_name = _normalize_group_input(raw_group)
+        if len(group_name) > 120:
+            raise SheetValidationError([{'detail': 'Nazwa kategorii może mieć maksymalnie 120 znaków.'}])
+        cc.group = group_name
+    if group_color or 'group' in data:
+        grp = _ensure_custom_group(sheet, tab, user, cc.group, group_color)
+
+    if 'help' in data or 'help_text' in data:
+        raw_help = data.get('help') if 'help' in data else data.get('help_text')
+        if raw_help is None:
+            raw_help = ''
+        if not isinstance(raw_help, str):
+            raise SheetValidationError([{'detail': 'Opis kolumny musi być tekstem.'}])
+        help_text = raw_help.strip()
+        if len(help_text) > 1000:
+            raise SheetValidationError([{'detail': 'Opis kolumny może mieć maksymalnie 1000 znaków.'}])
+        cc.help_text = help_text
+
+    if 'kind' in data:
+        new_kind = data['kind']
+        if not isinstance(new_kind, str) or new_kind not in CUSTOM_COLUMN_KINDS:
+            raise SheetValidationError([{'detail': 'Nieobsługiwany typ kolumny.'}])
+        if new_kind != cc.kind:
+            if {cc.kind, new_kind} <= {KIND_TEXT, KIND_LONGTEXT}:
+                cc.kind = new_kind
+            else:
+                raise SheetValidationError([{'detail': 'Nie można zmienić typu między tekstem a plikami mediowymi.'}])
+
+    if 'edit_roles' in data:
+        cc.edit_roles = _clean_custom_edit_roles(data['edit_roles'])
+
+    if 'hidden_for_all' in data:
+        hidden_flag = data['hidden_for_all']
+        if not isinstance(hidden_flag, bool):
+            raise SheetValidationError([{'detail': 'hidden_for_all musi być wartością logiczną.'}])
+        cc.hidden_for_all = hidden_flag
+
+    cc.updated_by = user
+    cc.save()
+    meta = column_meta(_custom_column_def(cc), user, mail_send_labels())
+    return {
+        'column': meta,
+        'group': _serialize_custom_group(grp, user) if grp else None,
+    }
+
+
+def _strip_column_from_layout_default(sheet_key: str, tab_key: str, column_key: str) -> None:
+    layout = SheetLayoutDefault.objects.filter(sheet_key=sheet_key).first()
+    if layout is None:
+        return
+    update_fields: list[str] = []
+    if isinstance(layout.column_widths, dict) and column_key in layout.column_widths:
+        widths = dict(layout.column_widths)
+        widths.pop(column_key, None)
+        layout.column_widths = widths
+        update_fields.append('column_widths')
+    if isinstance(layout.hidden_by_tab, dict) and isinstance(layout.hidden_by_tab.get(tab_key), list):
+        current = layout.hidden_by_tab[tab_key]
+        filtered = [k for k in current if k != column_key]
+        if len(filtered) != len(current):
+            hidden_map = dict(layout.hidden_by_tab)
+            hidden_map[tab_key] = filtered
+            layout.hidden_by_tab = hidden_map
+            update_fields.append('hidden_by_tab')
+    if isinstance(layout.column_order_by_tab, dict) and isinstance(layout.column_order_by_tab.get(tab_key), list):
+        current = layout.column_order_by_tab[tab_key]
+        filtered = [k for k in current if k != column_key]
+        if len(filtered) != len(current):
+            order_map = dict(layout.column_order_by_tab)
+            order_map[tab_key] = filtered
+            layout.column_order_by_tab = order_map
+            update_fields.append('column_order_by_tab')
+    if isinstance(layout.column_groups_by_tab, dict) and isinstance(layout.column_groups_by_tab.get(tab_key), dict):
+        tab_groups = layout.column_groups_by_tab[tab_key]
+        if column_key in tab_groups:
+            groups_map = dict(layout.column_groups_by_tab)
+            next_tab_groups = dict(tab_groups)
+            next_tab_groups.pop(column_key, None)
+            groups_map[tab_key] = next_tab_groups
+            layout.column_groups_by_tab = groups_map
+            update_fields.append('column_groups_by_tab')
+    if update_fields:
+        layout.save(update_fields=[*update_fields, 'updated_at'])
+
+
+def _strip_group_from_layout_default(sheet_key: str, tab_key: str, group_name: str) -> None:
+    layout = SheetLayoutDefault.objects.filter(sheet_key=sheet_key).first()
+    if layout is None or not isinstance(layout.column_groups_by_tab, dict):
+        return
+    tab_groups = layout.column_groups_by_tab.get(tab_key)
+    if not isinstance(tab_groups, dict):
+        return
+    next_tab_groups = {k: v for k, v in tab_groups.items() if v != group_name}
+    if len(next_tab_groups) == len(tab_groups):
+        return
+    groups_map = dict(layout.column_groups_by_tab)
+    groups_map[tab_key] = next_tab_groups
+    layout.column_groups_by_tab = groups_map
+    layout.save(update_fields=['column_groups_by_tab', 'updated_at'])
+
+
+def delete_custom_column(sheet: SheetDef, tab: TabDef, user, column_key: str) -> dict:
+    _authorize_custom_tab(tab, user)
+    cc = SheetCustomColumn.objects.filter(
+        sheet_key=sheet.key, tab_key=tab.key, key=column_key,
+    ).first()
+    if cc is None:
+        raise SheetNotFoundError('Nie znaleziono własnej kolumny.')
+    if not can_delete_custom_item(user, cc.created_by_id):
+        raise SheetPermissionError('Możesz usunąć tylko utworzoną przez siebie kolumnę.')
+
+    media_paths: list[str] = []
+    with transaction.atomic():
+        for raw in SheetCellValue.objects.filter(column_key=cc.key).values_list('value', flat=True):
+            items = raw if isinstance(raw, list) else [raw] if isinstance(raw, dict) else []
+            for item in items:
+                path = _managed_storage_path(item, ('sheet_custom_media/',))
+                if path:
+                    media_paths.append(path)
+        SheetCellValue.objects.filter(column_key=cc.key).delete()
+        SheetCellStyle.objects.filter(column_key=cc.key).delete()
+        SheetCellComment.objects.filter(column_key=cc.key).delete()
+        SheetCellDraft.objects.filter(column_key=cc.key).delete()
+        SheetCellChange.objects.filter(column_key=cc.key).delete()
+        _strip_column_from_layout_default(sheet.key, tab.key, cc.key)
+        cc.delete()
+
+    cleaned_dirs: set[str] = set()
+    for path in media_paths:
+        _delete_storage_path(path)
+        dir_path = os.path.dirname(path)
+        if dir_path and dir_path not in cleaned_dirs:
+            cleaned_dirs.add(dir_path)
+            _cleanup_storage_dir(dir_path)
+
+    return {'deleted': True, 'key': column_key}
+
+
+def delete_custom_group(sheet: SheetDef, tab: TabDef, user, group_id: int) -> dict:
+    _authorize_custom_tab(tab, user)
+    grp = SheetCustomGroup.objects.filter(
+        id=group_id, sheet_key=sheet.key, tab_key=tab.key,
+    ).first()
+    if grp is None:
+        raise SheetNotFoundError('Nie znaleziono kategorii.')
+    if not can_delete_custom_item(user, grp.created_by_id):
+        raise SheetPermissionError('Możesz usunąć tylko utworzoną przez siebie kategorię.')
+
+    name = grp.name
+    with transaction.atomic():
+        SheetCustomColumn.objects.filter(
+            sheet_key=sheet.key, tab_key=tab.key, group=name,
+        ).update(group='')
+        _strip_group_from_layout_default(sheet.key, tab.key, name)
+        grp.delete()
+
+    return {'deleted': True, 'id': group_id, 'name': name}
+
+
+def _authorize_custom_media_target(
+    sheet: SheetDef,
+    tab: TabDef,
+    user,
+    company_id: int,
+    column_key: str,
+) -> ColumnDef:
+    if tab.row_source != ROW_COMPANY or tab.view != VIEW_GRID:
+        raise SheetPermissionError('Pliki mediowe są dostępne tylko w siatce firm.')
+    columns = columns_for_write(tab, user, sheet_key=sheet.key)
+    col = columns.get(column_key)
+    if col is None or not col.is_custom or col.kind != KIND_FILE or not col.editable_by(user):
+        raise SheetPermissionError(f'Brak uprawnień do plików w kolumnie {column_key}.')
+    allowed_ids = set(
+        company_queryset(sheet, tab, user).filter(id=company_id).values_list('id', flat=True)
+    )
+    if company_id not in allowed_ids:
+        raise SheetPermissionError(f'Brak dostępu do firmy {company_id}.')
+    return col
+
+
+def upload_custom_media(
+    sheet: SheetDef,
+    tab: TabDef,
+    user,
+    company_id: int,
+    column_key: str,
+    files: list,
+) -> dict:
+    from django.core.files.base import ContentFile
+    from django.core.files.storage import default_storage
+
+    _authorize_custom_media_target(sheet, tab, user, company_id, column_key)
+    if not files:
+        raise SheetValidationError([{'detail': 'Wybierz przynajmniej jeden plik.'}])
+    for uploaded in files:
+        name = getattr(uploaded, 'name', '') or ''
+        ext = os.path.splitext(name)[1].lower()
+        if ext not in CUSTOM_MEDIA_EXTENSIONS:
+            raise SheetValidationError([{
+                'company_id': company_id,
+                'column_key': column_key,
+                'detail': f'Niedozwolony typ pliku ({ext or "brak rozszerzenia"}).',
+            }])
+        size = getattr(uploaded, 'size', None)
+        if isinstance(size, int) and size > CUSTOM_MEDIA_MAX_BYTES:
+            raise SheetValidationError([{
+                'company_id': company_id,
+                'column_key': column_key,
+                'detail': f'Plik „{os.path.basename(name)}” jest za duży (max 15 MB).',
+            }])
+
+    saved_paths: list[str] = []
+    batch_id = uuid.uuid4()
+    try:
+        with transaction.atomic():
+            company = Company.objects.select_for_update().get(id=company_id)
+            cell = SheetCellValue.objects.select_for_update().filter(
+                company=company, column_key=column_key,
+            ).first()
+            existing = list(cell.value) if cell and isinstance(cell.value, list) else []
+            if len(existing) + len(files) > CUSTOM_MEDIA_MAX_FILES:
+                raise SheetValidationError([{
+                    'company_id': company_id,
+                    'column_key': column_key,
+                    'detail': f'Maksymalnie {CUSTOM_MEDIA_MAX_FILES} plików w jednej komórce.',
+                }])
+            added: list[dict] = []
+            for uploaded in files:
+                raw_name = os.path.basename(getattr(uploaded, 'name', '') or '') or 'plik'
+                dest = f'sheet_custom_media/{company_id}/{column_key}/{uuid.uuid4().hex}_{raw_name}'
+                data = uploaded.read()
+                stored_path = default_storage.save(dest, ContentFile(data))
+                saved_paths.append(stored_path)
+                added.append({
+                    'id': uuid.uuid4().hex[:12],
+                    'path': stored_path,
+                    'name': raw_name,
+                    'size': len(data),
+                    'content_type': getattr(uploaded, 'content_type', '') or '',
+                })
+            new_list = [*existing, *added]
+            if cell is None:
+                cell = SheetCellValue(company=company, column_key=column_key)
+            cell.value = new_list
+            cell.updated_by = user
+            cell.save()
+            SheetCellChange.objects.create(
+                company=company,
+                column_key=column_key,
+                old_value=serialize(existing) if existing else None,
+                new_value=serialize(new_list),
+                changed_by=user,
+                batch_id=batch_id,
+            )
+    except Exception:
+        for path in saved_paths:
+            _delete_storage_path(path)
+        raise
+
+    return {
+        'company_id': company_id,
+        'column_key': column_key,
+        'value': serialize(new_list),
+        'batch_id': str(batch_id),
+    }
+
+
+def delete_custom_media(
+    sheet: SheetDef,
+    tab: TabDef,
+    user,
+    company_id: int,
+    column_key: str,
+    *,
+    file_id: str | None = None,
+    clear_all: bool = False,
+) -> dict:
+    _authorize_custom_media_target(sheet, tab, user, company_id, column_key)
+    if not clear_all and (not isinstance(file_id, str) or not file_id.strip()):
+        raise SheetValidationError([{'detail': 'Podaj file_id albo clear_all=true.'}])
+
+    removed_paths: list[str] = []
+    batch_id = uuid.uuid4()
+    with transaction.atomic():
+        company = Company.objects.select_for_update().get(id=company_id)
+        cell = SheetCellValue.objects.select_for_update().filter(
+            company=company, column_key=column_key,
+        ).first()
+        existing = list(cell.value) if cell and isinstance(cell.value, list) else []
+        if clear_all:
+            kept: list[dict] = []
+            removed = existing
+        else:
+            target_id = file_id.strip()
+            kept = []
+            removed = []
+            for item in existing:
+                if isinstance(item, dict) and item.get('id') == target_id:
+                    removed.append(item)
+                else:
+                    kept.append(item)
+        if not removed:
+            raise SheetValidationError([{'detail': 'Nie znaleziono pliku w tej komórce.'}])
+        for item in removed:
+            path = _managed_storage_path(item, ('sheet_custom_media/',))
+            if path:
+                removed_paths.append(path)
+        new_value = kept if kept else None
+        if cell is not None:
+            cell.value = new_value
+            cell.updated_by = user
+            cell.save()
+        SheetCellChange.objects.create(
+            company=company,
+            column_key=column_key,
+            old_value=serialize(existing) if existing else None,
+            new_value=serialize(kept) if kept else None,
+            changed_by=user,
+            batch_id=batch_id,
+        )
+
+    for path in removed_paths:
+        _delete_storage_path(path)
+
+    return {
+        'company_id': company_id,
+        'column_key': column_key,
+        'value': serialize(kept) if kept else None,
+        'batch_id': str(batch_id),
+    }

@@ -57,7 +57,7 @@ def _combined_tab_name(sheet_key: str, sheet_title: str, tab_title: str) -> str:
 
 def _build_tab_sheet_entry(sheet, tab, user, *, sheet_name: str) -> dict:
     payload = build_tab_payload(sheet, tab, user)
-    defs = visible_columns(tab, user)
+    defs = visible_columns(tab, user, sheet_key=sheet.key, include_hidden_custom=True)
     col_metas = payload['columns']
     width = len(defs)
 

@@ -134,6 +134,11 @@ class ColumnDef:
     list_schema: str | None = None
     # Read structured list for the editor (company → list[dict]).
     list_reader: Callable[[Company], list] | None = None
+    # Staff-created extra columns (SheetCustomColumn)
+    is_custom: bool = False
+    hidden_for_all: bool = False
+    multiple_files: bool = False
+    created_by_id: int | None = None
 
     def __post_init__(self):
         if self.kind not in KINDS:
@@ -153,7 +158,8 @@ class ColumnDef:
         if self.source in EDITABLE_SOURCES:
             if not self.edit_roles:
                 raise ValueError(f'{self.key}: editable column needs edit_roles')
-            if self.kind not in EDITABLE_KINDS:
+            allow_custom_file = self.kind == KIND_FILE and self.source == SOURCE_EXTRA and self.is_custom
+            if self.kind not in EDITABLE_KINDS and not allow_custom_file:
                 raise ValueError(f'{self.key}: kind {self.kind!r} cannot be editable')
         elif self.edit_roles:
             raise ValueError(f'{self.key}: read-only column must not declare edit_roles')
@@ -184,8 +190,10 @@ class ColumnDef:
 
     @property
     def is_proposable(self) -> bool:
+        if self.kind == KIND_FILE:
+            return False
         return self.is_editable_source or (
-            self.is_form_writable and not self.list_schema and self.kind != KIND_FILE
+            self.is_form_writable and not self.list_schema
         )
 
     def resolve_options(self) -> tuple[Option, ...]:

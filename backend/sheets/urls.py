@@ -29,6 +29,31 @@ urlpatterns = [
         views.SheetCellsFileView.as_view(),
         name='sheet-cells-file',
     ),
+    path(
+        '<slug:sheet_key>/<slug:tab_key>/cells/media/',
+        views.SheetCustomMediaView.as_view(),
+        name='sheet-cells-media',
+    ),
+    path(
+        '<slug:sheet_key>/<slug:tab_key>/columns/',
+        views.SheetCustomColumnsView.as_view(),
+        name='sheet-custom-columns',
+    ),
+    path(
+        '<slug:sheet_key>/<slug:tab_key>/columns/<str:column_key>/',
+        views.SheetCustomColumnDetailView.as_view(),
+        name='sheet-custom-column-detail',
+    ),
+    path(
+        '<slug:sheet_key>/<slug:tab_key>/groups/',
+        views.SheetCustomGroupsView.as_view(),
+        name='sheet-custom-groups',
+    ),
+    path(
+        '<slug:sheet_key>/<slug:tab_key>/groups/<int:group_id>/',
+        views.SheetCustomGroupDetailView.as_view(),
+        name='sheet-custom-group-detail',
+    ),
     path('<slug:sheet_key>/<slug:tab_key>/styles/', views.SheetCellStylesView.as_view(), name='sheet-styles'),
     path('<slug:sheet_key>/<slug:tab_key>/history/', views.SheetCellHistoryView.as_view(), name='sheet-history'),
     path('<slug:sheet_key>/<slug:tab_key>/xlsx/', views.SheetXlsxView.as_view(), name='sheet-xlsx'),

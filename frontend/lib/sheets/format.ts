@@ -1,7 +1,18 @@
 import type { SheetCellValue, SheetColumn, SheetFileValue } from "./types";
 
 export function isFileValue(value: SheetCellValue): value is SheetFileValue {
-  return typeof value === "object" && value !== null && "url" in value;
+  return typeof value === "object" && value !== null && !Array.isArray(value) && "url" in value;
+}
+
+export function isFileList(value: SheetCellValue): value is SheetFileValue[] {
+  return Array.isArray(value);
+}
+
+export function extractFiles(value: SheetCellValue | undefined): SheetFileValue[] {
+  if (!value) return [];
+  if (Array.isArray(value)) return value.filter((item): item is SheetFileValue => isFileValue(item));
+  if (isFileValue(value)) return [value];
+  return [];
 }
 
 /** Text shown in the cell, copied to clipboard and exported to CSV. */
@@ -15,8 +26,11 @@ export function displayText(column: SheetColumn, value: SheetCellValue): string 
       const option = column.options.find((o) => o.value === String(value));
       return option ? option.label : String(value);
     }
-    case "file_link":
-      return isFileValue(value) ? value.name : String(value);
+    case "file_link": {
+      const files = extractFiles(value);
+      if (files.length > 0) return files.map((f) => f.name).join(", ");
+      return Array.isArray(value) ? "" : String(value);
+    }
     case "date": {
       const match = typeof value === "string" && value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
       return match ? `${match[3]}.${match[2]}.${match[1]}` : String(value);
@@ -80,11 +94,23 @@ export function coerceInput(column: SheetColumn, raw: string): SheetCellValue {
 }
 
 export function isEmptyValue(value: SheetCellValue): boolean {
+  if (Array.isArray(value)) return value.length === 0;
   return value === null || value === undefined || value === "" || value === false;
 }
 
 export function sameValue(a: SheetCellValue, b: SheetCellValue): boolean {
   if (isEmptyValue(a) && isEmptyValue(b)) return true;
+  if (Array.isArray(a) || Array.isArray(b)) {
+    const listA = extractFiles(a);
+    const listB = extractFiles(b);
+    if (listA.length !== listB.length) return false;
+    return listA.every((item, idx) => {
+      const other = listB[idx];
+      if (!other) return false;
+      if (item.id && other.id) return item.id === other.id;
+      return (item.path ?? item.url) === (other.path ?? other.url);
+    });
+  }
   if (isFileValue(a) || isFileValue(b)) {
     return isFileValue(a) && isFileValue(b) && a.url === b.url;
   }

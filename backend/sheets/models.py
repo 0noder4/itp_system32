@@ -75,6 +75,8 @@ class SheetLayoutDefault(models.Model):
     hidden_by_tab = models.JSONField(default=dict, blank=True)
     # { tabKey: [column_key, ...] } — column order after the pinned first column
     column_order_by_tab = models.JSONField(default=dict, blank=True)
+    # { tabKey: { column_key: group_name } } — category overrides for columns
+    column_groups_by_tab = models.JSONField(default=dict, blank=True)
     updated_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -362,3 +364,88 @@ class SheetNotification(models.Model):
 
     def __str__(self):
         return f'to={self.recipient_id} comment={self.comment_id} read={self.read_at is not None}'
+
+
+class SheetCustomGroup(models.Model):
+    """User-defined column category for a specific sheet tab."""
+
+    sheet_key = models.CharField(max_length=50, db_index=True)
+    tab_key = models.CharField(max_length=50, db_index=True)
+    name = models.CharField(max_length=120)
+    color = models.CharField(max_length=20, blank=True, default='')
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='+',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['sheet_key', 'tab_key', 'name'],
+                name='uniq_sheet_custom_group_tab_name',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['sheet_key', 'tab_key'], name='sheetcustomgroup_sheet_tab'),
+        ]
+        ordering = ['id']
+        verbose_name = 'własna kategoria kolumn'
+        verbose_name_plural = 'własne kategorie kolumn'
+
+    def __str__(self):
+        return f'{self.sheet_key}/{self.tab_key}: {self.name}'
+
+
+class SheetCustomColumn(models.Model):
+    """Staff-created (admin / FR / LG) extra column scoped to one sheet tab."""
+
+    KIND_TEXT = 'text'
+    KIND_LONGTEXT = 'longtext'
+    KIND_FILE = 'file_link'
+    KIND_CHOICES = [
+        (KIND_TEXT, 'Tekst'),
+        (KIND_LONGTEXT, 'Opis (długi tekst)'),
+        (KIND_FILE, 'Pliki mediowe'),
+    ]
+
+    sheet_key = models.CharField(max_length=50, db_index=True)
+    tab_key = models.CharField(max_length=50, db_index=True)
+    key = models.CharField(max_length=100, unique=True)
+    label = models.CharField(max_length=120)
+    group = models.CharField(max_length=120, blank=True, default='')
+    help_text = models.TextField(max_length=1000, blank=True, default='')
+    kind = models.CharField(max_length=20, choices=KIND_CHOICES, default=KIND_TEXT)
+    edit_roles = models.JSONField(default=list, blank=True)
+    position = models.IntegerField(default=0)
+    hidden_for_all = models.BooleanField(default=False, db_index=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='+',
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='+',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['position', 'id']
+        indexes = [
+            models.Index(fields=['sheet_key', 'tab_key'], name='sheetcustomcol_sheet_tab'),
+        ]
+        verbose_name = 'własna kolumna arkusza'
+        verbose_name_plural = 'własne kolumny arkuszy'
+
+    def __str__(self):
+        return f'{self.sheet_key}/{self.tab_key}:{self.key} ({self.label})'

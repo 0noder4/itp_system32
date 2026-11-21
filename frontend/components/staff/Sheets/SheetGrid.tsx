@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { ArrowDown, ArrowUp } from "lucide-react";
+import { ArrowDown, ArrowUp, Info } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { STAFF_ACCENT_COLOR } from "@/lib/colors";
@@ -13,6 +13,8 @@ import {
   aggregateValues,
   coerceInput,
   displayText,
+  extractFiles,
+  isEmptyValue,
   isFileValue,
   isHighlighted,
   parseTsv,
@@ -131,12 +133,16 @@ interface SheetGridProps {
   tabKey: string;
   /** Fill colours keyed by `${companyId}|${columnKey}`. */
   cellStyles?: Record<string, string>;
+  /** Custom category colours keyed by category name. */
+  customGroupColors?: Record<string, string>;
   /** Wrap text in cells (taller, expanding rows). */
   wrapLongtext?: boolean;
   /** Comment counts keyed by `c:{id}|col` / `u:{id}|col`. */
   commentCounts?: Record<string, number>;
   /** Open comments for a cell (corner click). */
   onOpenComments?: (row: SheetRow, column: SheetColumn) => void;
+  /** Open multi-file attachment modal for custom file_link columns. */
+  onOpenMediaCell?: (row: SheetRow, column: SheetColumn) => void;
   /** Form-field edit mode (admin / LG / FR): can_draft columns become editable. */
   formEditMode?: boolean;
   /** Draft markers `${companyId}|${columnKey}`. */
@@ -198,9 +204,11 @@ export const SheetGrid = React.forwardRef<SheetGridHandle, SheetGridProps>(funct
     sheetKey,
     tabKey,
     cellStyles = {},
+    customGroupColors = {},
     wrapLongtext = false,
     commentCounts = {},
     onOpenComments,
+    onOpenMediaCell,
     formEditMode = false,
     draftKeys = {},
     overrideKeys = {},
@@ -591,6 +599,10 @@ export const SheetGrid = React.forwardRef<SheetGridHandle, SheetGridProps>(funct
     const col = columns[c];
     const row = rows[r];
     if (!col || !row) return;
+    if (col.kind === "file_link") {
+      if (col.is_custom) onOpenMediaCell?.(row, col);
+      return;
+    }
     if (col.kind === "bool") {
       onEdit([
         {
@@ -650,6 +662,10 @@ export const SheetGrid = React.forwardRef<SheetGridHandle, SheetGridProps>(funct
     const col = columns[c];
     const row = rows[r];
     if (!col || !row) return;
+    if (col.kind === "file_link" && col.is_custom) {
+      onOpenMediaCell?.(row, col);
+      return;
+    }
     if (!col.editable) {
       toast.info(t("sheets.readOnlyCell"));
       return;
@@ -660,9 +676,14 @@ export const SheetGrid = React.forwardRef<SheetGridHandle, SheetGridProps>(funct
   const clearCells = (cells: Iterable<{ r: number; c: number }>) => {
     const edits: CellEdit[] = [];
     let skipped = 0;
+    let skippedMedia = 0;
     for (const { r: ri, c: ci } of cells) {
       const col = columns[ci];
       if (!col || !rows[ri]) continue;
+      if (col.kind === "file_link") {
+        skippedMedia += 1;
+        continue;
+      }
       if (!editableAt(ri, ci)) {
         skipped += 1;
         continue;
@@ -670,6 +691,7 @@ export const SheetGrid = React.forwardRef<SheetGridHandle, SheetGridProps>(funct
       edits.push({ companyId: rows[ri].company_id, columnKey: col.key, value: col.kind === "bool" ? false : null });
     }
     if (edits.length) onEdit(edits);
+    else if (skippedMedia) toast.info(t("sheets.media.deleteViaDialogHint"));
     else if (skipped) toast.info(t("sheets.readOnlyCell"));
   };
 
@@ -858,7 +880,7 @@ export const SheetGrid = React.forwardRef<SheetGridHandle, SheetGridProps>(funct
       startEdit(r, c);
     } else if (event.key.length === 1 && !ctrl && !event.altKey) {
       const col = columns[c];
-      if (col?.editable && col.kind !== "bool") {
+      if (col?.editable && col.kind !== "bool" && col.kind !== "file_link") {
         event.preventDefault();
         startEdit(r, c, col.kind === "select" || col.kind === "user_select" ? undefined : event.key);
       }
@@ -903,7 +925,7 @@ export const SheetGrid = React.forwardRef<SheetGridHandle, SheetGridProps>(funct
       if (single) {
         const raw = matrix[0][0];
         for (const { r: ri, c: ci } of picks) {
-          if (!editableAt(ri, ci)) {
+          if (!editableAt(ri, ci) || columns[ci]?.kind === "file_link") {
             skipped += 1;
             continue;
           }
@@ -929,7 +951,7 @@ export const SheetGrid = React.forwardRef<SheetGridHandle, SheetGridProps>(funct
           if (!pickKeys.has(cellKey(ri, ci))) continue;
           const raw = matrix[dr]?.[dc];
           if (raw === undefined) continue;
-          if (!editableAt(ri, ci)) {
+          if (!editableAt(ri, ci) || columns[ci]?.kind === "file_link") {
             skipped += 1;
             continue;
           }
@@ -958,7 +980,7 @@ export const SheetGrid = React.forwardRef<SheetGridHandle, SheetGridProps>(funct
         if (ri > maxRow || ci > maxCol) continue;
         const raw = single ? matrix[0][0] : matrix[dr]?.[dc];
         if (raw === undefined) continue;
-        if (!editableAt(ri, ci)) {
+        if (!editableAt(ri, ci) || columns[ci]?.kind === "file_link") {
           skipped += 1;
           continue;
         }
@@ -1051,6 +1073,7 @@ export const SheetGrid = React.forwardRef<SheetGridHandle, SheetGridProps>(funct
     onRowNumberMouseDown,
     commitEdit,
     cancelEdit,
+    onOpenMediaCell,
   });
   handlersRef.current = {
     onCellMouseDown,
@@ -1059,6 +1082,7 @@ export const SheetGrid = React.forwardRef<SheetGridHandle, SheetGridProps>(funct
     onRowNumberMouseDown,
     commitEdit,
     cancelEdit,
+    onOpenMediaCell,
   };
   const stable = React.useMemo(
     () => ({
@@ -1069,6 +1093,7 @@ export const SheetGrid = React.forwardRef<SheetGridHandle, SheetGridProps>(funct
       onRowNumberMouseDown: (e: React.MouseEvent, r: number) => handlersRef.current.onRowNumberMouseDown(e, r),
       commitEdit: (raw: string, move: "down" | "right" | "none") => handlersRef.current.commitEdit(raw, move),
       cancelEdit: () => handlersRef.current.cancelEdit(),
+      onOpenMediaCell: (row: SheetRow, column: SheetColumn) => handlersRef.current.onOpenMediaCell?.(row, column),
     }),
     []
   );
@@ -1146,7 +1171,7 @@ export const SheetGrid = React.forwardRef<SheetGridHandle, SheetGridProps>(funct
               {groupSegments.map((g) => {
                 const end = g.start + g.span - 1;
                 const atFreezeEdge = g.frozen && end === lastFrozenIndex;
-                const groupBg = sheetGroupHeaderBg(g.label);
+                const groupBg = sheetGroupHeaderBg(g.label, customGroupColors);
                 return (
                   <th
                     key={`${g.start}-${g.span}-${g.label}`}
@@ -1204,7 +1229,7 @@ export const SheetGrid = React.forwardRef<SheetGridHandle, SheetGridProps>(funct
                 data-col-index={index}
                 className="border-b border-r px-1.5 py-1.5 text-left align-bottom font-medium"
                 style={stickyStyle(index, {
-                  backgroundColor: sheetGroupColumnBg(col.group),
+                  backgroundColor: sheetGroupColumnBg(col.group, customGroupColors),
                   color: sheetGroupHeaderInk(),
                 })}
                 title={col.help || flatColumnLabel(col.label)}
@@ -1218,6 +1243,9 @@ export const SheetGrid = React.forwardRef<SheetGridHandle, SheetGridProps>(funct
                   <span className="line-clamp-2 whitespace-pre-line break-words leading-tight">
                     {col.label}
                   </span>
+                  {col.is_custom && col.help && (
+                    <Info className="mb-0.5 h-3 w-3 shrink-0 opacity-60" aria-hidden />
+                  )}
                   {col.editable && (
                     <span
                       className="mb-0.5 ml-auto h-1.5 w-1.5 shrink-0 rounded-full"
@@ -1258,7 +1286,9 @@ export const SheetGrid = React.forwardRef<SheetGridHandle, SheetGridProps>(funct
                 <th
                   key={col.key}
                   className="border-b border-r p-1"
-                  style={stickyStyle(index, { backgroundColor: sheetGroupColumnBg(col.group) })}
+                  style={stickyStyle(index, {
+                    backgroundColor: sheetGroupColumnBg(col.group, customGroupColors),
+                  })}
                 >
                   <input
                     value={filters[col.key] ?? ""}
@@ -1296,6 +1326,7 @@ export const SheetGrid = React.forwardRef<SheetGridHandle, SheetGridProps>(funct
                 overrideKeys={overrideKeys}
                 formValues={formValues}
                 onOpenComments={onOpenComments}
+                onOpenMediaCell={stable.onOpenMediaCell}
                 onCellMouseDown={stable.onCellMouseDown}
                 onCellMouseEnter={stable.onCellMouseEnter}
                 onCellDoubleClick={stable.startEdit}
@@ -1423,6 +1454,7 @@ interface GridRowProps {
   overrideKeys: Record<string, boolean>;
   formValues: Record<string, SheetCellValue>;
   onOpenComments?: (row: SheetRow, column: SheetColumn) => void;
+  onOpenMediaCell?: (row: SheetRow, column: SheetColumn) => void;
   onCellMouseDown: (event: React.MouseEvent, r: number, c: number) => void;
   onCellMouseEnter: (event: React.MouseEvent, r: number, c: number) => void;
   onCellDoubleClick: (r: number, c: number) => void;
@@ -1450,6 +1482,7 @@ const GridRow = React.memo(function GridRow({
   overrideKeys,
   formValues,
   onOpenComments,
+  onOpenMediaCell,
   onCellMouseDown,
   onCellMouseEnter,
   onCellDoubleClick,
@@ -1458,9 +1491,14 @@ const GridRow = React.memo(function GridRow({
   onCancel,
 }: GridRowProps) {
   const { t } = useTranslation();
+  const hasExpandingLongtext =
+    !wrapLongtext &&
+    columns.some(
+      (col) => col.is_custom && col.kind === "longtext" && !isEmptyValue(row.cells[col.key])
+    );
   return (
     <tr
-      style={wrapLongtext ? undefined : { height: ROW_HEIGHT }}
+      style={wrapLongtext || hasExpandingLongtext ? undefined : { height: ROW_HEIGHT }}
       className={cn(row.resigned && "text-muted-foreground line-through")}
     >
       <td
@@ -1523,15 +1561,23 @@ const GridRow = React.memo(function GridRow({
             onMouseDown={(e) => onCellMouseDown(e, rowIndex, c)}
             onMouseEnter={(event) => onCellMouseEnter(event, rowIndex, c)}
             onDoubleClick={() => {
-              if (col.kind === "file_link" && isFileValue(value)) {
-                openSheetFile(value, t("sheets.pdfError"));
-                return;
+              if (col.kind === "file_link") {
+                if (col.is_custom) {
+                  onOpenMediaCell?.(row, col);
+                  return;
+                }
+                if (isFileValue(value)) {
+                  openSheetFile(value, t("sheets.pdfError"));
+                  return;
+                }
               }
               onCellDoubleClick(rowIndex, c);
             }}
             className={cn(
               "relative border-b border-r px-1.5",
-              wrapLongtext ? "align-top py-1" : "align-middle",
+              wrapLongtext || (col.is_custom && col.kind === "longtext")
+                ? "align-top py-1"
+                : "align-middle",
               col.kind === "number" && "text-right tabular-nums",
               pending && "italic"
             )}
@@ -1563,6 +1609,7 @@ const GridRow = React.memo(function GridRow({
               column={col}
               value={value}
               wrap={wrapLongtext}
+              autoExpand={Boolean(col.is_custom && col.kind === "longtext")}
               ink={ink}
               onPastel={hasLightPastel}
               draft={isDraft}
@@ -1627,6 +1674,7 @@ function CellContent({
   column,
   value,
   wrap = false,
+  autoExpand = false,
   ink,
   onPastel = false,
   draft = false,
@@ -1634,10 +1682,12 @@ function CellContent({
   column: SheetColumn;
   value: SheetCellValue;
   wrap?: boolean;
+  autoExpand?: boolean;
   ink?: string;
   onPastel?: boolean;
   draft?: boolean;
 }) {
+  const { t } = useTranslation();
   if (column.kind === "bool") {
     return (
       <span className="flex items-center justify-center gap-1">
@@ -1659,18 +1709,48 @@ function CellContent({
       </span>
     );
   }
-  if (column.kind === "file_link" && isFileValue(value)) {
-    return (
-      <span
-        className={cn(
-          "block max-w-full truncate underline",
-          onPastel ? "text-sky-800" : "text-sky-700 dark:text-sky-400"
-        )}
-        title="Dwuklik otwiera plik"
-      >
-        {value.name}
-      </span>
-    );
+  if (column.kind === "file_link") {
+    const files = extractFiles(value);
+    if (column.is_custom) {
+      if (files.length === 0) {
+        return column.editable ? (
+          <span
+            className="block truncate text-[11px] text-muted-foreground/60"
+            title={t("sheets.media.cellHint")}
+          >
+            {t("sheets.media.emptyCellPrompt")}
+          </span>
+        ) : null;
+      }
+      const label =
+        files.length === 1
+          ? files[0]!.name
+          : `${files.length} ${t("sheets.media.filesCountSuffix")} (${files[0]!.name})`;
+      return (
+        <span
+          className={cn(
+            "block max-w-full truncate underline",
+            onPastel ? "text-sky-800" : "text-sky-700 dark:text-sky-400"
+          )}
+          title={files.map((f) => f.name).join("\n")}
+        >
+          {label}
+        </span>
+      );
+    }
+    if (isFileValue(value)) {
+      return (
+        <span
+          className={cn(
+            "block max-w-full truncate underline",
+            onPastel ? "text-sky-800" : "text-sky-700 dark:text-sky-400"
+          )}
+          title="Dwuklik otwiera plik"
+        >
+          {value.name}
+        </span>
+      );
+    }
   }
   const text = displayText(column, value);
   const body = (
@@ -1680,7 +1760,9 @@ function CellContent({
         draft && "italic",
         wrap
           ? "max-w-full whitespace-pre-wrap break-words [overflow-wrap:anywhere] leading-snug"
-          : "truncate"
+          : autoExpand
+            ? "line-clamp-5 max-w-full whitespace-pre-wrap break-words [overflow-wrap:anywhere] leading-snug"
+            : "truncate"
       )}
       title={!draft && !wrap && text.length > 20 ? text : undefined}
     >
@@ -1709,6 +1791,15 @@ function CellEditor({
 }) {
   const [value, setValue] = React.useState(initial);
   const committedRef = React.useRef(false);
+  const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+
+  React.useLayoutEffect(() => {
+    if (column.kind !== "longtext") return;
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(Math.max(el.scrollHeight + 4, 96), 340)}px`;
+  }, [column.kind, value]);
 
   const commit = (move: "down" | "right" | "none", raw = value) => {
     if (committedRef.current) return;
@@ -1764,11 +1855,12 @@ function CellEditor({
   if (column.kind === "longtext") {
     return (
       <textarea
+        ref={textareaRef}
         {...common}
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onFocus={(e) => e.currentTarget.setSelectionRange(e.currentTarget.value.length, e.currentTarget.value.length)}
-        className={cn(common.className, "min-h-24 w-[min(20rem,75vw)] py-1 shadow-lg")}
+        className={cn(common.className, "min-h-24 w-[min(22rem,75vw)] resize-y py-1 shadow-lg")}
       />
     );
   }
