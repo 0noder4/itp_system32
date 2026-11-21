@@ -195,23 +195,39 @@ NOTIFICATIONS_MINUTE=0
 - **Gdzie**: `frontend` (jako `NEXT_PUBLIC_API_URL`).
 - **Po co**: adres API przekazywany do frontendu jako publiczna zmienna `NEXT_PUBLIC_API_URL`.
 
-## 6) Konfiguracja backupów
+## 6) Konfiguracja backupów i eksportu ratunkowego
 
 ### `BACKUP_SCHEDULE`
 - **Gdzie**: `backup`.
-- **Po co**: harmonogram crona wykonywania backupów.
+- **Po co**: harmonogram crona backupów bazy MySQL (domyślnie `0 */6 * * *` — co 6 godzin).
 
 ### `BACKUP_RETENTION_DAYS`
+- **Gdzie**: `backup`, `scheduler`.
+- **Po co**: liczba dni retencji dumpów MySQL oraz paczek tagowanych (`pre-deploy`, `pre-restore`; domyślnie `30`).
+
+### `MEDIA_BACKUP_ENABLED` / `MEDIA_BACKUP_SCHEDULE` / `MEDIA_BACKUP_RETENTION_DAYS`
 - **Gdzie**: `backup`.
-- **Po co**: liczba dni retencji plików backupu.
+- **Po co**: włączenie i harmonogram nocnego backupu `mediafiles` (domyślnie `true`, `30 2 * * *`, retencja `14` dni).
+
+### `BACKUP_MIN_FREE_GB`
+- **Gdzie**: `backup`.
+- **Po co**: minimalna wymagana ilość wolnego miejsca na `/backups` w GB przed startem backupu (dla `mediafiles` skrypt dodaje dodatkowo bieżący rozmiar katalogu `/mediafiles`; domyślnie `5`).
 
 ### `BACKUP_ON_START`
 - **Gdzie**: `backup`.
-- **Po co**: uruchomienie jednorazowego backupu przy starcie kontenera.
+- **Po co**: uruchomienie jednorazowego pełnego backupu przy starcie kontenera (domyślnie `false`).
+
+### `BACKUP_ALERT_EMAIL`
+- **Gdzie**: `backup`.
+- **Po co**: opcjonalny zapasowy adres e-mail dla alertów błędu, gdy w bazie `Settings.system_admin_email` nie jest jeszcze ustawiony (zwykle pusty — głównym źródłem jest panel admina Django).
 
 ### `TZ`
 - **Gdzie**: `backup`.
-- **Po co**: strefa czasowa używana przez harmonogram backupów.
+- **Po co**: strefa czasowa używana przez harmonogram backupów (domyślnie `Europe/Warsaw`).
+
+### `EMERGENCY_EXPORT_ENABLED` / `EMERGENCY_EXPORT_HOUR` / `EMERGENCY_EXPORT_MINUTE` / `EXPORT_RETENTION_DAYS`
+- **Gdzie**: `scheduler`.
+- **Po co**: nocny eksport 5 arkuszy `.xlsx` (`lg`, `fr`, `tr`, `opiekun`, `wszystkie-arkusze`) do `/backups/exports/` według zegara `Europe/Warsaw` (domyślnie `true`, `2:45`, retencja `7` dni).
 
 ### `NOTIFICATIONS_HOUR`
 - **Gdzie**: `scheduler`.

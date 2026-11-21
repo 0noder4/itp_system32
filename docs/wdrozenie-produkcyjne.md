@@ -149,15 +149,26 @@ docker compose -f compose.prod.yml ps
 
 ## Kopie zapasowe i bezpieczeństwo danych
 
-- Za automatyczne backupy odpowiada kontener `backup`, który uruchamia skrypt `/usr/local/bin/backup.sh`.
-- Harmonogram i retencja backupów są konfigurowane przez zmienne `BACKUP_SCHEDULE`, `BACKUP_RETENTION_DAYS`, `BACKUP_ON_START`, `TZ`.
-- Backupy są zapisywane lokalnie na VPS (wolumen Docker `backups`), dlatego nie mogą być traktowane jako jedyne źródło odtwarzania.
+- Za automatyczne backupy odpowiada kontener `backup` (`/usr/local/bin/backup.sh`):
+  - **Baza MySQL:** co 6 godzin (`BACKUP_SCHEDULE=0 */6 * * *`, retencja `30` dni, test `gzip -t`).
+  - **`mediafiles`:** raz dziennie w nocy (`MEDIA_BACKUP_SCHEDULE=30 2 * * *`, retencja `14` dni, wolumen montowany `:ro`, test `tar -tzf`).
+  - **Bezpiecznik dysku:** przed każdym przebiegiem skrypt sprawdza minimalny zapas miejsca (`BACKUP_MIN_FREE_GB=5`, dla mediów dodatkowo + rozmiar `mediafiles`).
+- Raz dziennie w nocy (`02:45` `Europe/Warsaw`) kontener `scheduler` generuje również paczkę ratunkową `.xlsx` (4 pliki per zespół + 1 zbiorczy) do `/backups/exports/` (`EXPORT_RETENTION_DAYS=7`).
+- **Alerty e-mail (wyłącznie przy błędzie):** w razie niepowodzenia backupu lub eksportu `.xlsx` system wysyła powiadomienie przez SMTP na adres `Settings.system_admin_email` ustawiony w Django Admin.
+- Backupy są zapisywane lokalnie na VPS (wolumen Docker `backups`), dlatego do czasu wdrożenia automatycznego off-site nie mogą być traktowane jako jedyne źródło odtwarzania.
 
-Przykładowe ręczne uruchomienie backupu:
+Przykładowe ręczne uruchomienie backupu przed wdrożeniem (`pre-deploy`):
 
 ```bash
-docker compose -f compose.prod.yml exec backup /usr/local/bin/backup.sh
+./scripts/pre-deploy-backup.sh
 ```
+
+Po udanym wdrożeniu nowych tarów na VPS warto usunąć nieużywane stare obrazy (`<none>:<none>`):
+
+```bash
+docker image prune -f
+```
+*(Nie używaj `docker volume prune`, aby nie usunąć niepodpiętych wolumenów innych projektów na serwerze.)*
 
 ### Wymóg operacyjny
 
