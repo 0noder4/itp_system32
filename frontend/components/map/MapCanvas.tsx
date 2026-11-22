@@ -8,8 +8,7 @@ import {
   DEFAULT_MAP_VIEW,
   MAP_MINE_COLOR,
   MAP_PARTNER_COLOR,
-  MAP_SIZE_COLORS,
-  isDefaultMapView,
+  getMapLegendItems,
   isPartnerStatus,
   sizeColorForArea,
   type MapViewFlags,
@@ -40,6 +39,8 @@ type MapCanvasProps = {
   editable?: boolean;
   /** Staff map color overlays (ignored for exhibitor highlight mode). */
   colorView?: MapViewFlags;
+  /** Optional ref forwarded to the underlying SVG element (e.g. for image export). */
+  svgRef?: React.RefObject<SVGSVGElement | null>;
 };
 
 function shapeCenter(shape: MapSegment["shape"]): { x: number; y: number } {
@@ -132,6 +133,16 @@ function resolvePaint(
     };
   }
 
+  if (colorView.clean) {
+    return {
+      fill: "#ffffff",
+      fillOpacity: 0.02,
+      stroke: "#000",
+      strokeWidth: 1,
+      emphasized: false,
+    };
+  }
+
   if (colorView.mine) {
     if (stand?.isMine) {
       return {
@@ -203,25 +214,7 @@ function resolvePaint(
 }
 
 function MapViewLegend({ colorView }: { colorView: MapViewFlags }) {
-  if (isDefaultMapView(colorView)) return null;
-
-  const items: { color: string; label: string }[] = [];
-  if (colorView.mine) {
-    items.push({ color: MAP_MINE_COLOR, label: "Moje firmy" });
-  } else {
-    if (colorView.standSizes) {
-      items.push(
-        { color: MAP_SIZE_COLORS[4], label: "4 m²" },
-        { color: MAP_SIZE_COLORS[6], label: "6 m²" },
-        { color: MAP_SIZE_COLORS[8], label: "8 m²" },
-        { color: MAP_SIZE_COLORS[12], label: "12 m²" }
-      );
-    }
-    if (colorView.partners) {
-      items.push({ color: MAP_PARTNER_COLOR, label: "Partner" });
-    }
-  }
-
+  const items = getMapLegendItems(colorView);
   if (items.length === 0) return null;
 
   return (
@@ -249,8 +242,15 @@ export function MapCanvas({
   onSelectedContextMenu,
   editable = false,
   colorView = DEFAULT_MAP_VIEW,
+  svgRef,
 }: MapCanvasProps) {
-  const svgRef = useRef<SVGSVGElement>(null);
+  const internalSvgRef = useRef<SVGSVGElement | null>(null);
+  const setSvgElementRef = (node: SVGSVGElement | null) => {
+    internalSvgRef.current = node;
+    if (svgRef) {
+      svgRef.current = node;
+    }
+  };
   const tooltipRef = useRef<HTMLDivElement>(null);
   const [hoveredLabel, setHoveredLabel] = useState<string | null>(null);
   /** Stand center in viewport (client) coordinates. */
@@ -276,6 +276,7 @@ export function MapCanvas({
 
   const isHighlighted = (label: string) => {
     if (userStandNumber) return label === userStandNumber;
+    if (colorView.clean) return false;
     if (colorView.mine) return !!standMap.get(label)?.isMine;
     if (colorView.standSizes || colorView.partners) {
       const stand = standMap.get(label);
@@ -289,7 +290,8 @@ export function MapCanvas({
   };
 
   const showCompanyTip = (label: string) => {
-    if (userStandNumber && label !== userStandNumber) return false;
+    if (userStandNumber) return label === userStandNumber;
+    if (colorView.clean) return false;
     return standMap.has(label);
   };
 
@@ -306,7 +308,7 @@ export function MapCanvas({
 
   const updateTooltipAnchor = (label: string) => {
     const seg = segments.find((s) => s.label === label);
-    const svg = svgRef.current;
+    const svg = internalSvgRef.current;
     if (!seg || !svg) return;
     const c = shapeCenter(seg.shape);
     const vb = svg.viewBox.baseVal;
@@ -319,7 +321,10 @@ export function MapCanvas({
     });
   };
 
-  const hoveredStand = hoveredLabel ? standMap.get(hoveredLabel) : undefined;
+  const hoveredStand =
+    hoveredLabel && showCompanyTip(hoveredLabel)
+      ? standMap.get(hoveredLabel)
+      : undefined;
 
   useLayoutEffect(() => {
     if (!hoveredStand || !tooltipAnchor || !tooltipRef.current) {
@@ -381,9 +386,9 @@ export function MapCanvas({
     <div className="relative w-full overflow-hidden rounded-md border bg-slate-50">
       <div className="overflow-auto">
         <svg
-          ref={svgRef}
+          ref={setSvgElementRef}
           viewBox="0 0 534.8 297.8"
-          className="h-auto w-full"
+          className="block h-auto w-full"
           preserveAspectRatio="xMidYMid meet"
         >
           <rect x="0" y="0" width="534.8" height="297.8" fill="#f8fafc" />

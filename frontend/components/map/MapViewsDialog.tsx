@@ -26,7 +26,7 @@ type Props = {
   onChange: (next: MapViewFlags) => void;
 };
 
-type OptionKey = "default" | "standSizes" | "partners" | "mine";
+type OptionKey = "default" | "standSizes" | "partners" | "mine" | "clean";
 
 const OPTIONS: {
   key: OptionKey;
@@ -53,28 +53,40 @@ const OPTIONS: {
     label: "Moje firmy",
     hint: "Tylko firmy, których jesteś opiekunem FR.",
   },
+  {
+    key: "clean",
+    label: "Czysty układ (bez firm)",
+    hint: "Pokazuje aktualny układ i numery stoisk bez przypisanych firm i kolorowych nakładek.",
+  },
 ];
 
 function applyToggle(current: MapViewFlags, key: OptionKey): MapViewFlags {
   if (key === "default") {
     return { ...DEFAULT_MAP_VIEW };
   }
+  if (key === "clean") {
+    const nextClean = !current.clean;
+    if (!nextClean) return { ...DEFAULT_MAP_VIEW };
+    return { standSizes: false, partners: false, mine: false, clean: true };
+  }
   if (key === "mine") {
     const nextMine = !current.mine;
     if (!nextMine) return { ...DEFAULT_MAP_VIEW };
-    return { standSizes: false, partners: false, mine: true };
+    return { standSizes: false, partners: false, mine: true, clean: false };
   }
   if (key === "standSizes") {
     return {
       standSizes: !current.standSizes,
       partners: current.partners,
       mine: false,
+      clean: false,
     };
   }
   return {
     standSizes: current.standSizes,
     partners: !current.partners,
     mine: false,
+    clean: false,
   };
 }
 
@@ -82,6 +94,7 @@ function isChecked(view: MapViewFlags, key: OptionKey): boolean {
   if (key === "default") return isDefaultMapView(view);
   if (key === "standSizes") return view.standSizes;
   if (key === "partners") return view.partners;
+  if (key === "clean") return view.clean;
   return view.mine;
 }
 
@@ -110,8 +123,8 @@ export function MapViewsDialog({
         <DialogHeader>
           <DialogTitle>Widoki mapy</DialogTitle>
           <DialogDescription>
-            Rozmiar stoisk i partnerzy mogą być włączone naraz. „Moje firmy”
-            oraz widok domyślny gaszą pozostałe.
+            Rozmiar stoisk i partnerzy mogą być włączone naraz. „Moje firmy”,
+            „Czysty układ (bez firm)” oraz widok domyślny wyłączają pozostałe.
           </DialogDescription>
         </DialogHeader>
 

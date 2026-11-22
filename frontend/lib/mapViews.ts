@@ -4,16 +4,18 @@ export type MapViewFlags = {
   standSizes: boolean;
   partners: boolean;
   mine: boolean;
+  clean: boolean;
 };
 
 export const DEFAULT_MAP_VIEW: MapViewFlags = {
   standSizes: false,
   partners: false,
   mine: false,
+  clean: false,
 };
 
 export function isDefaultMapView(view: MapViewFlags): boolean {
-  return !view.standSizes && !view.partners && !view.mine;
+  return !view.standSizes && !view.partners && !view.mine && !view.clean;
 }
 
 /** Excel-like fills for booth area. */
@@ -42,4 +44,31 @@ export function isPartnerStatus(
   status: string | null | undefined
 ): boolean {
   return status === "partner" || status === "main";
+}
+
+export type MapLegendItem = {
+  color: string;
+  label: string;
+};
+
+export function getMapLegendItems(colorView: MapViewFlags): MapLegendItem[] {
+  if (isDefaultMapView(colorView) || colorView.clean) return [];
+
+  if (colorView.mine) {
+    return [{ color: MAP_MINE_COLOR, label: "Moje firmy" }];
+  }
+
+  const items: MapLegendItem[] = [];
+  if (colorView.standSizes) {
+    items.push(
+      { color: MAP_SIZE_COLORS[4], label: "4 m²" },
+      { color: MAP_SIZE_COLORS[6], label: "6 m²" },
+      { color: MAP_SIZE_COLORS[8], label: "8 m²" },
+      { color: MAP_SIZE_COLORS[12], label: "12 m²" }
+    );
+  }
+  if (colorView.partners) {
+    items.push({ color: MAP_PARTNER_COLOR, label: "Partner" });
+  }
+  return items;
 }

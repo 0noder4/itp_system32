@@ -1,12 +1,12 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { useTranslation } from "@/lib/i18n";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { AlertCircle, Plus, Redo2, Trash2, Undo2 } from "lucide-react";
+import { AlertCircle, Download, Plus, Redo2, Trash2, Undo2 } from "lucide-react";
 import { MapCanvas } from "@/components/map/MapCanvas";
 import { MapViewsDialog } from "@/components/map/MapViewsDialog";
 import useSWR from "swr";
@@ -16,9 +16,11 @@ import { Header } from "@/components/layout/Header";
 import { getUserId, getUserInfo, hasStaffRole } from "@/lib/auth";
 import {
   DEFAULT_MAP_VIEW,
+  getMapLegendItems,
   isDefaultMapView,
   type MapViewFlags,
 } from "@/lib/mapViews";
+import { downloadMapSvgAsPng } from "@/lib/mapExport";
 import {
   MapLayoutResponse,
   MapLayoutSnapshot,
@@ -76,6 +78,8 @@ export default function StaffMapPage() {
   const [manualErrors, setManualErrors] = useState<string[]>([]);
   const [viewsOpen, setViewsOpen] = useState(false);
   const [colorView, setColorView] = useState<MapViewFlags>(DEFAULT_MAP_VIEW);
+  const mapSvgRef = useRef<SVGSVGElement | null>(null);
+  const [downloading, setDownloading] = useState(false);
 
   const userInfo = getUserInfo();
   const userId = getUserId();
@@ -205,6 +209,34 @@ export default function StaffMapPage() {
   const segments = segmentsForDay(dayLayout);
   const companyStands =
     selectedDay === "day1" ? day1CompanyStands : day2CompanyStands;
+
+  const handleDownloadMap = async () => {
+    if (!mapSvgRef.current || downloading) return;
+    const dayNum = selectedDay === "day1" ? "1" : "2";
+    const viewSuffixes: string[] = [];
+    if (colorView.clean) {
+      viewSuffixes.push("czysty");
+    } else if (colorView.mine) {
+      viewSuffixes.push("moje");
+    } else {
+      if (colorView.standSizes) viewSuffixes.push("rozmiary");
+      if (colorView.partners) viewSuffixes.push("partnerzy");
+    }
+    const suffix = viewSuffixes.length > 0 ? `-${viewSuffixes.join("-")}` : "";
+    const filename = `mapa-itp-dzien-${dayNum}${suffix}.png`;
+
+    setDownloading(true);
+    try {
+      await downloadMapSvgAsPng(mapSvgRef.current, {
+        filename,
+        legendItems: getMapLegendItems(colorView),
+      });
+    } catch {
+      toast.error(t("staff.map.downloadError"));
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   const toggleSelect = (label: string) => {
     setSelectedLabels((prev) => {
@@ -548,6 +580,16 @@ export default function StaffMapPage() {
                     </span>
                   ) : null}
                 </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={downloading || segments.length === 0}
+                  onClick={handleDownloadMap}
+                >
+                  <Download className="mr-1.5 h-4 w-4" />
+                  {t("staff.map.download")}
+                </Button>
               </div>
               {editMode ? (
                 <div className="flex flex-wrap items-center gap-2">
@@ -645,6 +687,7 @@ export default function StaffMapPage() {
                     }
                     editable={editMode}
                     colorView={colorView}
+                    svgRef={mapSvgRef}
                   />
                 </TabsContent>
               </Tabs>

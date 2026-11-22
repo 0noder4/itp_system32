@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { useTranslation } from "@/lib/i18n";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AlertCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { AlertCircle, Download } from "lucide-react";
 import { MapCanvas } from "@/components/map/MapCanvas";
 import useSWR from "swr";
 import { fetcher } from "@/lib/api";
@@ -16,11 +17,15 @@ import {
   segmentsForDay,
 } from "@/lib/mapLayout";
 import { getFileUrl } from "@/components/staff/StageViewer/utils";
+import { toast } from "sonner";
+import { downloadMapSvgAsPng } from "@/lib/mapExport";
 
 export default function MapPage() {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const { companyId, isLoading: isLoadingStatus } = useFormStatus();
   const [selectedDay, setSelectedDay] = useState<"day1" | "day2">("day1");
+  const mapSvgRef = useRef<SVGSVGElement | null>(null);
+  const [downloading, setDownloading] = useState(false);
 
   const {
     data: company,
@@ -79,6 +84,25 @@ export default function MapPage() {
       ? company?.day1_stand?.stand_number
       : company?.day2_stand?.stand_number;
 
+  const handleDownloadMap = async () => {
+    if (!mapSvgRef.current || !standNumber || downloading) return;
+    const dayNum = selectedDay === "day1" ? "1" : "2";
+    const safeStand = standNumber.replace(/[^a-zA-Z0-9_-]/g, "");
+    const filename =
+      locale === "en"
+        ? `itp-map-day-${dayNum}-${safeStand}.png`
+        : `mapa-itp-dzien-${dayNum}-${safeStand}.png`;
+
+    setDownloading(true);
+    try {
+      await downloadMapSvgAsPng(mapSvgRef.current, { filename });
+    } catch {
+      toast.error(t("exhibitor.map.downloadError"));
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex flex-1 flex-col space-y-6 overflow-auto p-6">
@@ -92,7 +116,7 @@ export default function MapPage() {
     return (
       <div className="flex flex-1 flex-col overflow-auto p-6">
         <Card className="border-destructive">
-          <CardContent className="flex items-center gap-4 pt-6">
+          <CardContent className="flex items-center gap-4">
             <AlertCircle className="h-8 w-8 text-destructive" />
             <div>
               <h2 className="font-semibold">{t("common.error")}</h2>
@@ -119,19 +143,33 @@ export default function MapPage() {
         </div>
 
         <Card>
-          <CardContent className="pt-6">
+          <CardContent>
             <Tabs
               value={selectedDay}
               onValueChange={(v) => setSelectedDay(v as "day1" | "day2")}
             >
-              <TabsList className="mb-4">
-                <TabsTrigger value="day1">
-                  {t("exhibitor.map.day1")}
-                </TabsTrigger>
-                <TabsTrigger value="day2">
-                  {t("exhibitor.map.day2")}
-                </TabsTrigger>
-              </TabsList>
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <TabsList>
+                  <TabsTrigger value="day1">
+                    {t("exhibitor.map.day1")}
+                  </TabsTrigger>
+                  <TabsTrigger value="day2">
+                    {t("exhibitor.map.day2")}
+                  </TabsTrigger>
+                </TabsList>
+                {standNumber && segments.length > 0 ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={downloading}
+                    onClick={handleDownloadMap}
+                  >
+                    <Download className="mr-1.5 h-4 w-4" />
+                    {t("exhibitor.map.download")}
+                  </Button>
+                ) : null}
+              </div>
               <TabsContent value={selectedDay} className="mt-0">
                 {standNumber ? (
                   <div className="space-y-2">
@@ -152,6 +190,7 @@ export default function MapPage() {
                           logoUrl,
                         },
                       ]}
+                      svgRef={mapSvgRef}
                     />
                   </div>
                 ) : (
