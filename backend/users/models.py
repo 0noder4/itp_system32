@@ -30,22 +30,28 @@ class User(AbstractUser):
     type = models.CharField(
         max_length=10,
         choices=USER_TYPES,
-        default="company"
+        default="company",
+        verbose_name="typ konta",
     )
     language = models.CharField(
         max_length=5,
         choices=LANGUAGE_CHOICES,
-        default="pl"
+        default="pl",
+        verbose_name="język",
     )
-    phone_number = models.CharField(max_length=20, verbose_name="Phone number", blank=True)
+    phone_number = models.CharField(max_length=20, verbose_name="numer telefonu", blank=True)
     staff_roles = models.JSONField(
         default=list,
         blank=True,
         verbose_name="role staff",
-        help_text="Tylko dla kont typu staff. Admin ma wszystkie role automatycznie.",
+        help_text="Dotyczy kont typu staff (administrator posiada wszystkie role).",
     )
-    created_at = models.DateTimeField(auto_now_add = True)
-    updated_at = models.DateTimeField(auto_now = True)
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="utworzono")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="zmodyfikowano")
+
+    class Meta:
+        verbose_name = "użytkownik"
+        verbose_name_plural = "użytkownicy"
 
     def get_staff_roles(self) -> frozenset:
         if self.type == 'admin':
@@ -68,11 +74,15 @@ def get_staff_invitation_expiry():
 
 
 class PasswordResetRequest(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
-    token = models.UUIDField(default=uuid.uuid4, unique=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    expires_at = models.DateTimeField(default=get_password_reset_expiry)
-    is_used = models.BooleanField(default=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="użytkownik")
+    token = models.UUIDField(default=uuid.uuid4, unique=True, verbose_name="token")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="utworzono")
+    expires_at = models.DateTimeField(default=get_password_reset_expiry, verbose_name="wygasa")
+    is_used = models.BooleanField(default=False, verbose_name="użyto")
+
+    class Meta:
+        verbose_name = "żądanie resetu hasła"
+        verbose_name_plural = "żądania resetu hasła"
 
     def is_expired(self):
         return django.utils.timezone.now() > self.expires_at
@@ -95,22 +105,27 @@ class StaffInvitation(models.Model):
         (STAFF_ROLE_OPIEKUN, 'Opiekun firm'),
     ]
 
-    email = models.EmailField()
-    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default=STAFF_ROLE_OPIEKUN)
-    language = models.CharField(max_length=5, choices=LANGUAGE_CHOICES, default='pl')
-    token = models.UUIDField(default=uuid.uuid4, unique=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    expires_at = models.DateTimeField(blank=True, default=get_staff_invitation_expiry)
-    is_accepted = models.BooleanField(default=False)
-    is_cancelled = models.BooleanField(default=False)
+    email = models.EmailField(verbose_name="e-mail")
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default=STAFF_ROLE_OPIEKUN, verbose_name="rola")
+    language = models.CharField(max_length=5, choices=LANGUAGE_CHOICES, default='pl', verbose_name="język")
+    token = models.UUIDField(default=uuid.uuid4, unique=True, verbose_name="token")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="utworzono")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="zmodyfikowano")
+    expires_at = models.DateTimeField(blank=True, default=get_staff_invitation_expiry, verbose_name="wygasa")
+    is_accepted = models.BooleanField(default=False, verbose_name="zaakceptowane")
+    is_cancelled = models.BooleanField(default=False, verbose_name="anulowane")
     created_by = models.ForeignKey(
         'users.User',
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name='created_staff_invitations',
+        verbose_name="utworzone przez",
     )
+
+    class Meta:
+        verbose_name = "zaproszenie staff"
+        verbose_name_plural = "zaproszenia staff"
 
     def is_expired(self):
         return django.utils.timezone.now() > self.expires_at

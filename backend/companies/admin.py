@@ -15,6 +15,11 @@ from .models import (
 )
 
 
+admin.site.site_header = 'Panel administracyjny ITP'
+admin.site.site_title = 'ITP Admin'
+admin.site.index_title = 'Zarządzanie systemem'
+
+
 class CompanyAdmin(admin.ModelAdmin):
     list_display = ['id', 'name', 'email', 'status', 'representative', 'created_at']
     list_filter = ['status', 'created_at']
@@ -68,41 +73,59 @@ class InvitationExpiryReminderSentAdmin(admin.ModelAdmin):
     ordering = ('-sent_at',)
     list_select_related = ('invitation', 'invitation__created_by')
 
-    @admin.display(description='Company name', ordering='invitation__company_name')
+    @admin.display(description='Nazwa firmy', ordering='invitation__company_name')
     def company_name(self, obj):
         return obj.invitation.company_name
 
-    @admin.display(description='Email address')
+    @admin.display(description='Adres e-mail')
     def email_address(self, obj):
         if obj.recipient == InvitationExpiryReminderSent.RECIPIENT_STAFF:
             staff = obj.invitation.created_by
             return staff.email if staff and staff.email else '—'
         return obj.invitation.email
 
-    @admin.display(description='Sent by', ordering='invitation__created_by')
+    @admin.display(description='Utworzone przez', ordering='invitation__created_by')
     def sent_by(self, obj):
         return obj.invitation.created_by or '—'
 
 
 admin.site.register(Company, CompanyAdmin)
-admin.site.register(Form)
-admin.site.register(Feedback)
+
+
+@admin.register(Form)
+class FormAdmin(admin.ModelAdmin):
+    list_display = (
+        'company',
+        'current_stage',
+        'stage_1_completed',
+        'stage_2_completed',
+        'stage_3_completed',
+        'stage_4_completed',
+        'stage_5_completed',
+        'updated_at',
+    )
+    list_filter = ('current_stage',)
+    search_fields = ('company__name',)
+
+
+@admin.register(Feedback)
+class FeedbackAdmin(admin.ModelAdmin):
+    list_display = ('company', 'form', 'status', 'comment')
+    list_filter = ('form', 'status')
+    search_fields = ('company__name', 'comment')
 
 
 @admin.register(EquipmentItem)
 class EquipmentItemAdmin(admin.ModelAdmin):
-    list_display = ('name_en', 'name_pl', 'code', 'price', 'is_basic', 'included_quantity', 'category', 'is_active', 'created_at')
+    list_display = ('name_pl', 'name_en', 'code', 'price', 'is_basic', 'included_quantity', 'category', 'is_active', 'created_at')
     list_filter = ('is_basic', 'category', 'is_active', 'created_at')
-    search_fields = ('name_en', 'name_pl', 'code')
-    ordering = ('category', 'name_en')
+    search_fields = ('name_pl', 'name_en', 'code')
+    ordering = ('category', 'name_pl')
     fieldsets = (
-        ('English Information', {
-            'fields': ('name_en',)
+        ('Nazwa pozycji', {
+            'fields': ('name_pl', 'name_en')
         }),
-        ('Polish Information', {
-            'fields': ('name_pl',)
-        }),
-        ('Pricing & Configuration', {
+        ('Cennik i konfiguracja', {
             'fields': ('code', 'price', 'is_basic', 'included_quantity', 'category')
         }),
         ('Status', {
@@ -128,33 +151,36 @@ class SettingsAdmin(admin.ModelAdmin):
                 ('stand_price_8m2_1d', 'stand_price_8m2_2d'),
                 ('stand_price_12m2_1d', 'stand_price_12m2_2d'),
             ),
-            'description': 'Ceny netto stoisk dla pakietu Wystawca (podane kwoty nie zawierają VAT).'
+            'description': 'Kwoty w PLN netto (bez VAT).'
         }),
         ('Cennik pakietów partnerskich (netto)', {
             'fields': ('partner_package_price', 'main_partner_package_price'),
-            'description': 'Ceny netto pakietów Partner i Partner Główny (2 dni, stoisko 8 m², bez VAT).'
+            'description': 'Pakiety dwudniowe ze stoiskiem 8 m² (kwoty w PLN netto).'
         }),
         ('JobWall — limity i pakiety (netto)', {
             'fields': (
                 ('jobwall_free_basic_early', 'jobwall_early_deadline', 'jobwall_free_basic_late'),
                 ('jobwall_free_partner', 'jobwall_free_main'),
                 ('jobwall_pack_2_price', 'jobwall_pack_3_price', 'jobwall_max_extra_offers'),
-                ('jobwall_price', 'jobwall_free_count'),
             ),
-            'description': 'Limity darmowych ogłoszeń JobWall wg pakietu oraz ceny netto pakietów +2 / +3 dodatkowych ofert.'
+            'description': 'Darmowe ogłoszenia w pakiecie oraz ceny netto pakietów dodatkowych.'
         }),
         ('Obiady — limity i cena (netto)', {
             'fields': (
                 ('lunches_free_basic', 'lunches_free_partner', 'lunches_free_main'),
                 'lunch_price',
             ),
-            'description': 'Liczba darmowych obiadów na dzień wg pakietu oraz cena netto każdego dodatkowego obiadu.'
+            'description': 'Darmowe obiady dziennie wg pakietu oraz cena netto dodatkowego obiadu.'
         }),
-        ('Stage Deadlines', {
-            'fields': ('stage_1_deadline', 'stage_2_deadline', 'stage_3_deadline', 'stage_4_deadline', 'stage_5_deadline',),
-            'description': 'Set global deadlines for each form stage. Deadlines are informational only and do not block form access. Leave blank if no deadline is needed for a stage.'
+        ('Edycja i daty targów', {
+            'fields': ('edition_number', 'day1_date', 'day2_date'),
+            'description': 'Numer edycji oraz daty dni targowych.'
         }),
-        ('Mail send deadlines', {
+        ('Terminy etapów formularza', {
+            'fields': ('stage_1_deadline', 'stage_2_deadline', 'stage_3_deadline', 'stage_4_deadline', 'stage_5_deadline'),
+            'description': 'Informacyjne terminy widoczne dla wystawców w panelu (nie blokują formularza).'
+        }),
+        ('Terminy wysyłki maili (Arkusze)', {
             'fields': (
                 'mail_1_send_by',
                 'mail_2_send_by',
@@ -162,16 +188,9 @@ class SettingsAdmin(admin.ModelAdmin):
                 'mail_4_send_by',
                 'mail_5_send_by',
             ),
-            'description': (
-                'Calendar dates shown on MAIL groups in the sheets. '
-                'Staff with FR or LG (and admin) can also change them in sheet settings.'
-            ),
+            'description': 'Daty orientacyjne wyświetlane w nagłówkach grup MAIL #1–#5 w arkuszach.'
         }),
-        ('Job Fair Dates', {
-            'fields': ('day1_date', 'day2_date', 'edition_number',),
-            'description': 'Set the dates for the job fair days and the edition number shown in the app name / browser title (e.g. System 33). Format for dates: YYYY-MM-DD (e.g., 2025-03-10)'
-        }),
-        ('Invitation settings', {
+        ('Zaproszenia i przypomnienia', {
             'fields': (
                 'invitation_validity_days',
                 'invitation_reminder_count',
@@ -179,31 +198,18 @@ class SettingsAdmin(admin.ModelAdmin):
                 'invitation_reminder_2_days',
                 'invitation_reminder_3_days',
             ),
-            'description': (
-                'Validity applies to newly created invitations only. '
-                'Reminder count 0 disables expiry reminder emails. '
-                'Reminder slots are days before expiry and must be less than validity days.'
-            ),
+            'description': 'Ważność nowych linków zaproszeń oraz automatyczne przypomnienia e-mail przed wygaśnięciem.'
         }),
-        ('Email contact', {
+        ('Adresy e-mail kontaktowe', {
             'fields': (
                 'general_contact_email',
                 'system_admin_email',
             ),
-            'description': (
-                'General contact appears in emails to companies/exhibitors. '
-                'System admin appears in emails to FR/staff (stage pending, invitation expiry reminders). '
-                'Set real production addresses in admin after deploy.'
-            ),
+            'description': 'Adresy wyświetlane w stopkach wiadomości systemowych oraz używane do alertów.'
         }),
-        ('Documents', {
+        ('Dokumenty i pliki', {
             'fields': ('terms_pdf', 'carpet_catalog_image'),
-            'description': (
-                'Upload the exhibitor terms PDF shown after Stage 1 save, '
-                'and the carpet catalog image (RIPS/WELUR swatch sheet) for Stage 2 partners. '
-                'Replace files here to update links without a frontend redeploy. '
-                'Old files on disk may remain until cleaned manually.'
-            ),
+            'description': 'Pliki udostępniane wystawcom w formularzu zgłoszeniowym.'
         }),
     )
 

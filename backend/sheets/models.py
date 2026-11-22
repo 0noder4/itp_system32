@@ -12,17 +12,18 @@ class SheetCellValue(models.Model):
     Form fields (SOURCE_SYSTEM) stay read-only in sheets.
     """
 
-    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='sheet_cells')
-    column_key = models.CharField(max_length=100)
-    value = models.JSONField(null=True, blank=True)
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='sheet_cells', verbose_name='firma')
+    column_key = models.CharField(max_length=100, verbose_name='klucz kolumny')
+    value = models.JSONField(null=True, blank=True, verbose_name='wartość')
     updated_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name='+',
+        verbose_name='zmodyfikowane przez',
     )
-    updated_at = models.DateTimeField(auto_now=True)
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='zmodyfikowano')
 
     class Meta:
         constraints = [
@@ -38,18 +39,19 @@ class SheetCellValue(models.Model):
 class SheetCellChange(models.Model):
     """Audit log of every editable cell change made through sheets (incl. undo/redo)."""
 
-    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='sheet_cell_changes')
-    column_key = models.CharField(max_length=100)
-    old_value = models.JSONField(null=True, blank=True)
-    new_value = models.JSONField(null=True, blank=True)
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='sheet_cell_changes', verbose_name='firma')
+    column_key = models.CharField(max_length=100, verbose_name='klucz kolumny')
+    old_value = models.JSONField(null=True, blank=True, verbose_name='poprzednia wartość')
+    new_value = models.JSONField(null=True, blank=True, verbose_name='nowa wartość')
     changed_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name='+',
+        verbose_name='zmienione przez',
     )
-    changed_at = models.DateTimeField(auto_now_add=True)
+    changed_at = models.DateTimeField(auto_now_add=True, verbose_name='zmieniono')
     batch_id = models.UUIDField(db_index=True)
 
     class Meta:
@@ -69,22 +71,23 @@ class SheetLayoutDefault(models.Model):
     (sync in sheet settings). Publishing a new default does not overwrite existing accounts.
     """
 
-    sheet_key = models.CharField(max_length=50, unique=True)
-    column_widths = models.JSONField(default=dict, blank=True)
+    sheet_key = models.CharField(max_length=50, unique=True, verbose_name='arkusz')
+    column_widths = models.JSONField(default=dict, blank=True, verbose_name='szerokości kolumn')
     # { tabKey: [column_key, ...] } — columns hidden by default for that tab
-    hidden_by_tab = models.JSONField(default=dict, blank=True)
+    hidden_by_tab = models.JSONField(default=dict, blank=True, verbose_name='ukryte kolumny wg zakładek')
     # { tabKey: [column_key, ...] } — column order after the pinned first column
-    column_order_by_tab = models.JSONField(default=dict, blank=True)
+    column_order_by_tab = models.JSONField(default=dict, blank=True, verbose_name='kolejność kolumn wg zakładek')
     # { tabKey: { column_key: group_name } } — category overrides for columns
-    column_groups_by_tab = models.JSONField(default=dict, blank=True)
+    column_groups_by_tab = models.JSONField(default=dict, blank=True, verbose_name='kategorie kolumn wg zakładek')
     updated_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name='+',
+        verbose_name='zmodyfikowane przez',
     )
-    updated_at = models.DateTimeField(auto_now=True)
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='zmodyfikowano')
 
     class Meta:
         verbose_name = 'domyślny układ arkusza'
@@ -100,17 +103,18 @@ class SheetCellDraft(models.Model):
     Shared across sheets/tabs for the same (company, column_key).
     """
 
-    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='sheet_cell_drafts')
-    column_key = models.CharField(max_length=100)
-    value = models.JSONField(null=True, blank=True)
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='sheet_cell_drafts', verbose_name='firma')
+    column_key = models.CharField(max_length=100, verbose_name='klucz kolumny')
+    value = models.JSONField(null=True, blank=True, verbose_name='wartość')
     updated_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name='+',
+        verbose_name='zmodyfikowane przez',
     )
-    updated_at = models.DateTimeField(auto_now=True)
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='zmodyfikowano')
 
     class Meta:
         constraints = [
@@ -132,18 +136,19 @@ class SheetCellFormOverride(models.Model):
     commit; later commits keep that original so restore can bring it back.
     """
 
-    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='sheet_form_overrides')
-    column_key = models.CharField(max_length=100)
-    previous_value = models.JSONField(null=True, blank=True)
-    value = models.JSONField(null=True, blank=True)
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='sheet_form_overrides', verbose_name='firma')
+    column_key = models.CharField(max_length=100, verbose_name='klucz kolumny')
+    previous_value = models.JSONField(null=True, blank=True, verbose_name='poprzednia wartość')
+    value = models.JSONField(null=True, blank=True, verbose_name='wartość')
     updated_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name='+',
+        verbose_name='zmodyfikowane przez',
     )
-    updated_at = models.DateTimeField(auto_now=True)
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='zmodyfikowano')
 
     class Meta:
         constraints = [
@@ -162,12 +167,13 @@ class SheetCellFormOverride(models.Model):
 class SheetCellStyle(models.Model):
     """Optional fill colour for a sheet cell (company × column), shared across tabs."""
 
-    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='sheet_cell_styles')
-    column_key = models.CharField(max_length=100)
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='sheet_cell_styles', verbose_name='firma')
+    column_key = models.CharField(max_length=100, verbose_name='klucz kolumny')
     bg_color = models.CharField(
         max_length=20,
         blank=True,
         default='',
+        verbose_name='kolor tła',
         help_text='Pusty = brak koloru. Hex, np. #FEF08A.',
     )
     updated_by = models.ForeignKey(
@@ -176,8 +182,9 @@ class SheetCellStyle(models.Model):
         null=True,
         blank=True,
         related_name='+',
+        verbose_name='zmodyfikowane przez',
     )
-    updated_at = models.DateTimeField(auto_now=True)
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='zmodyfikowano')
 
     class Meta:
         constraints = [
@@ -200,18 +207,20 @@ class StaffMeal(models.Model):
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name='staff_meal',
+        verbose_name='członek staff',
     )
-    day1 = models.BooleanField(default=False)
-    day2 = models.BooleanField(default=False)
-    note = models.TextField(blank=True, default='')
+    day1 = models.BooleanField(default=False, verbose_name='dzień 1')
+    day2 = models.BooleanField(default=False, verbose_name='dzień 2')
+    note = models.TextField(blank=True, default='', verbose_name='uwagi')
     updated_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name='+',
+        verbose_name='zmodyfikowane przez',
     )
-    updated_at = models.DateTimeField(auto_now=True)
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='zmodyfikowano')
 
     class Meta:
         verbose_name = 'obiad Beściaka'
@@ -224,16 +233,17 @@ class StaffMeal(models.Model):
 class StaffMealGuest(models.Model):
     """Manual Beściak row without a system User account on the Obiady Beściaków tab."""
 
-    full_name = models.CharField(max_length=150)
-    day1 = models.BooleanField(default=False)
-    day2 = models.BooleanField(default=False)
-    note = models.TextField(blank=True, default='')
+    full_name = models.CharField(max_length=150, verbose_name='imię i nazwisko')
+    day1 = models.BooleanField(default=False, verbose_name='dzień 1')
+    day2 = models.BooleanField(default=False, verbose_name='dzień 2')
+    note = models.TextField(blank=True, default='', verbose_name='uwagi')
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name='created_staff_meal_guests',
+        verbose_name='utworzone przez',
     )
     updated_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -241,14 +251,15 @@ class StaffMealGuest(models.Model):
         null=True,
         blank=True,
         related_name='+',
+        verbose_name='zmodyfikowane przez',
     )
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='utworzono')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='zmodyfikowano')
 
     class Meta:
         ordering = ['full_name', 'id']
-        verbose_name = 'obiad Beściaka (ręczny)'
-        verbose_name_plural = 'obiady Beściaków (ręczne)'
+        verbose_name = 'gość obiadów Beściaków'
+        verbose_name_plural = 'goście obiadów Beściaków'
 
     def __str__(self):
         return f'{self.full_name} d1={self.day1} d2={self.day2}'
@@ -271,6 +282,7 @@ class StaffMealChange(models.Model):
         null=True,
         blank=True,
         related_name='staff_meal_changes',
+        verbose_name='członek staff',
     )
     staff_guest = models.ForeignKey(
         StaffMealGuest,
@@ -278,18 +290,20 @@ class StaffMealChange(models.Model):
         null=True,
         blank=True,
         related_name='meal_changes',
+        verbose_name='gość bez konta',
     )
-    column_key = models.CharField(max_length=100)
-    old_value = models.JSONField(null=True, blank=True)
-    new_value = models.JSONField(null=True, blank=True)
+    column_key = models.CharField(max_length=100, verbose_name='klucz kolumny')
+    old_value = models.JSONField(null=True, blank=True, verbose_name='poprzednia wartość')
+    new_value = models.JSONField(null=True, blank=True, verbose_name='nowa wartość')
     changed_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name='+',
+        verbose_name='zmienione przez',
     )
-    changed_at = models.DateTimeField(auto_now_add=True)
+    changed_at = models.DateTimeField(auto_now_add=True, verbose_name='zmieniono')
     batch_id = models.UUIDField(db_index=True)
 
     class Meta:
@@ -337,6 +351,7 @@ class SheetCellComment(models.Model):
         null=True,
         blank=True,
         related_name='sheet_comments',
+        verbose_name='firma',
     )
     staff_user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -344,6 +359,7 @@ class SheetCellComment(models.Model):
         null=True,
         blank=True,
         related_name='sheet_row_comments',
+        verbose_name='członek staff',
     )
     staff_guest = models.ForeignKey(
         StaffMealGuest,
@@ -351,33 +367,37 @@ class SheetCellComment(models.Model):
         null=True,
         blank=True,
         related_name='sheet_row_comments',
+        verbose_name='gość bez konta',
     )
-    column_key = models.CharField(max_length=100)
-    sheet_key = models.CharField(max_length=50)
-    tab_key = models.CharField(max_length=50)
+    column_key = models.CharField(max_length=100, verbose_name='klucz kolumny')
+    sheet_key = models.CharField(max_length=50, verbose_name='arkusz')
+    tab_key = models.CharField(max_length=50, verbose_name='zakładka')
     author = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name='authored_sheet_comments',
+        verbose_name='autor',
     )
-    body = models.TextField(max_length=2000)
+    body = models.TextField(max_length=2000, verbose_name='treść')
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
         default=STATUS_PROGRESS,
         db_index=True,
+        verbose_name='status',
     )
     # null = ordinary comment; set = proposed new cell value awaiting review / apply
-    proposed_value = models.JSONField(null=True, blank=True)
+    proposed_value = models.JSONField(null=True, blank=True, verbose_name='proponowana wartość')
     mentions = models.ManyToManyField(
         settings.AUTH_USER_MODEL,
         blank=True,
         related_name='mentioned_in_sheet_comments',
+        verbose_name='wzmianki',
     )
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='utworzono')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='zmodyfikowano')
 
     class Meta:
         indexes = [
@@ -416,14 +436,16 @@ class SheetNotification(models.Model):
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name='sheet_notifications',
+        verbose_name='odbiorca',
     )
     comment = models.ForeignKey(
         SheetCellComment,
         on_delete=models.CASCADE,
         related_name='notifications',
+        verbose_name='komentarz',
     )
-    created_at = models.DateTimeField(auto_now_add=True)
-    read_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='utworzono')
+    read_at = models.DateTimeField(null=True, blank=True, verbose_name='przeczytano')
 
     class Meta:
         constraints = [
@@ -446,18 +468,19 @@ class SheetNotification(models.Model):
 class SheetCustomGroup(models.Model):
     """User-defined column category for a specific sheet tab."""
 
-    sheet_key = models.CharField(max_length=50, db_index=True)
-    tab_key = models.CharField(max_length=50, db_index=True)
-    name = models.CharField(max_length=120)
-    color = models.CharField(max_length=20, blank=True, default='')
+    sheet_key = models.CharField(max_length=50, db_index=True, verbose_name='arkusz')
+    tab_key = models.CharField(max_length=50, db_index=True, verbose_name='zakładka')
+    name = models.CharField(max_length=120, verbose_name='nazwa')
+    color = models.CharField(max_length=20, blank=True, default='', verbose_name='kolor')
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name='+',
+        verbose_name='utworzone przez',
     )
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='utworzono')
 
     class Meta:
         constraints = [
@@ -489,22 +512,23 @@ class SheetCustomColumn(models.Model):
         (KIND_FILE, 'Pliki mediowe'),
     ]
 
-    sheet_key = models.CharField(max_length=50, db_index=True)
-    tab_key = models.CharField(max_length=50, db_index=True)
-    key = models.CharField(max_length=100, unique=True)
-    label = models.CharField(max_length=120)
-    group = models.CharField(max_length=120, blank=True, default='')
-    help_text = models.TextField(max_length=1000, blank=True, default='')
-    kind = models.CharField(max_length=20, choices=KIND_CHOICES, default=KIND_TEXT)
-    edit_roles = models.JSONField(default=list, blank=True)
-    position = models.IntegerField(default=0)
-    hidden_for_all = models.BooleanField(default=False, db_index=True)
+    sheet_key = models.CharField(max_length=50, db_index=True, verbose_name='arkusz')
+    tab_key = models.CharField(max_length=50, db_index=True, verbose_name='zakładka')
+    key = models.CharField(max_length=100, unique=True, verbose_name='klucz')
+    label = models.CharField(max_length=120, verbose_name='etykieta')
+    group = models.CharField(max_length=120, blank=True, default='', verbose_name='kategoria')
+    help_text = models.TextField(max_length=1000, blank=True, default='', verbose_name='opis')
+    kind = models.CharField(max_length=20, choices=KIND_CHOICES, default=KIND_TEXT, verbose_name='typ')
+    edit_roles = models.JSONField(default=list, blank=True, verbose_name='role edytujące')
+    position = models.IntegerField(default=0, verbose_name='pozycja')
+    hidden_for_all = models.BooleanField(default=False, db_index=True, verbose_name='ukryta dla wszystkich')
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name='+',
+        verbose_name='utworzone przez',
     )
     updated_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -512,9 +536,10 @@ class SheetCustomColumn(models.Model):
         null=True,
         blank=True,
         related_name='+',
+        verbose_name='zmodyfikowane przez',
     )
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='utworzono')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='zmodyfikowano')
 
     class Meta:
         ordering = ['position', 'id']

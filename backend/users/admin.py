@@ -49,7 +49,7 @@ class UserAdmin(BaseUserAdmin):
             "fields": ("is_active", "is_staff", "is_superuser", "groups", "user_permissions"),
         }),
         (_("Important dates"), {"fields": ("last_login", "date_joined")}),
-        (_("Custom fields"), {"fields": ("type", "staff_roles", "language")}),
+        ("Ustawienia konta ITP", {"fields": ("type", "staff_roles", "language")}),
     )
     
     add_fieldsets = (
@@ -77,7 +77,7 @@ class PasswordResetRequestAdmin(admin.ModelAdmin):
     def is_valid(self, obj):
         return obj.is_valid()
     is_valid.boolean = True
-    is_valid.short_description = "Is Valid"
+    is_valid.short_description = "Aktywne"
 
 
 @admin.register(StaffInvitation)

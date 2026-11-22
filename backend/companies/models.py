@@ -190,19 +190,21 @@ EQUIPMENT_SPECIAL_CODE_CHOICES = [
 ]
 
 class Company(models.Model):
-    name = models.CharField(max_length=100, unique=True)
-    email = models.EmailField()
+    name = models.CharField(max_length=100, unique=True, verbose_name="nazwa firmy")
+    email = models.EmailField(verbose_name="e-mail")
     representative = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         null=True,
-        related_name="comp_repr"
+        related_name="comp_repr",
+        verbose_name="przedstawiciel",
     )
     fr_resp = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
-        related_name="fr_resp"
+        related_name="fr_resp",
+        verbose_name="opiekun FR",
     )
     opiekun = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -211,16 +213,21 @@ class Company(models.Model):
         blank=True,
         related_name="opiekun_companies",
         verbose_name="opiekun firmy",
-        help_text="Członek stowarzyszenia opiekujący się firmą (konto staff z rolą Opiekun). Inna osoba niż FR.",
+        help_text="Konto staff z rolą Opiekun przypisane do firmy.",
     )
 
     status = models.CharField(
         max_length=10,
         choices=COMPANY_STATUS_CHOICES,
         default=STATUS_BASIC,
+        verbose_name="pakiet",
     )
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="utworzono")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="zmodyfikowano")
+
+    class Meta:
+        verbose_name = "firma"
+        verbose_name_plural = "firmy"
 
     def __str__(self):
         return self.name
@@ -243,29 +250,31 @@ class CompanyInvitation(models.Model):
         ('pl', 'Polish'),
     ]
     
-    email = models.EmailField()
-    company_name = models.CharField(max_length=255)
-    token = models.UUIDField(default=uuid.uuid4, unique=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    expires_at = models.DateTimeField(blank=True, default=get_expiry_time)
-    is_accepted = models.BooleanField(default=False)
-    is_cancelled = models.BooleanField(default=False)
+    email = models.EmailField(verbose_name="e-mail")
+    company_name = models.CharField(max_length=255, verbose_name="nazwa firmy")
+    token = models.UUIDField(default=uuid.uuid4, unique=True, verbose_name="token")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="utworzono")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="zmodyfikowano")
+    expires_at = models.DateTimeField(blank=True, default=get_expiry_time, verbose_name="wygasa")
+    is_accepted = models.BooleanField(default=False, verbose_name="zaakceptowane")
+    is_cancelled = models.BooleanField(default=False, verbose_name="anulowane")
     is_resigned = models.BooleanField(
         default=False,
-        verbose_name="firma rezygnuje",
-        help_text="Zaproszenie anulowane z powodu rezygnacji firmy (sygnał dla logistyki).",
+        verbose_name="rezygnacja firmy",
+        help_text="Wymaga zaznaczenia anulowania zaproszenia.",
     )
     language = models.CharField(
         max_length=5,
         choices=LANGUAGE_CHOICES,
         default='en',
+        verbose_name="język",
     )
 
     company_status = models.CharField(
         max_length=10,
         choices=COMPANY_STATUS_CHOICES,
         default=STATUS_BASIC,
+        verbose_name="pakiet",
     )
     
     created_by = models.ForeignKey(
@@ -274,8 +283,12 @@ class CompanyInvitation(models.Model):
         null=True,
         blank=True,
         related_name='created_invitations',
-        verbose_name='Created by'
+        verbose_name='utworzone przez'
     )
+
+    class Meta:
+        verbose_name = "zaproszenie firmy"
+        verbose_name_plural = "zaproszenia firm"
 
     def is_expired(self):
         return django.utils.timezone.now() > self.expires_at
@@ -309,15 +322,19 @@ class CompanyInvitation(models.Model):
     # null=True -> pole w bazie moze przyjmowac null
 
 class Form(models.Model):
-    company = models.OneToOneField(Company, on_delete=models.CASCADE, related_name='form')
-    current_stage = models.CharField(max_length=20, choices=STAGE_CHOICES, default='stage_1')
-    stage_1_completed = models.BooleanField(default=False)
-    stage_2_completed = models.BooleanField(default=False)
-    stage_3_completed = models.BooleanField(default=False)
-    stage_4_completed = models.BooleanField(default=False)
-    stage_5_completed = models.BooleanField(default=False)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    company = models.OneToOneField(Company, on_delete=models.CASCADE, related_name='form', verbose_name="firma")
+    current_stage = models.CharField(max_length=20, choices=STAGE_CHOICES, default='stage_1', verbose_name="aktualny etap")
+    stage_1_completed = models.BooleanField(default=False, verbose_name="etap 1 ukończony")
+    stage_2_completed = models.BooleanField(default=False, verbose_name="etap 2 ukończony")
+    stage_3_completed = models.BooleanField(default=False, verbose_name="etap 3 ukończony")
+    stage_4_completed = models.BooleanField(default=False, verbose_name="etap 4 ukończony")
+    stage_5_completed = models.BooleanField(default=False, verbose_name="etap 5 ukończony")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="utworzono")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="zmodyfikowano")
+
+    class Meta:
+        verbose_name = "postęp formularza"
+        verbose_name_plural = "postęp formularzy"
 
     def can_access_stage_2(self):
         return self.stage_1_completed
@@ -360,8 +377,8 @@ class MapLayout(models.Model):
     )
 
     class Meta:
-        verbose_name = "Map layout"
-        verbose_name_plural = "Map layouts"
+        verbose_name = "układ mapy"
+        verbose_name_plural = "układy mapy"
 
     def __str__(self):
         return f"MapLayout(sync={self.sync_days})"
@@ -381,10 +398,14 @@ class Deadline(models.Model):
     dl = models.DateTimeField()
 
 class Feedback(models.Model):
-    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="feedback")
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="feedback", verbose_name="firma")
     form = models.CharField(max_length=50, verbose_name="etap formularza")  # lista etapów?
-    status = models.CharField(max_length=30, choices=STATE_OPT, default='pending')
+    status = models.CharField(max_length=30, choices=STATE_OPT, default='pending', verbose_name="status")
     comment = models.TextField(verbose_name="komentarz", blank=True)
+
+    class Meta:
+        verbose_name = "ocena etapu"
+        verbose_name_plural = "oceny etapów"
 
 # FORMULARZE:
 class BasicData(models.Model):
@@ -456,29 +477,37 @@ class EquipmentItem(models.Model):
         null=True,
         unique=True,
         verbose_name="kod specjalnych właściwości",
-        help_text=(
-            "Puste = zwykła pozycja bez ekstra reguł. "
-            "Wybierz co najwyżej jeden kod specjalnych właściwości."
-        ),
+        help_text="Opcjonalna reguła specjalna dla pozycji w formularzu Etapu 2.",
     )
     price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="cena")
     is_basic = models.BooleanField(default=False, verbose_name="wyposażenie podstawowe")
     included_quantity = models.IntegerField(default=0, verbose_name="ilość wliczona (darmowa)")
     category = models.CharField(max_length=100, blank=True, verbose_name="kategoria")
     is_active = models.BooleanField(default=True, verbose_name="aktywne")
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="utworzono")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="zmodyfikowano")
 
     def __str__(self):
         return self.name_en
 
     class Meta:
         ordering = ['category', 'name_en']
+        verbose_name = "pozycja wyposażenia"
+        verbose_name_plural = "pozycje wyposażenia"
 
 
 class EquipmentSelection(models.Model):
-    stand_details = models.ForeignKey(StandDetails, on_delete=models.CASCADE, related_name='equipment_selections')
-    equipment_item = models.ForeignKey(EquipmentItem, on_delete=models.CASCADE)
+    stand_details = models.ForeignKey(
+        StandDetails,
+        on_delete=models.CASCADE,
+        related_name='equipment_selections',
+        verbose_name="szczegóły stoiska",
+    )
+    equipment_item = models.ForeignKey(
+        EquipmentItem,
+        on_delete=models.CASCADE,
+        verbose_name="pozycja wyposażenia",
+    )
     quantity = models.IntegerField(default=1, verbose_name="ilość")
     mount_type = models.CharField(
         max_length=20,
@@ -493,6 +522,8 @@ class EquipmentSelection(models.Model):
 
     class Meta:
         unique_together = ['stand_details', 'equipment_item']
+        verbose_name = "wybrane wyposażenie"
+        verbose_name_plural = "wybrane wyposażenie"
 
 class Jobwall(models.Model):
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="jobwalls")
@@ -503,7 +534,7 @@ class Jobwall(models.Model):
     description = models.TextField(verbose_name="opis stanowiska")
     benefits = models.TextField(verbose_name="co jest oferowane")
     requirements = models.TextField(verbose_name="wymagania")
-    url = models.CharField(max_length=500, verbose_name="application URL or email")
+    url = models.CharField(max_length=500, verbose_name="link aplikacyjny lub e-mail")
     dl = models.ForeignKey(Deadline, on_delete=models.SET_NULL, null=True)
 
 class Workshop(models.Model):
@@ -646,280 +677,240 @@ class Settings(models.Model):
     """
     System-wide settings. Uses singleton pattern - only one instance should exist.
     """
-    # --- Legacy / fallback unit pricing ---
     jobwall_price = models.DecimalField(
-        max_digits=10, 
-        decimal_places=2, 
-        verbose_name="cena za ogłoszenie jobwall (jednostkowa / archiwalna)",
+        max_digits=10,
+        decimal_places=2,
+        verbose_name="Cena pojedynczej oferty JobWall (netto)",
         default=0.00,
-        help_text="Cena jednostkowa fallback; podstawowy cennik jobwall korzysta z pakietów +2 / +3 poniżej."
     )
     jobwall_free_count = models.PositiveIntegerField(
         default=2,
-        verbose_name="liczba darmowych ogłoszeń jobwall (legacy)",
-        help_text="Pole archiwalne fallback; limity zależne od pakietu konfiguruje się poniżej.",
+        verbose_name="Domyślny limit darmowych ofert JobWall",
     )
     lunch_price = models.DecimalField(
         max_digits=10,
         decimal_places=2,
-        verbose_name="cena za dodatkowy obiad (netto)",
+        verbose_name="Cena dodatkowego obiadu (netto)",
         default=0.00,
-        help_text="Cena netto za każdy dodatkowy obiad ponad limit darmowych obiadów dziennie przypisany do pakietu."
     )
 
     # --- Stand pricing — Wystawca (Basic), netto ---
     stand_price_4m2_1d = models.DecimalField(
         max_digits=10, decimal_places=2, default=5950.00,
-        verbose_name="Stoisko 4 m² — 1 dzień (netto)",
-        help_text="Cena netto stoiska podstawowego (4 m²) na 1 dzień.",
+        verbose_name="Stoisko 4 m² — 1 dzień",
     )
     stand_price_4m2_2d = models.DecimalField(
         max_digits=10, decimal_places=2, default=10120.00,
-        verbose_name="Stoisko 4 m² — 2 dni (netto)",
-        help_text="Cena netto stoiska podstawowego (4 m²) na 2 dni.",
+        verbose_name="Stoisko 4 m² — 2 dni",
     )
     stand_price_6m2_1d = models.DecimalField(
         max_digits=10, decimal_places=2, default=8550.00,
-        verbose_name="Stoisko 6 m² — 1 dzień (netto)",
-        help_text="Cena netto stoiska standardowego (6 m²) na 1 dzień.",
+        verbose_name="Stoisko 6 m² — 1 dzień",
     )
     stand_price_6m2_2d = models.DecimalField(
         max_digits=10, decimal_places=2, default=14530.00,
-        verbose_name="Stoisko 6 m² — 2 dni (netto)",
-        help_text="Cena netto stoiska standardowego (6 m²) na 2 dni.",
+        verbose_name="Stoisko 6 m² — 2 dni",
     )
     stand_price_8m2_1d = models.DecimalField(
         max_digits=10, decimal_places=2, default=10710.00,
-        verbose_name="Stoisko 8 m² — 1 dzień (netto)",
-        help_text="Cena netto stoiska rozszerzonego (8 m²) na 1 dzień.",
+        verbose_name="Stoisko 8 m² — 1 dzień",
     )
     stand_price_8m2_2d = models.DecimalField(
         max_digits=10, decimal_places=2, default=18200.00,
-        verbose_name="Stoisko 8 m² — 2 dni (netto)",
-        help_text="Cena netto stoiska rozszerzonego (8 m²) na 2 dni.",
+        verbose_name="Stoisko 8 m² — 2 dni",
     )
     stand_price_12m2_1d = models.DecimalField(
         max_digits=10, decimal_places=2, default=0.00,
-        verbose_name="Stoisko 12 m² — 1 dzień (netto)",
-        help_text="Cena netto stoiska 12 m² na 1 dzień (0 = nieustalona / wycena indywidualna).",
+        verbose_name="Stoisko 12 m² — 1 dzień",
+        help_text="0 = wycena indywidualna.",
     )
     stand_price_12m2_2d = models.DecimalField(
         max_digits=10, decimal_places=2, default=0.00,
-        verbose_name="Stoisko 12 m² — 2 dni (netto)",
-        help_text="Cena netto stoiska 12 m² na 2 dni (0 = nieustalona / wycena indywidualna).",
+        verbose_name="Stoisko 12 m² — 2 dni",
+        help_text="0 = wycena indywidualna.",
     )
 
     # --- Partner packages (2 days, 8 m²), netto ---
     partner_package_price = models.DecimalField(
         max_digits=10, decimal_places=2, default=24880.00,
-        verbose_name="Pakiet Partner — 2 dni, 8 m² (netto)",
-        help_text="Cena netto pakietu Partner.",
+        verbose_name="Pakiet Partner (2 dni, 8 m²)",
     )
     main_partner_package_price = models.DecimalField(
         max_digits=10, decimal_places=2, default=28120.00,
-        verbose_name="Pakiet Partner Główny — 2 dni, 8 m² (netto)",
-        help_text="Cena netto pakietu Partner Główny.",
+        verbose_name="Pakiet Partner Główny (2 dni, 8 m²)",
     )
 
     # --- JobWall quotas & packs, netto ---
     jobwall_free_basic_early = models.PositiveIntegerField(
         default=1,
-        verbose_name="Darmowe JobWall — Wystawca do terminu",
-        help_text="Liczba darmowych ofert JobWall dla Wystawcy przy rejestracji do terminu wczesnej rejestracji.",
+        verbose_name="Wystawca — darmowe oferty (wczesna rejestracja)",
     )
     jobwall_early_deadline = models.DateField(
         default=_default_jobwall_early_deadline,
-        verbose_name="Termin wczesnej rejestracji (JobWall gratis)",
-        help_text="Data graniczna (włącznie) rejestracji firmy dająca wczesny limit darmowych ofert JobWall dla Wystawcy.",
+        verbose_name="Termin wczesnej rejestracji",
+        help_text="Włącznie z tym dniem obowiązuje wczesny limit dla Wystawcy.",
     )
     jobwall_free_basic_late = models.PositiveIntegerField(
         default=0,
-        verbose_name="Darmowe JobWall — Wystawca po terminie",
-        help_text="Liczba darmowych ofert JobWall dla Wystawcy po terminie wczesnej rejestracji.",
+        verbose_name="Wystawca — darmowe oferty (po terminie)",
     )
     jobwall_free_partner = models.PositiveIntegerField(
         default=4,
-        verbose_name="Darmowe JobWall — Partner",
-        help_text="Liczba darmowych ofert JobWall w pakiecie Partner.",
+        verbose_name="Partner — darmowe oferty",
     )
     jobwall_free_main = models.PositiveIntegerField(
         default=7,
-        verbose_name="Darmowe JobWall — Partner Główny",
-        help_text="Liczba darmowych ofert JobWall w pakiecie Partner Główny.",
+        verbose_name="Partner Główny — darmowe oferty",
     )
     jobwall_pack_2_price = models.DecimalField(
         max_digits=10, decimal_places=2, default=480.00,
-        verbose_name="Pakiet +2 oferty JobWall (netto)",
-        help_text="Cena netto za 1–2 płatne oferty JobWall ponad darmowy limit.",
+        verbose_name="Pakiet +2 oferty (netto)",
+        help_text="Opłata za 1–2 dodatkowe oferty ponad limit pakietu.",
     )
     jobwall_pack_3_price = models.DecimalField(
         max_digits=10, decimal_places=2, default=630.00,
-        verbose_name="Pakiet +3 oferty JobWall (netto)",
-        help_text="Cena netto za 3 płatne oferty JobWall ponad darmowy limit.",
+        verbose_name="Pakiet +3 oferty (netto)",
+        help_text="Opłata za 3 dodatkowe oferty ponad limit pakietu.",
     )
     jobwall_max_extra_offers = models.PositiveIntegerField(
         default=3,
-        verbose_name="Maks. dodatkowych płatnych ofert JobWall",
-        help_text="Maksymalna liczba płatnych ofert JobWall ponad limit pakietu.",
+        verbose_name="Limit dodatkowych płatnych ofert",
     )
 
     # --- Lunch quotas per day ---
     lunches_free_basic = models.PositiveIntegerField(
         default=2,
-        verbose_name="Darmowe obiady / dzień — Wystawca",
-        help_text="Liczba darmowych obiadów na dzień dla pakietu Wystawca.",
+        verbose_name="Wystawca — darmowe obiady dziennie",
     )
     lunches_free_partner = models.PositiveIntegerField(
         default=6,
-        verbose_name="Darmowe obiady / dzień — Partner",
-        help_text="Liczba darmowych obiadów na dzień dla pakietu Partner.",
+        verbose_name="Partner — darmowe obiady dziennie",
     )
     lunches_free_main = models.PositiveIntegerField(
         default=10,
-        verbose_name="Darmowe obiady / dzień — Partner Główny",
-        help_text="Liczba darmowych obiadów na dzień dla pakietu Partner Główny.",
+        verbose_name="Partner Główny — darmowe obiady dziennie",
     )
     stage_1_deadline = models.DateTimeField(
         null=True,
         blank=True,
-        verbose_name="termin etapu 1",
-        help_text="Globalny termin dla etapu 1 (Dane podstawowe)"
+        verbose_name="Etap 1 — Dane podstawowe",
     )
     stage_2_deadline = models.DateTimeField(
         null=True,
         blank=True,
-        verbose_name="termin etapu 2",
-        help_text="Globalny termin dla etapu 2 (Wyposażenie)"
+        verbose_name="Etap 2 — Wyposażenie stoiska",
     )
     stage_3_deadline = models.DateTimeField(
         null=True,
         blank=True,
-        verbose_name="termin etapu 3",
-        help_text="Globalny termin dla etapu 3 (Warsztaty)"
+        verbose_name="Etap 3 — Warsztaty",
     )
     stage_4_deadline = models.DateTimeField(
         null=True,
         blank=True,
-        verbose_name="termin etapu 4",
-        help_text="Globalny termin dla etapu 4 (Jobwall)"
+        verbose_name="Etap 4 — Katalog i JobWall",
     )
     stage_5_deadline = models.DateTimeField(
         null=True,
         blank=True,
-        verbose_name="termin etapu 5",
-        help_text="Globalny termin dla etapu 5 (Inne dane)"
+        verbose_name="Etap 5 — Dane końcowe",
     )
     mail_1_send_by = models.DateField(
         default=datetime.date(2027, 2, 25),
-        verbose_name="termin wysyłki maila 1",
-        help_text="Do kiedy wysłać Mail #1 (potwierdzenie zamówienia). Widać w nagłówku grupy w arkuszu.",
+        verbose_name="Mail #1 — potwierdzenie zamówienia",
     )
     mail_2_send_by = models.DateField(
         default=datetime.date(2027, 2, 27),
-        verbose_name="termin wysyłki maila 2",
-        help_text="Do kiedy wysłać Mail #2 (zaproszenie na galę PDI). Widać w nagłówku grupy w arkuszu.",
+        verbose_name="Mail #2 — zaproszenie na galę PDI",
     )
     mail_3_send_by = models.DateField(
         default=datetime.date(2027, 3, 3),
-        verbose_name="termin wysyłki maila 3",
-        help_text="Do kiedy wysłać Mail #3 (informator i parking). Widać w nagłówku grupy w arkuszu.",
+        verbose_name="Mail #3 — informator i parking",
     )
     mail_4_send_by = models.DateField(
         default=datetime.date(2027, 3, 5),
-        verbose_name="termin wysyłki maila 4",
-        help_text="Do kiedy wysłać Mail #4 (osobiste zaproszenie na PDI). Widać w nagłówku grupy w arkuszu.",
+        verbose_name="Mail #4 — imienne zaproszenie na PDI",
     )
     mail_5_send_by = models.DateField(
         default=datetime.date(2027, 3, 9),
-        verbose_name="termin wysyłki maila 5",
-        help_text="Kiedy wysłać Mail #5 (powitanie na targach). Widać w nagłówku grupy w arkuszu.",
+        verbose_name="Mail #5 — powitanie na targach",
     )
     day1_date = models.DateField(
         null=True,
         blank=True,
-        verbose_name="dzień 1 targów",
-        help_text="Data pierwszego dnia targów (np. 2025-03-10)"
+        verbose_name="Dzień 1 targów",
     )
     day2_date = models.DateField(
         null=True,
         blank=True,
-        verbose_name="dzień 2 targów",
-        help_text="Data drugiego dnia targów (np. 2025-03-11)"
+        verbose_name="Dzień 2 targów",
     )
     invitation_validity_days = models.PositiveSmallIntegerField(
         default=7,
         validators=[MinValueValidator(1), MaxValueValidator(30)],
-        verbose_name="ważność zaproszenia (dni)",
-        help_text="Liczba dni ważności nowo wysłanych linków zaproszenia (1–30). Nie zmienia już wysłanych zaproszeń."
+        verbose_name="Ważność zaproszenia (dni)",
+        help_text="Dotyczy nowo tworzonych zaproszeń (1–30 dni).",
     )
     invitation_reminder_count = models.PositiveSmallIntegerField(
         default=2,
         validators=[MinValueValidator(0), MaxValueValidator(3)],
-        verbose_name="liczba przypomnień o wygaśnięciu",
-        help_text="Set to 0 to disable invitation expiry reminders. Max 3 reminders."
+        verbose_name="Liczba przypomnień (0–3)",
+        help_text="0 wyłącza automatyczne przypomnienia o wygaśnięciu.",
     )
     invitation_reminder_1_days = models.PositiveSmallIntegerField(
         default=2,
         null=True,
         blank=True,
-        verbose_name="przypomnienie 1 (dni przed wygaśnięciem)",
+        verbose_name="Przypomnienie 1 (dni przed wygaśnięciem)",
     )
     invitation_reminder_2_days = models.PositiveSmallIntegerField(
         default=1,
         null=True,
         blank=True,
-        verbose_name="przypomnienie 2 (dni przed wygaśnięciem)",
+        verbose_name="Przypomnienie 2 (dni przed wygaśnięciem)",
     )
     invitation_reminder_3_days = models.PositiveSmallIntegerField(
         null=True,
         blank=True,
-        verbose_name="przypomnienie 3 (dni przed wygaśnięciem)",
+        verbose_name="Przypomnienie 3 (dni przed wygaśnięciem)",
     )
     general_contact_email = models.EmailField(
         default="best@best.pw.edu.pl",
-        verbose_name="ogólny kontakt (maile do firm)",
-        help_text="Adres w stopkach maili do wystawców/firm (zaproszenia, akceptacje, przypomnienia etapów itd.).",
+        verbose_name="Kontakt ogólny (maile do wystawców)",
     )
     system_admin_email = models.EmailField(
         default="admin@example.com",
-        verbose_name="administrator systemu (maile do staff/FR)",
-        help_text="Adres w stopkach maili do opiekunów FR i staff. Ustaw właściwy adres w panelu admina na produkcji.",
+        verbose_name="Administrator systemu (alerty i maile do staff)",
     )
     terms_pdf = models.FileField(
         upload_to="terms",
         blank=True,
         null=True,
-        verbose_name="regulamin (PDF)",
-        help_text="PDF regulaminu pokazywany firmom przy zapisie etapu 1. Podmiana w adminie bez redeployu frontendu.",
+        verbose_name="Regulamin targów (PDF)",
+        help_text="Wyświetlany przy zapisie Etapu 1.",
     )
     carpet_catalog_image = models.ImageField(
         upload_to="carpet_catalog",
         blank=True,
         null=True,
-        verbose_name="katalog wykładzin (obraz)",
-        help_text=(
-            "Rozpiska RIPS/WELUR (JPG/PNG/WebP) pokazywana partnerom w dużym dialogu Etapu 2. "
-            "Podmiana w adminie bez redeployu frontendu."
-        ),
+        verbose_name="Katalog wykładzin (obraz)",
+        help_text="Wzornik kolorów RIPS/WELUR dla partnerów w Etapie 2.",
     )
     edition_number = models.PositiveSmallIntegerField(
         default=33,
         validators=[MinValueValidator(1), MaxValueValidator(99)],
-        verbose_name="numer edycji",
-        help_text=(
-            "Numer edycji Targów Pracy (np. 33). Widoczny w nazwie systemu w panelu i tytule przeglądarki. "
-            "Zmiana w adminie bez redeployu frontendu."
-        ),
+        verbose_name="Numer edycji",
+        help_text="Wyświetlany w nazwie systemu i tytule karty przeglądarki.",
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        verbose_name = "Settings"
-        verbose_name_plural = "Settings"
+        verbose_name = "ustawienia systemu"
+        verbose_name_plural = "ustawienia systemu"
 
     def __str__(self):
-        return "System Settings"
+        return "Ustawienia systemu"
 
     @classmethod
     def get_settings(cls):
@@ -1026,22 +1017,23 @@ class InvitationExpiryReminderSent(models.Model):
     RECIPIENT_EXHIBITOR = "exhibitor"
     RECIPIENT_STAFF = "staff"
     RECIPIENT_CHOICES = [
-        (RECIPIENT_EXHIBITOR, "Exhibitor"),
-        (RECIPIENT_STAFF, "Staff"),
+        (RECIPIENT_EXHIBITOR, "Wystawca"),
+        (RECIPIENT_STAFF, "Opiekun FR"),
     ]
 
     invitation = models.ForeignKey(
         CompanyInvitation,
         on_delete=models.CASCADE,
         related_name="expiry_reminders_sent",
+        verbose_name="zaproszenie",
     )
-    days_before = models.PositiveSmallIntegerField()
-    recipient = models.CharField(max_length=20, choices=RECIPIENT_CHOICES)
-    sent_at = models.DateTimeField(auto_now_add=True)
+    days_before = models.PositiveSmallIntegerField(verbose_name="dni przed wygaśnięciem")
+    recipient = models.CharField(max_length=20, choices=RECIPIENT_CHOICES, verbose_name="odbiorca")
+    sent_at = models.DateTimeField(auto_now_add=True, verbose_name="wysłano")
 
     class Meta:
-        verbose_name = "Company reminder"
-        verbose_name_plural = "Company reminders"
+        verbose_name = "wysłane przypomnienie o zaproszeniu"
+        verbose_name_plural = "wysłane przypomnienia o zaproszeniach"
         unique_together = ("invitation", "days_before", "recipient")
 
     def __str__(self):
@@ -1055,52 +1047,53 @@ class WebsitePublication(models.Model):
         Company,
         on_delete=models.CASCADE,
         related_name="website_publication",
+        verbose_name="firma",
     )
-    strapi_document_id = models.CharField(max_length=64, blank=True, default="")
-    strapi_logo_id = models.PositiveIntegerField(null=True, blank=True)
-    strapi_logo_sha256 = models.CharField(max_length=64, blank=True, default="")
+    strapi_document_id = models.CharField(max_length=64, blank=True, default="", verbose_name="ID dokumentu Strapi")
+    strapi_logo_id = models.PositiveIntegerField(null=True, blank=True, verbose_name="ID logotypu Strapi")
+    strapi_logo_sha256 = models.CharField(max_length=64, blank=True, default="", verbose_name="hash SHA-256 logotypu")
     # {"<Jobwall.id>": {"documentId": "...", "title": "..."}} for job offers pushed to the website.
-    strapi_jobs = models.JSONField(default=dict, blank=True)
-    payload_hash = models.CharField(max_length=64, blank=True, default="")
-    last_exported_at = models.DateTimeField(null=True, blank=True)
-    last_error = models.TextField(blank=True, default="")
+    strapi_jobs = models.JSONField(default=dict, blank=True, verbose_name="oferty pracy w Strapi")
+    payload_hash = models.CharField(max_length=64, blank=True, default="", verbose_name="hash danych")
+    last_exported_at = models.DateTimeField(null=True, blank=True, verbose_name="ostatni eksport")
+    last_error = models.TextField(blank=True, default="", verbose_name="ostatni błąd")
 
     class Meta:
-        verbose_name = "Website publication"
-        verbose_name_plural = "Website publications"
+        verbose_name = "publikacja na stronie"
+        verbose_name_plural = "publikacje na stronie"
 
     def __str__(self):
         return f"WebsitePublication({self.company_id}, {self.strapi_document_id or '—'})"
 
 
 FAQ_CATEGORY_CHOICES = [
-    ('general', 'General'),
-    ('logistics', 'Logistics'),
-    ('materials', 'Promotional materials & setup'),
-    ('ownConstruction', 'Own construction'),
-    ('workshops', 'Workshops'),
-    ('support', 'Support & catering'),
-    ('pdiVenue', 'PDI Gala'),
+    ('general', 'Informacje ogólne'),
+    ('logistics', 'Logistyka i dojazd'),
+    ('materials', 'Materiały promocyjne i stoisko'),
+    ('ownConstruction', 'Własna zabudowa'),
+    ('workshops', 'Warsztaty'),
+    ('support', 'Wsparcie i wyżywienie'),
+    ('pdiVenue', 'Gala PDI'),
 ]
 
 
 class FAQItem(models.Model):
     """Editable FAQ entries shown to exhibitors and managed by Admin / FR."""
 
-    category = models.CharField(max_length=50, choices=FAQ_CATEGORY_CHOICES, default='general')
-    question_pl = models.CharField(max_length=500)
-    answer_pl = models.TextField()
-    question_en = models.CharField(max_length=500)
-    answer_en = models.TextField()
-    order = models.PositiveIntegerField(default=0)
-    is_active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    category = models.CharField(max_length=50, choices=FAQ_CATEGORY_CHOICES, default='general', verbose_name="kategoria")
+    question_pl = models.CharField(max_length=500, verbose_name="pytanie (PL)")
+    answer_pl = models.TextField(verbose_name="odpowiedź (PL)")
+    question_en = models.CharField(max_length=500, verbose_name="pytanie (EN)")
+    answer_en = models.TextField(verbose_name="odpowiedź (EN)")
+    order = models.PositiveIntegerField(default=0, verbose_name="kolejność")
+    is_active = models.BooleanField(default=True, verbose_name="aktywne")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="utworzono")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="zmodyfikowano")
 
     class Meta:
         ordering = ['category', 'order', 'id']
-        verbose_name = "FAQ entry"
-        verbose_name_plural = "FAQ entries"
+        verbose_name = "pytanie FAQ"
+        verbose_name_plural = "pytania FAQ"
 
     def __str__(self):
         return f"[{self.category}] {self.question_pl[:60]}"

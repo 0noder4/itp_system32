@@ -13,6 +13,42 @@ export type UpdateOverviewEntry = {
 
 export const updateOverviews: readonly UpdateOverviewEntry[] = [
   {
+    releaseDate: "2026-11-22",
+    highlights: [
+      "Cennik w ustawieniach systemu (stoiska 4–12 m², pakiety Partner / Partner Główny, pakiety JobWall +2/+3 i limity obiadów) oraz podsumowanie kosztów netto w formularzach wystawcy i w arkuszu FR.",
+      "Nowy, zwięzły PDF podsumowania zamówienia z rozliczeniem kosztów netto, krótszą nazwą pliku, poprawnym tytułem dokumentu oraz przyciskiem pobierania w szczegółach firmy dla FR.",
+      "Zarządzanie pytaniami FAQ w panelu staff (dla roli FR): dodawanie, edycja PL/EN, kolejność, ukrywanie i kategorie — z dynamiczną listą FAQ u wystawcy.",
+      "Filtry na liście firm: wielokrotny wybór statusów, opiekunów FR i etapów, nowy filtr Opiekuna firmy, oznaczenie języka EN przy firmie oraz podpowiedź o komentarzu po angielsku przy ocenie etapu.",
+      "Mapa stoisk: pobieranie mapy do pliku PNG (z legendą aktywnego widoku) u wystawcy i staff oraz nowy widok „Czysty układ (bez firm)”.",
+      "Arkusze: dodawanie i usuwanie osób bez konta (gości) na zakładce Obiady Beściaków oraz podgląd propozycji i wersji roboczych w historii komórki.",
+      "Poprawione pobieranie archiwum .zip w „Eksportuj Pliki Mediowe” (bez podkreślnika na końcu rozszerzenia) oraz spójny polski panel Django Admin z odchudzonymi opisami.",
+    ],
+    worthChecking: [
+      "Panel staff → FAQ w menu bocznym → dodaj / edytuj pytanie PL i EN → sprawdź widok FAQ w panelu wystawcy.",
+      "Panel FR → Edytuj filtry → zaznacz kilka statusów oraz filtr Opiekun firmy → sprawdź badge EN przy firmie anglojęzycznej i pobierz PDF podsumowania zamówienia z karty firmy.",
+      "Panel staff → Mapa → Widoki → „Czysty układ (bez firm)” oraz przycisk Pobierz PNG (także w panelu wystawcy → Mapa).",
+      "Arkusze → Opiekun → Obiady Beściaków → Dodaj osobę (bez konta) → edytuj komórki i usuń wiersz; w arkuszu FR sprawdź kolumnę kosztu pakietu.",
+      "Panel FR → Eksportuj Pliki Mediowe → sprawdź, że pobrany plik ma rozszerzenie .zip i otwiera się bezpośrednio.",
+      "Django Admin (/admin/) → Ustawienia systemu → sprawdź spójne polskie nazewnictwo i cennik.",
+      "Po zalogowaniu → przegląd aktualizacji → daty 22.11.2026 oraz 21.11.2026.",
+    ],
+  },
+  {
+    releaseDate: "2026-11-21",
+    highlights: [
+      "Arkusze: własne kolumny (tekst, długi opis, pliki mediowe z wieloma załącznikami) oraz własne kategorie kolumn z wyborem koloru.",
+      "Ustawienia arkusza: przenoszenie kolumn między kategoriami (przeciągnij i upuść), ukrywanie własnych kolumn dla wszystkich oraz przycisk Cofnij zmiany układu.",
+      "Etap 2 i arkusze: rozdzielenie wymiarów własnej zabudowy od listy przywożonego sprzętu i elementów zabudowy.",
+      "Backupy i bezpieczeństwo danych: nocny ratunkowy eksport arkuszy do plików XLSX, kopia zapasowa mediafiles oraz alerty e-mail przy awarii backupu.",
+    ],
+    worthChecking: [
+      "Arkusze → Ustawienia → Dodaj kategorię i własną kolumnę (np. Pliki mediowe) → wgraj załączniki dwuklikiem w komórce.",
+      "Arkusze → Ustawienia → przeciągnij kolumnę do innej kategorii → użyj Cofnij lub Zapisz układ.",
+      "Panel firmy → Etap 2 (własna zabudowa) → osobne pole wymiarów i przywożonego sprzętu; sprawdź oba pola w arkuszu LG / Opiekun.",
+      "Po zalogowaniu → przegląd aktualizacji → przełącz datę na 21.11.2026.",
+    ],
+  },
+  {
     releaseDate: "2026-11-18",
     highlights: [
       "Arkusze: komentarze w komórkach z @oznaczeniem osób — dzwonek powiadomień w nagłówku staff.",
@@ -156,43 +192,6 @@ export const updateOverviews: readonly UpdateOverviewEntry[] = [
       "Django Admin → Settings → numer edycji / liczba darmowych ogłoszeń Jobwall → odśwież panel (nazwa System XX).",
       "Panel firmy → Etap 1 → zapis bez numeru domu / lokalu.",
       "Panel staff → po zalogowaniu → przegląd aktualizacji → data 11.10.2026.",
-    ],
-  },
-  {
-    releaseDate: "2026-09-22",
-    highlights: [
-      "W etapie 2 firma potwierdza checkboxem, że w etapie 5 poda moc elektryczną — widać to też w podglądzie staff.",
-      "Certyfikat o niepalności przy własnej zabudowie nie blokuje wysyłki etapu 2; przy odrzuceniu bez certyfikatu widać ostrzeżenie z terminami.",
-      "Brak certyfikatu na 6 tygodni przed finałem może automatycznie odrzucić etap 2 (z powiadomieniem do firmy).",
-      "Firma może zapisać wersję roboczą etapu bez wysyłki do weryfikacji (bez maila do FR).",
-      "Na zablokowanym etapie (oczekuje / zaakceptowany) nie widać już szarego przycisku Prześlij.",
-      "Przyciski Odrzuć w panelu firmy są czerwone; w przeglądzie aktualizacji można przełączać daty wydań.",
-      "Regulamin w etapie 1 bierze PDF z ustawień systemu (bez redeployu samego pliku w frontcie).",
-      "W ciemnym motywie zaznaczone checkboxy i radiobuttony są czytelne (pomarańczowe wypełnienie).",
-    ],
-    worthChecking: [
-      "Panel firmy → Etap 2 → checkbox mocy + opcjonalny certyfikat / hint z datą → Zapisz wersję roboczą.",
-      "Panel firmy → etap „Oczekuje na akceptację” → brak przycisku Prześlij, pola tylko do odczytu.",
-      "Panel staff → firma → Etap 2 → Odrzuć (gdy brak certyfikatu) → ostrzeżenie z datami; Anuluj bez wysyłki.",
-      "Panel staff → po zalogowaniu → przegląd aktualizacji → przełącz datę wydania → Zamknij.",
-      "Panel firmy → Etap 1 → Prześlij → dialog regulaminu → link „Zobacz regulamin”.",
-      "Panel firmy → ciemny motyw → Etap 2/3/5 → zaznacz checkbox lub radio.",
-    ],
-  },
-  {
-    releaseDate: "2026-09-18",
-    highlights: [
-      "Etap 3 (warsztaty) ma pełny formularz: nazwa, opis, dzień i godzina, umiejętności, kierunki studiów, udogodnienia sali.",
-      "Można dodać prowadzących warsztatu (imię, nazwisko, telefon, opis) oraz telefon kontaktowy ds. warsztatów.",
-      "Zwykli wystawcy (basic) pomijają etap 3 — od razu odblokowują kolejne etapy bez wypełniania warsztatów.",
-      "Wymagany jest świadomy wybór: firma musi kliknąć tak lub nie przy warsztacie (nie da się przejść z pustym wyborem).",
-      "Eksport CSV zawiera kolumny ze szczegółami warsztatu i prowadzącymi.",
-    ],
-    worthChecking: [
-      "Panel firmy (main/partner) → Etap 3 → wypełnij warsztat z prowadzącym i zapisz szkic / wyślij.",
-      "Panel firmy (basic) → sprawdź, że etap 3 jest niedostępny, a etap 4 się odblokowuje.",
-      "Panel staff → firma → podgląd etapu 3: szczegóły warsztatu i lista prowadzących.",
-      "Panel staff → eksport CSV → w pliku kolumny warsztatów (nazwa, dzień, godzina, prowadzący…).",
     ],
   },
 ];

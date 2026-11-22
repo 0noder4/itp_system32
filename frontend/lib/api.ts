@@ -433,18 +433,10 @@ export const downloadCompaniesCSV = async (
     const link = document.createElement("a");
     link.href = url;
 
-    // Extract filename from Content-Disposition header if available
-    const contentDisposition = response.headers["content-disposition"];
-    let filename = "companies_export.csv";
-    if (contentDisposition) {
-      // Handle both regular filename and RFC 5987 encoded filename (filename*=UTF-8''...)
-      const filenameMatch =
-        contentDisposition.match(/filename\*=UTF-8''(.+)/i) ||
-        contentDisposition.match(/filename="?(.+)"?/i);
-      if (filenameMatch) {
-        filename = decodeURIComponent(filenameMatch[1]);
-      }
-    }
+    const filename = extractDownloadFilename(
+      response.headers["content-disposition"],
+      "companies_export.csv"
+    );
 
     link.setAttribute("download", filename);
     document.body.appendChild(link);
@@ -452,7 +444,7 @@ export const downloadCompaniesCSV = async (
 
     // Cleanup
     link.parentNode?.removeChild(link);
-    window.URL.revokeObjectURL(url);
+    window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
   } catch (error: any) {
     const errorMessage =
       error.response?.data?.detail ||
@@ -495,17 +487,10 @@ export const downloadMediaFiles = async (): Promise<void> => {
     const link = document.createElement("a");
     link.href = url;
 
-    // Extract filename from Content-Disposition header if available
-    const contentDisposition = response.headers["content-disposition"];
-    let filename = "media_files.zip";
-    if (contentDisposition) {
-      const filenameMatch =
-        contentDisposition.match(/filename\*=UTF-8''(.+)/i) ||
-        contentDisposition.match(/filename="?(.+)"?/i);
-      if (filenameMatch) {
-        filename = decodeURIComponent(filenameMatch[1]);
-      }
-    }
+    const filename = extractDownloadFilename(
+      response.headers["content-disposition"],
+      "media_files.zip"
+    );
 
     link.setAttribute("download", filename);
     document.body.appendChild(link);
@@ -513,7 +498,7 @@ export const downloadMediaFiles = async (): Promise<void> => {
 
     // Cleanup
     link.parentNode?.removeChild(link);
-    window.URL.revokeObjectURL(url);
+    window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
   } catch (error: any) {
     const errorMessage =
       error.response?.data?.detail ||
