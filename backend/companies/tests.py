@@ -1038,3 +1038,622 @@ class CompanyEndpointsPermissionTests(TestCase):
         names = {row["username"] for row in self.client.get("/api/staff/").data}
         self.assertIn("perm-staff", names)
         self.assertNotIn("perm-tr2", names)
+
+
+class StageValidationAndPrivacyRegressionTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.owner = User.objects.create_user(
+            username="reg-owner",
+            email="reg-owner@example.com",
+            password="x",
+            type="company",
+        )
+        self.fr = User.objects.create_user(
+            username="reg-fr",
+            email="reg-fr@best.pw.edu.pl",
+            password="x",
+            type="staff",
+            staff_roles=["fr"],
+        )
+        self.opiekun = User.objects.create_user(
+            username="reg-opiekun",
+            email="reg-op@best.pw.edu.pl",
+            password="x",
+            type="staff",
+            staff_roles=["opiekun"],
+        )
+        self.tr = User.objects.create_user(
+            username="reg-tr",
+            email="reg-tr@best.pw.edu.pl",
+            password="x",
+            type="staff",
+            staff_roles=["tr"],
+        )
+        self.partner = Company.objects.create(
+            name="Partner Test",
+            email="partner-reg@example.com",
+            status="partner",
+            representative=self.owner,
+            fr_resp=self.fr,
+            opiekun=self.opiekun,
+        )
+        from companies.models import Form
+
+        self.form = Form.objects.create(company=self.partner)
+        Feedback.objects.create(company=self.partner, form="stage_1", status="accepted")
+        Feedback.objects.create(company=self.partner, form="stage_2", status="accepted")
+
+    def test_stage3_preferred_time_empty_string_is_coerced_to_none(self):
+        self.client.force_authenticate(self.owner)
+        resp = self.client.post(
+            f"/api/company/{self.partner.id}/form/stage-3/",
+            {
+                "workshop": False,
+                "title": "",
+                "descr": "",
+                "skills": "",
+                "study_majors": "",
+                "room_projector": False,
+                "room_hdmi": False,
+                "preferred_day": "",
+                "preferred_time": "",
+                "contact_phone": "",
+                "facilitators": [],
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED, resp.data)
+        self.assertIsNone(resp.data["preferred_time"])
+
+    def test_equipment_and_lunch_quantity_caps_reject_excess_values(self):
+        from companies.models import EquipmentItem
+        from companies.serializers import EquipmentSelectionSerializer, LunchSerializer
+
+        item = EquipmentItem.objects.create(name_pl="Krzesło", name_en="Chair", price="50.00")
+        bad_eq = EquipmentSelectionSerializer(data={"equipment_item_id": item.id, "quantity": 51})
+        self.assertFalse(bad_eq.is_valid())
+        self.assertIn("quantity", bad_eq.errors)
+
+        ok_eq = EquipmentSelectionSerializer(data={"equipment_item_id": item.id, "quantity": 50})
+        self.assertTrue(ok_eq.is_valid(), ok_eq.errors)
+
+        bad_lunch = LunchSerializer(data={"day": "day1", "lunch_quantity": 101, "diet_info": ""})
+        self.assertFalse(bad_lunch.is_valid())
+        self.assertIn("lunch_quantity", bad_lunch.errors)
+
+        ok_lunch = LunchSerializer(data={"day": "day1", "lunch_quantity": 100, "diet_info": ""})
+        self.assertTrue(ok_lunch.is_valid(), ok_lunch.errors)
+
+    def test_staff_list_role_opiekun_filters_and_hides_date_joined(self):
+        self.client.force_authenticate(self.fr)
+        resp = self.client.get("/api/staff/?role=opiekun")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        usernames = {row["username"] for row in resp.data}
+        self.assertIn("reg-opiekun", usernames)
+        self.assertNotIn("reg-tr", usernames)
+        for row in resp.data:
+            self.assertNotIn("date_joined", row)
+
+
+class PricingAndOrderPdfTests(TestCase):
+    def setUp(self):
+        from companies.models import Settings
+
+        self.client = APIClient()
+        self.sys_settings = Settings.get_settings()
+        self.owner = User.objects.create_user(
+            username="price-owner",
+            email="price-owner@example.com",
+            password="x",
+            type="company",
+        )
+        self.fr = User.objects.create_user(
+            username="price-fr",
+            email="price-fr@best.pw.edu.pl",
+            password="x",
+            type="staff",
+            staff_roles=["fr"],
+        )
+
+    def test_pricing_engine_base_jobwall_and_lunch_quotas(self):
+        from decimal import Decimal
+        from companies.models import (
+            EquipmentItem,
+            EquipmentSelection,
+            FinalData,
+            Jobwall,
+            Lunch,
+            Stand,
+            StandDetails,
+        )
+        from companies.pricing import (
+            calculate_company_costs,
+            calculate_jobwall_breakdown,
+            get_free_lunches_per_day,
+        )
+
+        # Basic package across stand sizes and 1 vs 2 days (verified netto defaults + individual 12m2)
+        expected = {
+            ("podstawowy", 1): (Decimal("5950.00"), False),
+            ("podstawowy", 2): (Decimal("10120.00"), False),
+            ("standardowy", 1): (Decimal("8550.00"), False),
+            ("standardowy", 2): (Decimal("14530.00"), False),
+            ("rozszerzony", 1): (Decimal("10710.00"), False),
+            ("rozszerzony", 2): (Decimal("18200.00"), False),
+            ("12m2", 1): (Decimal("0.00"), True),
+            ("12m2", 2): (Decimal("0.00"), True),
+        }
+        for (size, days), (exp_cost, exp_indiv) in expected.items():
+            co = Company.objects.create(name=f"B-{size}-{days}", email=f"{size}{days}@ex.com", status="basic")
+            Stand.objects.create(company=co, day="day1", stand_number="A1", stand_size=size)
+            if days == 2:
+                Stand.objects.create(company=co, day="day2", stand_number="A1", stand_size=size)
+            summary = calculate_company_costs(co, self.sys_settings)
+            self.assertEqual(summary["base_package"]["cost"], exp_cost, (size, days))
+            self.assertEqual(summary["base_package"]["individual_pricing"], exp_indiv, (size, days))
+
+        # Early vs late basic free jobwall offers & packs
+        early_co = Company.objects.create(name="Early", email="early@ex.com", status="basic")
+        Company.objects.filter(pk=early_co.pk).update(
+            created_at=timezone.make_aware(datetime(2026, 12, 15, 12, 0))
+        )
+        early_co.refresh_from_db()
+        self.assertEqual(calculate_jobwall_breakdown(early_co, 1, self.sys_settings)["free_count"], 1)
+        self.assertEqual(calculate_jobwall_breakdown(early_co, 1, self.sys_settings)["cost"], Decimal("0.00"))
+        self.assertEqual(calculate_jobwall_breakdown(early_co, 2, self.sys_settings)["cost"], Decimal("480.00"))
+        self.assertEqual(calculate_jobwall_breakdown(early_co, 4, self.sys_settings)["cost"], Decimal("630.00"))
+
+        late_co = Company.objects.create(name="Late", email="late@ex.com", status="basic")
+        Company.objects.filter(pk=late_co.pk).update(
+            created_at=timezone.make_aware(datetime(2027, 1, 10, 12, 0))
+        )
+        late_co.refresh_from_db()
+        self.assertEqual(calculate_jobwall_breakdown(late_co, 1, self.sys_settings)["free_count"], 0)
+        self.assertEqual(calculate_jobwall_breakdown(late_co, 1, self.sys_settings)["cost"], Decimal("480.00"))
+
+        # Partner & Main quotas + itemized cost summary + endpoint
+        partner = Company.objects.create(
+            name="Partner P",
+            email="partner-p@ex.com",
+            status="partner",
+            representative=self.owner,
+        )
+        main = Company.objects.create(name="Main M", email="main-m@ex.com", status="main")
+        self.assertEqual(get_free_lunches_per_day(early_co, self.sys_settings), 2)
+        self.assertEqual(get_free_lunches_per_day(partner, self.sys_settings), 6)
+        self.assertEqual(get_free_lunches_per_day(main, self.sys_settings), 10)
+
+        sd = StandDetails.objects.create(company=partner, stand_type="provided_stand")
+        item = EquipmentItem.objects.create(name_pl="Lada", name_en="Counter", price="150.00", included_quantity=1)
+        EquipmentSelection.objects.create(stand_details=sd, equipment_item=item, quantity=3)
+        for idx in range(6):  # partner gets 4 free + 2 paid (480.00)
+            Jobwall.objects.create(
+                company=partner,
+                name=f"Offer {idx}",
+                form="s",
+                workload="pelen",
+                contract="uop",
+                description="Opis",
+                benefits="Benefity",
+                requirements="Wymagania",
+                url="https://example.com",
+            )
+        fd = FinalData.objects.create(company=partner)
+        Lunch.objects.create(form=fd, day="day1", lunch_quantity=8)  # 6 free -> 2 paid
+        expected_lunch = (Decimal(str(self.sys_settings.lunch_price)) * 2).quantize(Decimal("0.01"))
+        expected_total = (Decimal("24880.00") + Decimal("300.00") + Decimal("480.00") + expected_lunch).quantize(
+            Decimal("0.01")
+        )
+
+        self.client.force_authenticate(self.owner)
+        resp = self.client.get(f"/api/company/{partner.id}/cost-summary/")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
+        self.assertEqual(resp.data["base_package"]["cost"], "24880.00")
+        self.assertEqual(resp.data["equipment"]["cost"], "300.00")
+        self.assertEqual(resp.data["jobwall"]["cost"], "480.00")
+        self.assertEqual(resp.data["lunches"]["cost"], f"{expected_lunch:.2f}")
+        self.assertEqual(resp.data["total_cost"], f"{expected_total:.2f}")
+
+        main_summary = calculate_company_costs(main, self.sys_settings)
+        self.assertEqual(main_summary["base_package"]["cost"], Decimal("28120.00"))
+        self.assertEqual(main_summary["jobwall"]["free_count"], 7)
+
+    def test_stage4_rejects_excess_jobwalls_and_generates_valid_order_pdf(self):
+        from companies.models import (
+            Address,
+            BasicData,
+            Description,
+            FinalData,
+            Form,
+            Jobwall,
+            Lunch,
+            PDI,
+            Stand,
+            StandDetails,
+            Workshop,
+        )
+        from companies.pdf_generator import OrderSummaryPDFGenerator
+
+        partner = Company.objects.create(
+            name="PDF & JW Co",
+            email="pdf@example.com",
+            status="partner",
+            representative=self.owner,
+        )
+        Form.objects.create(company=partner)
+        bd = BasicData.objects.create(company=partner, full_name="PDF & JW Sp. z o.o.", nip="1234567890")
+        Address.objects.create(
+            form=bd,
+            street="Mokotowska",
+            home_number="1",
+            city="Warszawa",
+            country="Polska",
+            postal_code="00-001",
+        )
+        Stand.objects.create(company=partner, day="day1", stand_number="P1", stand_size="rozszerzony")
+        Stand.objects.create(company=partner, day="day2", stand_number="P1", stand_size="rozszerzony")
+        StandDetails.objects.create(company=partner, stand_type="provided_stand", el_power_acknowledged=True)
+        Workshop.objects.create(company=partner, workshop=False)
+        Feedback.objects.create(company=partner, form="stage_1", status="accepted")
+        Feedback.objects.create(company=partner, form="stage_2", status="accepted")
+        Feedback.objects.create(company=partner, form="stage_3", status="accepted")
+
+        # Partner has 4 free + 3 max extra = 7 max offers -> 8 must fail
+        too_many_offers = [
+            {
+                "name": f"Dev {i}",
+                "form": "s",
+                "workload": "pelen",
+                "contract": "uop",
+                "description": "Opis",
+                "benefits": "Benefity",
+                "requirements": "Wymagania",
+                "url": "https://example.com",
+            }
+            for i in range(8)
+        ]
+        self.client.force_authenticate(self.owner)
+        rejected = self.client.post(
+            f"/api/company/{partner.id}/form/stage-4/",
+            {"jobwalls": too_many_offers, "description": {"descr": "Firma testowa"}},
+            format="json",
+        )
+        self.assertEqual(rejected.status_code, status.HTTP_400_BAD_REQUEST, rejected.data)
+
+        Description.objects.create(company=partner, descr="Opis firmy testowej")
+        Jobwall.objects.create(
+            company=partner,
+            name="Python Engineer",
+            form="s",
+            workload="pelen",
+            contract="uop",
+            description="Opis",
+            benefits="Benefity",
+            requirements="Wymagania",
+            url="https://example.com",
+        )
+        fd = FinalData.objects.create(company=partner, el_low_power=True)
+        PDI.objects.create(form=fd, tickets_quantity=2)
+        Lunch.objects.create(form=fd, day="day1", lunch_quantity=7)
+
+        for lang in ("pl", "en"):
+            pdf_buf = OrderSummaryPDFGenerator(partner, language=lang).generate()
+            pdf_bytes = pdf_buf.getvalue()
+            self.assertTrue(pdf_bytes.startswith(b"%PDF-"), f"Invalid PDF output for {lang}")
+            self.assertGreater(len(pdf_bytes), 500)
+
+
+class FAQApiTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.exhibitor = User.objects.create_user(
+            username="faq-exh", email="faq-exh@example.com", password="x", type="company"
+        )
+        self.tr = User.objects.create_user(
+            username="faq-tr", email="faq-tr@best.pw.edu.pl", password="x", type="staff", staff_roles=["tr"]
+        )
+        self.fr = User.objects.create_user(
+            username="faq-fr", email="faq-fr@best.pw.edu.pl", password="x", type="staff", staff_roles=["fr"]
+        )
+
+    def test_faq_permissions_and_crud(self):
+        from companies.models import FAQItem
+
+        self.client.force_authenticate(self.exhibitor)
+        initial = self.client.get("/api/faq/")
+        self.assertEqual(initial.status_code, status.HTTP_200_OK)
+        self.assertGreaterEqual(len(initial.data), 14)
+
+        self.assertEqual(
+            self.client.post(
+                "/api/faq/",
+                {"category": "general", "question_pl": "Q?", "answer_pl": "A."},
+                format="json",
+            ).status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+        self.client.force_authenticate(self.tr)
+        self.assertEqual(
+            self.client.post(
+                "/api/faq/",
+                {"category": "general", "question_pl": "Q?", "answer_pl": "A."},
+                format="json",
+            ).status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+        self.client.force_authenticate(self.fr)
+        created = self.client.post(
+            "/api/faq/",
+            {
+                "category": "workshops",
+                "question_pl": "Pytanie testowe?",
+                "answer_pl": "Odpowiedź testowa.",
+                "question_en": "Test Q?",
+                "answer_en": "Test A.",
+                "is_active": False,
+            },
+            format="json",
+        )
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED, created.data)
+        faq_id = created.data["id"]
+
+        # Inactive entry hidden from exhibitor, visible to FR with ?include_inactive=1
+        self.client.force_authenticate(self.exhibitor)
+        exh_ids = {item["id"] for item in self.client.get("/api/faq/").data}
+        self.assertNotIn(faq_id, exh_ids)
+
+        self.client.force_authenticate(self.fr)
+        fr_ids = {item["id"] for item in self.client.get("/api/faq/?include_inactive=1").data}
+        self.assertIn(faq_id, fr_ids)
+
+        patched = self.client.patch(
+            f"/api/faq/{faq_id}/",
+            {"is_active": True, "answer_pl": "Zaktualizowana odpowiedź."},
+            format="json",
+        )
+        self.assertEqual(patched.status_code, status.HTTP_200_OK, patched.data)
+        self.assertTrue(patched.data["is_active"])
+
+        self.client.force_authenticate(self.exhibitor)
+        exh_ids_after = {item["id"] for item in self.client.get("/api/faq/").data}
+        self.assertIn(faq_id, exh_ids_after)
+
+        self.client.force_authenticate(self.fr)
+        deleted = self.client.delete(f"/api/faq/{faq_id}/")
+        self.assertEqual(deleted.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(FAQItem.objects.filter(id=faq_id).exists())
+
+
+class OrderSummaryPDFTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.owner_pl = User.objects.create_user(
+            username="pdf-owner-pl",
+            email="pdf-pl@example.com",
+            password="x",
+            type="company",
+            language="pl",
+            first_name="Jan",
+            last_name="Kowalski",
+            phone_number="+48 111 222 333",
+        )
+        self.owner_en = User.objects.create_user(
+            username="pdf-owner-en",
+            email="pdf-en@example.com",
+            password="x",
+            type="company",
+            language="en",
+        )
+        self.fr_staff = User.objects.create_user(
+            username="pdf-fr",
+            email="pdf-fr@best.pw.edu.pl",
+            password="x",
+            type="staff",
+            staff_roles=["fr"],
+            language="pl",
+            first_name="Marek",
+            last_name="Mały",
+        )
+        self.lg_staff = User.objects.create_user(
+            username="pdf-lg",
+            email="pdf-lg@best.pw.edu.pl",
+            password="x",
+            type="staff",
+            staff_roles=["lg"],
+            language="pl",
+        )
+
+    def test_order_summary_pdf_filename_and_basic_company_access(self):
+        from companies.models import (
+            Address,
+            BasicData,
+            Description,
+            Feedback,
+            FinalData,
+            Form,
+            Lunch,
+            PDI,
+            Stand,
+            StandDetails,
+        )
+
+        basic = Company.objects.create(
+            name="Żółć & Co",
+            email="zolc@example.com",
+            status="basic",
+            representative=self.owner_pl,
+            fr_resp=self.fr_staff,
+        )
+        Form.objects.create(
+            company=basic,
+            stage_1_completed=True,
+            stage_2_completed=True,
+            stage_3_completed=False,
+            stage_4_completed=True,
+            stage_5_completed=True,
+        )
+        bd = BasicData.objects.create(company=basic, full_name="Żółć & Co Sp. z o.o.", nip="1234567890")
+        Address.objects.create(
+            form=bd,
+            street="Mokotowska",
+            home_number="1",
+            apt_number="2",
+            city="Warszawa",
+            country="Polska",
+            postal_code="00-001",
+        )
+        Stand.objects.create(company=basic, day="day1", stand_number="A1", stand_size="podstawowy")
+        StandDetails.objects.create(company=basic, stand_type="provided_stand", el_power_acknowledged=True)
+        Description.objects.create(company=basic, descr="Opis firmy")
+        fd = FinalData.objects.create(company=basic, el_low_power=True, lunches_declined=True, no_other_delegates=True)
+        PDI.objects.create(form=fd, tickets_quantity=1)
+        Lunch.objects.create(form=fd, day="day1", lunch_quantity=0)
+
+        for stage_num in (1, 2, 4, 5):
+            Feedback.objects.create(company=basic, form=f"stage_{stage_num}", status="accepted")
+
+        # Basic company representative (PL) can download despite stage_3_completed=False
+        self.client.force_authenticate(self.owner_pl)
+        resp_pl = self.client.get(f"/api/company/{basic.id}/order-summary-pdf/")
+        self.assertEqual(resp_pl.status_code, status.HTTP_200_OK)
+        self.assertTrue(resp_pl.content.startswith(b"%PDF-"))
+        cd_pl = resp_pl["Content-Disposition"]
+        self.assertIn('filename="podsumowanie_zamowienia_Zolc_Co.pdf"', cd_pl)
+        self.assertIn("filename*=UTF-8''podsumowanie_zamowienia_%C5%BB%C3%B3%C5%82%C4%87_%26_Co.pdf", cd_pl)
+
+        # FR staff can also download
+        self.client.force_authenticate(self.fr_staff)
+        resp_fr = self.client.get(f"/api/company/{basic.id}/order-summary-pdf/")
+        self.assertEqual(resp_fr.status_code, status.HTTP_200_OK)
+
+        # Non-FR staff cannot download
+        self.client.force_authenticate(self.lg_staff)
+        resp_lg = self.client.get(f"/api/company/{basic.id}/order-summary-pdf/")
+        self.assertEqual(resp_lg.status_code, status.HTTP_403_FORBIDDEN)
+
+        # EN filename check
+        basic.representative = self.owner_en
+        basic.save(update_fields=["representative"])
+        self.client.force_authenticate(self.owner_en)
+        resp_en = self.client.get(f"/api/company/{basic.id}/order-summary-pdf/")
+        self.assertEqual(resp_en.status_code, status.HTTP_200_OK)
+        cd_en = resp_en["Content-Disposition"]
+        self.assertIn('filename="order_summary_Zolc_Co.pdf"', cd_en)
+        self.assertIn("filename*=UTF-8''order_summary_%C5%BB%C3%B3%C5%82%C4%87_%26_Co.pdf", cd_en)
+
+    def test_order_summary_pdf_generator_full_data_pl_and_en(self):
+        import datetime
+        from decimal import Decimal
+        from companies.models import (
+            Address,
+            BasicData,
+            Description,
+            EquipmentItem,
+            EquipmentSelection,
+            Exhibitor,
+            FinalData,
+            Jobwall,
+            Lunch,
+            PDI,
+            PDIAttendee,
+            Stand,
+            StandDetails,
+            Workshop,
+            WorkshopFacilitator,
+        )
+        from companies.pdf_generator import OrderSummaryPDFGenerator
+
+        partner = Company.objects.create(
+            name="Aires & Test",
+            email="aires@example.com",
+            status="partner",
+            representative=self.owner_pl,
+            fr_resp=self.fr_staff,
+        )
+        bd = BasicData.objects.create(company=partner, full_name="Aires & Test Sp. z o.o.", nip="1234567891")
+        Address.objects.create(
+            form=bd,
+            street="Kapustna",
+            home_number="9",
+            apt_number="70",
+            city="Warszawa",
+            country="Polska",
+            postal_code="06-666",
+        )
+        Stand.objects.create(company=partner, day="day1", stand_number="A6", stand_size="standardowy")
+        Stand.objects.create(company=partner, day="day2", stand_number="A7b", stand_size="standardowy")
+        sd = StandDetails.objects.create(
+            company=partner,
+            stand_type="self_construction",
+            el_power_acknowledged=True,
+            sc_details="2x3x1,5m",
+            brought_equipment="Ekspres & laptop",
+            carpet_choice="welur",
+            carpet_color="V372",
+        )
+        chair = EquipmentItem.objects.create(
+            name_en="Chair", name_pl="Krzesło", price=Decimal("50.00"), included_quantity=2
+        )
+        rack = EquipmentItem.objects.create(
+            name_en="Brochure stand", name_pl="Stojak na ulotki", price=Decimal("200.00"), included_quantity=0
+        )
+        EquipmentSelection.objects.create(stand_details=sd, equipment_item=chair, quantity=2)
+        EquipmentSelection.objects.create(stand_details=sd, equipment_item=rack, quantity=1)
+
+        ws = Workshop.objects.create(
+            company=partner,
+            workshop=True,
+            title="AI & Robotics",
+            description="Budowa agentów & testowanie",
+            preferred_day="day1",
+            preferred_time=datetime.time(11, 30),
+            skills="Python, ROS",
+            study_majors="AiR, Informatyka",
+            room_projector=True,
+            room_hdmi=True,
+            contact_phone="500600700",
+        )
+        WorkshopFacilitator.objects.create(
+            workshop=ws, name="Anna", surname="Nowak", phone_number="500600700", description="Lead Engineer"
+        )
+        Description.objects.create(company=partner, descr="Fajna firma <test> & rozwój")
+        for idx in (1, 2):
+            Jobwall.objects.create(
+                company=partner,
+                name=f"Role {idx}",
+                form="s",
+                workload="pelen",
+                contract="uop",
+                description="Opis stanowiska",
+                requirements="Wymagania",
+                benefits="Benefity",
+                url="https://example.com",
+            )
+        fd = FinalData.objects.create(
+            company=partner,
+            el_devices="Ekspres, TV",
+            el_power="1800 W",
+            el_low_power=False,
+            lunches_declined=False,
+            no_other_delegates=False,
+            main_rep_name="Janusz",
+            main_rep_surname="Kowalski",
+            main_rep_phone="666 666 666",
+            main_rep_attendance="day1",
+            arrival_time_day1=datetime.time(6, 30),
+            arrival_time_day2=datetime.time(8, 20),
+        )
+        Lunch.objects.create(form=fd, day="day1", lunch_quantity=7, diet_info="1 wege")
+        Lunch.objects.create(form=fd, day="day2", lunch_quantity=4)
+        pdi = PDI.objects.create(form=fd, tickets_quantity=2)
+        PDIAttendee.objects.create(form=pdi, name="Ewa", surname="Lis", email="ewa@example.com", phone_number="123123123")
+        Exhibitor.objects.create(form=pdi, name="Joe", surname="Doe", phone_number="676767676", attendance="day2")
+
+        for lang in ("pl", "en"):
+            pdf_buf = OrderSummaryPDFGenerator(partner, language=lang).generate()
+            pdf_bytes = pdf_buf.getvalue()
+            self.assertTrue(pdf_bytes.startswith(b"%PDF-"), f"Invalid PDF output for {lang}")
+            self.assertGreater(len(pdf_bytes), 1500)

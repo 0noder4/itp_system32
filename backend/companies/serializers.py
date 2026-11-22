@@ -3,6 +3,7 @@ from django.conf import settings
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 from .models import (
+    FAQItem,
     Company,
     CompanyInvitation,
     Form,
@@ -73,6 +74,10 @@ class CompanySerializer(serializers.ModelSerializer):
     fr_resp_phone_number = serializers.SerializerMethodField()
     fr_resp_username = serializers.SerializerMethodField()
     opiekun = serializers.IntegerField(source='opiekun.id', read_only=True, allow_null=True)
+    opiekun_name = serializers.SerializerMethodField()
+    opiekun_surname = serializers.SerializerMethodField()
+    opiekun_username = serializers.SerializerMethodField()
+    language = serializers.SerializerMethodField()
     day1_stand = serializers.SerializerMethodField()
     day2_stand = serializers.SerializerMethodField()
     completed_stages_count = serializers.SerializerMethodField()
@@ -85,7 +90,7 @@ class CompanySerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Company
-        fields = ("id", "name", "status", "email", "representative", "representative_name", "representative_surname", "representative_phone_number", "representative_username", "fr_resp", "fr_resp_name", "fr_resp_surname", "fr_resp_email", "fr_resp_phone_number", "fr_resp_username", "opiekun", "day1_stand", "day2_stand", "completed_stages_count", "stage_1_completed", "stage_2_completed", "stage_3_completed", "stage_4_completed", "stage_5_completed", "stage_statuses", "created_at", "updated_at")
+        fields = ("id", "name", "status", "email", "language", "representative", "representative_name", "representative_surname", "representative_phone_number", "representative_username", "fr_resp", "fr_resp_name", "fr_resp_surname", "fr_resp_email", "fr_resp_phone_number", "fr_resp_username", "opiekun", "opiekun_name", "opiekun_surname", "opiekun_username", "day1_stand", "day2_stand", "completed_stages_count", "stage_1_completed", "stage_2_completed", "stage_3_completed", "stage_4_completed", "stage_5_completed", "stage_statuses", "created_at", "updated_at")
     
     def get_representative_name(self, obj):
         if obj.representative:
@@ -131,6 +136,34 @@ class CompanySerializer(serializers.ModelSerializer):
         if obj.fr_resp:
             return obj.fr_resp.username
         return None
+
+    def get_opiekun_name(self, obj):
+        if obj.opiekun:
+            return obj.opiekun.first_name
+        return None
+
+    def get_opiekun_surname(self, obj):
+        if obj.opiekun:
+            return obj.opiekun.last_name
+        return None
+
+    def get_opiekun_username(self, obj):
+        if obj.opiekun:
+            return obj.opiekun.username
+        return None
+
+    def get_language(self, obj):
+        if obj.representative and obj.representative.language in ('en', 'pl'):
+            return obj.representative.language
+        inv_lang = (
+            CompanyInvitation.objects.filter(company_name=obj.name)
+            .order_by('-created_at')
+            .values_list('language', flat=True)
+            .first()
+        )
+        if inv_lang in ('en', 'pl'):
+            return inv_lang
+        return 'pl'
     
     def get_day1_stand(self, obj):
         try:
@@ -418,6 +451,7 @@ class EquipmentItemSerializer(serializers.ModelSerializer):
 class EquipmentSelectionSerializer(serializers.ModelSerializer):
     equipment_item = EquipmentItemSerializer(read_only=True, context={'request': None})
     equipment_item_id = serializers.IntegerField(write_only=True)
+    quantity = serializers.IntegerField(min_value=0, max_value=50)
     
     class Meta:
         model = EquipmentSelection
@@ -460,6 +494,20 @@ class WorkshopSerializer(serializers.ModelSerializer):
     class Meta:
         model = Workshop
         fields = '__all__'
+
+    def to_internal_value(self, data):
+        data_copy = data.copy() if hasattr(data, 'copy') else dict(data) if isinstance(data, dict) else data
+        if isinstance(data_copy, dict):
+            if hasattr(data_copy, '_mutable'):
+                data_copy._mutable = True
+            if 'preferred_time' in data_copy and data_copy['preferred_time'] == '':
+                data_copy['preferred_time'] = None
+            workshop_val = data_copy.get('workshop')
+            if workshop_val in (False, 'false', 'False', 0, '0'):
+                data_copy['preferred_time'] = None
+                if 'preferred_day' in data_copy and data_copy['preferred_day'] not in ('day1', 'day2'):
+                    data_copy['preferred_day'] = ''
+        return super().to_internal_value(data_copy)
 
     def validate_workshop(self, value):
         if self.context.get('draft'):
@@ -757,6 +805,7 @@ class FinalDataSerializer(serializers.ModelSerializer):
 
 
 class LunchSerializer(serializers.ModelSerializer):
+    lunch_quantity = serializers.IntegerField(min_value=0, max_value=100)
     # Diet is chosen on-site at the lunch provider; keep blank for new submissions.
     diet_info = serializers.CharField(
         required=False,
@@ -939,6 +988,25 @@ class Stage2Serializer(serializers.Serializer):
         if choice == '':
             stand['carpet_choice'] = None
             choice = None
+
+        selections = data.get('equipment_selections')
+        if isinstance(selections, list):
+            sel_errors = []
+            has_sel_error = False
+            for sel in selections:
+                row_err = {}
+                if isinstance(sel, dict) and 'quantity' in sel and sel['quantity'] is not None:
+                    try:
+                        qty = int(sel['quantity'])
+                        if qty < 0 or qty > 50:
+                            row_err['quantity'] = ['Ensure this value is between 0 and 50.']
+                    except (TypeError, ValueError):
+                        row_err['quantity'] = ['A valid integer is required.']
+                if row_err:
+                    has_sel_error = True
+                sel_errors.append(row_err)
+            if has_sel_error:
+                raise serializers.ValidationError({'equipment_selections': sel_errors})
 
         if self.context.get('draft'):
             return data
@@ -1160,6 +1228,37 @@ class Stage2Serializer(serializers.Serializer):
 class Stage4Serializer(serializers.Serializer):
     jobwalls = JobwallSerializer(many=True, required=False, allow_empty=True)
     description = DescriptionSerializer(required=False, allow_null=True)
+
+    def validate(self, attrs):
+        if self.context.get('draft'):
+            return attrs
+        request = self.context.get('request')
+        user = getattr(request, 'user', None) if request else None
+        if user and getattr(user, 'is_authenticated', False) and getattr(user, 'type', None) in ('admin', 'staff'):
+            return attrs
+        company = self.context.get('company')
+        if company and 'jobwalls' in attrs:
+            from companies.models import Settings
+            from companies.pricing import get_free_jobwall_count
+
+            s = Settings.get_settings()
+            free_count = get_free_jobwall_count(company, s)
+            max_extra = int(s.jobwall_max_extra_offers)
+            max_total = free_count + max_extra
+            if len(attrs['jobwalls']) > max_total:
+                lang = getattr(company, 'language', 'pl')
+                if lang == 'en':
+                    msg = (
+                        f"Maximum number of JobWall offers for this package is {max_total} "
+                        f"({free_count} included in the package plus up to {max_extra} extra paid offers)."
+                    )
+                else:
+                    msg = (
+                        f"Maksymalna liczba ofert JobWall dla wybranego pakietu to {max_total} "
+                        f"({free_count} w cenie pakietu oraz maksymalnie {max_extra} dodatkowo płatnych)."
+                    )
+                raise serializers.ValidationError({'jobwalls': msg})
+        return attrs
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -1631,3 +1730,21 @@ class Stage5Serializer(serializers.Serializer):
                 instance['exhibitors'] = new_exhibitors
 
         return instance
+
+
+class FAQItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FAQItem
+        fields = [
+            'id',
+            'category',
+            'question_pl',
+            'answer_pl',
+            'question_en',
+            'answer_en',
+            'order',
+            'is_active',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']

@@ -31,6 +31,7 @@ urlpatterns = [
     
     # Jobwall price
     path('jobwall-price/', views.JobwallPriceView.as_view(), name='jobwall-price'),
+    path('company/<int:company_id>/cost-summary/', views.CompanyCostSummaryView.as_view(), name='company-cost-summary'),
 
     # Edition number (public — app name / browser title)
     path('edition/', views.EditionNumberView.as_view(), name='edition-number'),
@@ -99,4 +100,6 @@ urlpatterns = [
         views.WebsiteCatalogueExportView.as_view(),
         name='website-catalogue-export',
     ),
+    path('faq/', views.FAQListCreateView.as_view(), name='faq-list-create'),
+    path('faq/<int:pk>/', views.FAQDetailView.as_view(), name='faq-detail'),
 ]

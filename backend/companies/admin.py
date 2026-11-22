@@ -8,6 +8,7 @@ from .models import (
     EquipmentItem,
     EquipmentSelection,
     Settings,
+    FAQItem,
     InvitationExpiryReminderSent,
     WebsitePublication,
     compute_invitation_expires_at,
@@ -120,9 +121,34 @@ class EquipmentSelectionAdmin(admin.ModelAdmin):
 @admin.register(Settings)
 class SettingsAdmin(admin.ModelAdmin):
     fieldsets = (
-        ('Pricing', {
-            'fields': ('jobwall_price', 'jobwall_free_count', 'lunch_price',),
-            'description': 'Set prices for jobwall postings and additional lunches. The first N jobwall postings (jobwall_free_count) are free; further postings are charged at jobwall_price each. Lunch price is charged for each lunch beyond the 2 free lunches per day included in the package (4 free lunches total for 2 days).'
+        ('Cennik stoisk — Wystawca (netto)', {
+            'fields': (
+                ('stand_price_4m2_1d', 'stand_price_4m2_2d'),
+                ('stand_price_6m2_1d', 'stand_price_6m2_2d'),
+                ('stand_price_8m2_1d', 'stand_price_8m2_2d'),
+                ('stand_price_12m2_1d', 'stand_price_12m2_2d'),
+            ),
+            'description': 'Ceny netto stoisk dla pakietu Wystawca (podane kwoty nie zawierają VAT).'
+        }),
+        ('Cennik pakietów partnerskich (netto)', {
+            'fields': ('partner_package_price', 'main_partner_package_price'),
+            'description': 'Ceny netto pakietów Partner i Partner Główny (2 dni, stoisko 8 m², bez VAT).'
+        }),
+        ('JobWall — limity i pakiety (netto)', {
+            'fields': (
+                ('jobwall_free_basic_early', 'jobwall_early_deadline', 'jobwall_free_basic_late'),
+                ('jobwall_free_partner', 'jobwall_free_main'),
+                ('jobwall_pack_2_price', 'jobwall_pack_3_price', 'jobwall_max_extra_offers'),
+                ('jobwall_price', 'jobwall_free_count'),
+            ),
+            'description': 'Limity darmowych ogłoszeń JobWall wg pakietu oraz ceny netto pakietów +2 / +3 dodatkowych ofert.'
+        }),
+        ('Obiady — limity i cena (netto)', {
+            'fields': (
+                ('lunches_free_basic', 'lunches_free_partner', 'lunches_free_main'),
+                'lunch_price',
+            ),
+            'description': 'Liczba darmowych obiadów na dzień wg pakietu oraz cena netto każdego dodatkowego obiadu.'
         }),
         ('Stage Deadlines', {
             'fields': ('stage_1_deadline', 'stage_2_deadline', 'stage_3_deadline', 'stage_4_deadline', 'stage_5_deadline',),
@@ -186,3 +212,12 @@ class SettingsAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+
+@admin.register(FAQItem)
+class FAQItemAdmin(admin.ModelAdmin):
+    list_display = ('id', 'category', 'question_pl', 'order', 'is_active', 'updated_at')
+    list_filter = ('category', 'is_active')
+    list_editable = ('order', 'is_active')
+    search_fields = ('question_pl', 'answer_pl', 'question_en', 'answer_en')
+    ordering = ('category', 'order', 'id')

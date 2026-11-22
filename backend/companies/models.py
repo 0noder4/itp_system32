@@ -637,28 +637,147 @@ class Exhibitor(Person):
         verbose_name="obecność delegata",
     )
 
+def _default_jobwall_early_deadline():
+    from datetime import date
+    return date(2026, 12, 31)
+
+
 class Settings(models.Model):
     """
     System-wide settings. Uses singleton pattern - only one instance should exist.
     """
+    # --- Legacy / fallback unit pricing ---
     jobwall_price = models.DecimalField(
         max_digits=10, 
         decimal_places=2, 
-        verbose_name="cena za ogłoszenie jobwall",
+        verbose_name="cena za ogłoszenie jobwall (jednostkowa / archiwalna)",
         default=0.00,
-        help_text="Cena za jedno ogłoszenie jobwall"
+        help_text="Cena jednostkowa fallback; podstawowy cennik jobwall korzysta z pakietów +2 / +3 poniżej."
     )
     jobwall_free_count = models.PositiveIntegerField(
         default=2,
-        verbose_name="liczba darmowych ogłoszeń jobwall",
-        help_text="Ile pierwszych ogłoszeń jobwall jest darmowych (0 = wszystkie płatne).",
+        verbose_name="liczba darmowych ogłoszeń jobwall (legacy)",
+        help_text="Pole archiwalne fallback; limity zależne od pakietu konfiguruje się poniżej.",
     )
     lunch_price = models.DecimalField(
         max_digits=10,
         decimal_places=2,
-        verbose_name="cena za dodatkowy obiad",
+        verbose_name="cena za dodatkowy obiad (netto)",
         default=0.00,
-        help_text="Cena za dodatkowy obiad (pierwsze 2 obiady dziennie są w pakiecie, czyli 4 obiady za 2 dni)"
+        help_text="Cena netto za każdy dodatkowy obiad ponad limit darmowych obiadów dziennie przypisany do pakietu."
+    )
+
+    # --- Stand pricing — Wystawca (Basic), netto ---
+    stand_price_4m2_1d = models.DecimalField(
+        max_digits=10, decimal_places=2, default=5950.00,
+        verbose_name="Stoisko 4 m² — 1 dzień (netto)",
+        help_text="Cena netto stoiska podstawowego (4 m²) na 1 dzień.",
+    )
+    stand_price_4m2_2d = models.DecimalField(
+        max_digits=10, decimal_places=2, default=10120.00,
+        verbose_name="Stoisko 4 m² — 2 dni (netto)",
+        help_text="Cena netto stoiska podstawowego (4 m²) na 2 dni.",
+    )
+    stand_price_6m2_1d = models.DecimalField(
+        max_digits=10, decimal_places=2, default=8550.00,
+        verbose_name="Stoisko 6 m² — 1 dzień (netto)",
+        help_text="Cena netto stoiska standardowego (6 m²) na 1 dzień.",
+    )
+    stand_price_6m2_2d = models.DecimalField(
+        max_digits=10, decimal_places=2, default=14530.00,
+        verbose_name="Stoisko 6 m² — 2 dni (netto)",
+        help_text="Cena netto stoiska standardowego (6 m²) na 2 dni.",
+    )
+    stand_price_8m2_1d = models.DecimalField(
+        max_digits=10, decimal_places=2, default=10710.00,
+        verbose_name="Stoisko 8 m² — 1 dzień (netto)",
+        help_text="Cena netto stoiska rozszerzonego (8 m²) na 1 dzień.",
+    )
+    stand_price_8m2_2d = models.DecimalField(
+        max_digits=10, decimal_places=2, default=18200.00,
+        verbose_name="Stoisko 8 m² — 2 dni (netto)",
+        help_text="Cena netto stoiska rozszerzonego (8 m²) na 2 dni.",
+    )
+    stand_price_12m2_1d = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0.00,
+        verbose_name="Stoisko 12 m² — 1 dzień (netto)",
+        help_text="Cena netto stoiska 12 m² na 1 dzień (0 = nieustalona / wycena indywidualna).",
+    )
+    stand_price_12m2_2d = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0.00,
+        verbose_name="Stoisko 12 m² — 2 dni (netto)",
+        help_text="Cena netto stoiska 12 m² na 2 dni (0 = nieustalona / wycena indywidualna).",
+    )
+
+    # --- Partner packages (2 days, 8 m²), netto ---
+    partner_package_price = models.DecimalField(
+        max_digits=10, decimal_places=2, default=24880.00,
+        verbose_name="Pakiet Partner — 2 dni, 8 m² (netto)",
+        help_text="Cena netto pakietu Partner.",
+    )
+    main_partner_package_price = models.DecimalField(
+        max_digits=10, decimal_places=2, default=28120.00,
+        verbose_name="Pakiet Partner Główny — 2 dni, 8 m² (netto)",
+        help_text="Cena netto pakietu Partner Główny.",
+    )
+
+    # --- JobWall quotas & packs, netto ---
+    jobwall_free_basic_early = models.PositiveIntegerField(
+        default=1,
+        verbose_name="Darmowe JobWall — Wystawca do terminu",
+        help_text="Liczba darmowych ofert JobWall dla Wystawcy przy rejestracji do terminu wczesnej rejestracji.",
+    )
+    jobwall_early_deadline = models.DateField(
+        default=_default_jobwall_early_deadline,
+        verbose_name="Termin wczesnej rejestracji (JobWall gratis)",
+        help_text="Data graniczna (włącznie) rejestracji firmy dająca wczesny limit darmowych ofert JobWall dla Wystawcy.",
+    )
+    jobwall_free_basic_late = models.PositiveIntegerField(
+        default=0,
+        verbose_name="Darmowe JobWall — Wystawca po terminie",
+        help_text="Liczba darmowych ofert JobWall dla Wystawcy po terminie wczesnej rejestracji.",
+    )
+    jobwall_free_partner = models.PositiveIntegerField(
+        default=4,
+        verbose_name="Darmowe JobWall — Partner",
+        help_text="Liczba darmowych ofert JobWall w pakiecie Partner.",
+    )
+    jobwall_free_main = models.PositiveIntegerField(
+        default=7,
+        verbose_name="Darmowe JobWall — Partner Główny",
+        help_text="Liczba darmowych ofert JobWall w pakiecie Partner Główny.",
+    )
+    jobwall_pack_2_price = models.DecimalField(
+        max_digits=10, decimal_places=2, default=480.00,
+        verbose_name="Pakiet +2 oferty JobWall (netto)",
+        help_text="Cena netto za 1–2 płatne oferty JobWall ponad darmowy limit.",
+    )
+    jobwall_pack_3_price = models.DecimalField(
+        max_digits=10, decimal_places=2, default=630.00,
+        verbose_name="Pakiet +3 oferty JobWall (netto)",
+        help_text="Cena netto za 3 płatne oferty JobWall ponad darmowy limit.",
+    )
+    jobwall_max_extra_offers = models.PositiveIntegerField(
+        default=3,
+        verbose_name="Maks. dodatkowych płatnych ofert JobWall",
+        help_text="Maksymalna liczba płatnych ofert JobWall ponad limit pakietu.",
+    )
+
+    # --- Lunch quotas per day ---
+    lunches_free_basic = models.PositiveIntegerField(
+        default=2,
+        verbose_name="Darmowe obiady / dzień — Wystawca",
+        help_text="Liczba darmowych obiadów na dzień dla pakietu Wystawca.",
+    )
+    lunches_free_partner = models.PositiveIntegerField(
+        default=6,
+        verbose_name="Darmowe obiady / dzień — Partner",
+        help_text="Liczba darmowych obiadów na dzień dla pakietu Partner.",
+    )
+    lunches_free_main = models.PositiveIntegerField(
+        default=10,
+        verbose_name="Darmowe obiady / dzień — Partner Główny",
+        help_text="Liczba darmowych obiadów na dzień dla pakietu Partner Główny.",
     )
     stage_1_deadline = models.DateTimeField(
         null=True,
@@ -952,5 +1071,38 @@ class WebsitePublication(models.Model):
 
     def __str__(self):
         return f"WebsitePublication({self.company_id}, {self.strapi_document_id or '—'})"
+
+
+FAQ_CATEGORY_CHOICES = [
+    ('general', 'General'),
+    ('logistics', 'Logistics'),
+    ('materials', 'Promotional materials & setup'),
+    ('ownConstruction', 'Own construction'),
+    ('workshops', 'Workshops'),
+    ('support', 'Support & catering'),
+    ('pdiVenue', 'PDI Gala'),
+]
+
+
+class FAQItem(models.Model):
+    """Editable FAQ entries shown to exhibitors and managed by Admin / FR."""
+
+    category = models.CharField(max_length=50, choices=FAQ_CATEGORY_CHOICES, default='general')
+    question_pl = models.CharField(max_length=500)
+    answer_pl = models.TextField()
+    question_en = models.CharField(max_length=500)
+    answer_en = models.TextField()
+    order = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['category', 'order', 'id']
+        verbose_name = "FAQ entry"
+        verbose_name_plural = "FAQ entries"
+
+    def __str__(self):
+        return f"[{self.category}] {self.question_pl[:60]}"
 
 

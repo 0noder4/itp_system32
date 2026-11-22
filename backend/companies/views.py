@@ -1,6 +1,9 @@
 import logging
 import os
+import re
+import unicodedata
 from textwrap import dedent
+from urllib.parse import quote
 
 from django.core.mail import EmailMultiAlternatives
 from django.conf import settings
@@ -20,7 +23,7 @@ from .models import (
     Company, CompanyInvitation, Form, Feedback, BasicData, Address,
     StandDetails, Stand, EquipmentItem, EquipmentSelection, Workshop, Jobwall,
     Description, FinalData, Lunch, PDI, PDIAttendee, Exhibitor, Settings,
-    InvitationExpiryReminderSent, MapLayout, compute_invitation_expires_at,
+    InvitationExpiryReminderSent, MapLayout, FAQItem, compute_invitation_expires_at,
     company_can_access_stage3, ensure_basic_workshop_skipped,
 )
 from .map_seed import (
@@ -43,6 +46,11 @@ from .notifications import (
     send_stage_pending_fr_email,
     today_in_invitation_tz,
 )
+from .pricing import (
+    get_free_jobwall_count,
+    get_free_lunches_per_day,
+    serialize_company_cost_summary,
+)
 from .serializers import (
     CompanySerializer, CompanyInvitationSerializer, CompanyRegistrationSerializer,
     FormSerializer, FeedbackSerializer, BasicDataSerializer, AddressSerializer,
@@ -51,6 +59,7 @@ from .serializers import (
     DescriptionSerializer, FinalDataSerializer, LunchSerializer,
     PDISerializer, PDIAttendeeSerializer, ExhibitorSerializer,
     Stage1Serializer, Stage2Serializer, Stage4Serializer, Stage5Serializer,
+    FAQItemSerializer,
 )
 
 logger = logging.getLogger(__name__)
@@ -189,6 +198,8 @@ class CompanyListView(APIView):
                 'workshops',
                 'description',
                 'finaldata',
+                'representative',
+                'fr_resp',
                 'opiekun',
             )
             .prefetch_related('feedback', 'jobwalls')
@@ -454,7 +465,7 @@ class CompanyDetailView(APIView):
         # Build contact text for plain messages
         if staff_email:
             contact_text_en = f' your staff contact at {staff_email} or us at {default_email}'
-            contact_text_pl = f' ze swoim opiekunem pod adresem {staff_email} lub z nami pod adresem {default_email}'
+            contact_text_pl = f' z przydzielonym opiekunem pod adresem {staff_email} lub z nami pod adresem {default_email}'
         else:
             contact_text_en = f' us at {default_email}'
             contact_text_pl = f' z nami pod adresem {default_email}'
@@ -484,9 +495,9 @@ Your stand assignment for {company.name} has been updated.
 
 If you have any questions, please contact{contact_text_en}."""
         else:
-            plain_message = f"""Cześć {representative.username or representative.email},
+            plain_message = f"""Szanowni Państwo,
 
-Twoje przypisanie stoiska dla {company.name} zostało zaktualizowane.
+Przypisanie stoiska dla firmy {company.name} zostało zaktualizowane.
 
 """
             if day1_stand_data:
@@ -494,11 +505,11 @@ Twoje przypisanie stoiska dla {company.name} zostało zaktualizowane.
             if day2_stand_data:
                 plain_message += f"Stoisko dzień 2 ({day2_display_pl}):\nNumer stoiska: {day2_stand_data['stand_number']}\nRozmiar: {day2_stand_data['stand_size_display']}\n\n"
             if not day1_stand_data and not day2_stand_data:
-                plain_message += "Twoje przypisania stoisk zostały usunięte.\n\n"
+                plain_message += "Przypisania stoisk dla Państwa firmy zostały usunięte.\n\n"
             
-            plain_message += f"""Możesz zobaczyć informacje o swoim stoisku i inne szczegóły firmy w panelu: {dashboard_link}
+            plain_message += f"""Mogą Państwo zobaczyć informacje o stoisku oraz pozostałe szczegóły firmy w panelu: {dashboard_link}
 
-Jeśli masz pytania, skontaktuj się{contact_text_pl}."""
+W razie pytań prosimy o kontakt{contact_text_pl}."""
         
         # Render HTML template
         try:
@@ -506,6 +517,8 @@ Jeśli masz pytania, skontaktuj się{contact_text_pl}."""
                 'company_name': company.name,
                 'day1_stand': day1_stand_data,
                 'day2_stand': day2_stand_data,
+                'day1_display': day1_display_en if language == 'en' else day1_display_pl,
+                'day2_display': day2_display_en if language == 'en' else day2_display_pl,
                 'dashboard_link': dashboard_link,
                 'logo_url': logo_url,
                 'staff_email': staff_email,
@@ -639,12 +652,12 @@ class CompanyInvitationView(generics.CreateAPIView):
 
         # Subject and plain text based on language (aligned with expiry-reminder tone)
         if language == 'pl':
-            subject = "Dokończ rejestrację - Inżynierskie Targi Pracy - ITP System"
+            subject = "Dokończenie rejestracji - Inżynierskie Targi Pracy - ITP System"
             plain_message = dedent(f"""
-                Twoje konto na platformie wystawców Inżynierskich Targów Pracy jest gotowe do rejestracji.
-                Twój login: {invitation.company_name}
+                Państwa konto na platformie wystawców Inżynierskich Targów Pracy jest gotowe do rejestracji.
+                Państwa login: {invitation.company_name}
 
-                Dokończ rejestrację:
+                Prosimy o dokończenie rejestracji:
                 {registration_link}
 
                 Link wygaśnie za {validity_days} dni.
@@ -1592,7 +1605,7 @@ class FormStage4View(APIView):
             logger.info(f"Stage4 description data: {data['description']}")
         
         serializer = Stage4Serializer(
-            data=data, context={'company': company, 'draft': is_draft}
+            data=data, context={'company': company, 'draft': is_draft, 'request': request}
         )
         if serializer.is_valid():
             result = serializer.save()
@@ -1714,7 +1727,7 @@ class FormStage4View(APIView):
             instance_data,
             data=data,
             partial=True,
-            context={'company': company, 'draft': is_draft},
+            context={'company': company, 'draft': is_draft, 'request': request},
         )
         if serializer.is_valid():
             result = serializer.save()
@@ -2017,7 +2030,7 @@ class FormReviewView(APIView):
         # Build contact text for plain messages
         if staff_email:
             contact_text_en = f' your staff contact at {staff_email} or us at {default_email}'
-            contact_text_pl = f' ze swoim opiekunem pod adresem {staff_email} lub z nami pod adresem {default_email}'
+            contact_text_pl = f' z przydzielonym opiekunem pod adresem {staff_email} lub z nami pod adresem {default_email}'
         else:
             contact_text_en = f' us at {default_email}'
             contact_text_pl = f' z nami pod adresem {default_email}'
@@ -2037,9 +2050,9 @@ If you have any questions, please contact{contact_text_en}."""
 
 {f'Komentarz zespołu: {comment}' if comment else ''}
 
-Możesz przejść do kolejnego etapu zgłoszenia lub sprawdzić postęp w panelu: {dashboard_link}
+Mogą Państwo przejść do kolejnego etapu zgłoszenia lub sprawdzić postęp w panelu: {dashboard_link}
 
-Jeśli masz pytania, skontaktuj się{contact_text_pl}."""
+W razie pytań prosimy o kontakt{contact_text_pl}."""
         else:  # rejected
             if language == 'en':
                 plain_message = f"""{stage_name} for {company.name} requires corrections before it can be accepted.
@@ -2054,9 +2067,9 @@ If you have any questions, please contact{contact_text_en}."""
 
 {f'Uwagi zespołu: {comment}' if comment else 'Prosimy o przejrzenie zgłoszenia i wprowadzenie niezbędnych poprawek.'}
 
-Prosimy o przejrzenie uwag i wprowadzenie niezbędnych poprawek. Po aktualizacji możesz ponownie przesłać zgłoszenie do weryfikacji: {dashboard_link}
+Prosimy o przejrzenie uwag i wprowadzenie niezbędnych poprawek. Po aktualizacji mogą Państwo ponownie przesłać zgłoszenie do weryfikacji: {dashboard_link}
 
-Jeśli masz pytania, skontaktuj się{contact_text_pl}."""
+W razie pytań prosimy o kontakt{contact_text_pl}."""
         
         # Render HTML template
         html_content = render_to_string(template_name, {
@@ -2194,18 +2207,90 @@ class FormStatusView(APIView):
             return Response({"detail": "An error occurred while retrieving form status"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-class JobwallPriceView(APIView):
+def _resolve_company_for_pricing_request(request):
+    """Resolve optional ?company_id= (verified for access) or logged-in company."""
+    company_id = request.query_params.get('company_id')
+    if company_id:
+        try:
+            cid = int(company_id)
+        except (TypeError, ValueError):
+            return None
+        company = Company.objects.filter(id=cid).first()
+        if not company:
+            return None
+        if (
+            company.representative_id == request.user.id
+            or request.user.is_staff
+            or user_has_staff_role(request.user, 'fr', 'opiekun', 'lg', 'tr')
+        ):
+            return company
+        return None
+    if getattr(request.user, 'type', None) == 'company':
+        return Company.objects.filter(representative=request.user).first()
+    return None
+
+
+class CompanyCostSummaryView(APIView):
     """
-    Get the current jobwall price from system settings.
+    Itemized netto cost breakdown (package/stand, equipment, jobwall, lunches) for a company.
     """
     permission_classes = [IsAuthenticated]
-    
+
+    def get(self, request, company_id):
+        try:
+            company = (
+                Company.objects.select_related('stand_details', 'finaldata')
+                .prefetch_related(
+                    'stand_all',
+                    'stand_details__equipment_selections__equipment_item',
+                    'jobwalls',
+                    'finaldata__lunches',
+                )
+                .get(id=company_id)
+            )
+        except Company.DoesNotExist:
+            return Response({"detail": "Company not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        if (
+            company.representative_id != request.user.id
+            and not request.user.is_staff
+            and not user_has_staff_role(request.user, 'fr', 'opiekun', 'lg', 'tr')
+        ):
+            return Response({"detail": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
+
+        return Response(serialize_company_cost_summary(company), status=status.HTTP_200_OK)
+
+
+class JobwallPriceView(APIView):
+    """
+    Get the current jobwall price, package free quotas, and pack prices from system settings.
+    """
+    permission_classes = [IsAuthenticated]
+
     def get(self, request):
         try:
-            settings = Settings.get_settings()
+            settings_obj = Settings.get_settings()
+            company = _resolve_company_for_pricing_request(request)
+            free_count = (
+                get_free_jobwall_count(company, settings_obj)
+                if company
+                else int(settings_obj.jobwall_free_basic_early)
+            )
             return Response({
-                'jobwall_price': str(settings.jobwall_price),
-                'jobwall_free_count': settings.jobwall_free_count,
+                'jobwall_price': str(settings_obj.jobwall_price),
+                'jobwall_free_count': free_count,
+                'jobwall_pack_2_price': str(settings_obj.jobwall_pack_2_price),
+                'jobwall_pack_3_price': str(settings_obj.jobwall_pack_3_price),
+                'jobwall_max_extra_offers': int(settings_obj.jobwall_max_extra_offers),
+                'jobwall_early_deadline': (
+                    settings_obj.jobwall_early_deadline.isoformat()
+                    if settings_obj.jobwall_early_deadline
+                    else None
+                ),
+                'jobwall_free_basic_early': int(settings_obj.jobwall_free_basic_early),
+                'jobwall_free_basic_late': int(settings_obj.jobwall_free_basic_late),
+                'jobwall_free_partner': int(settings_obj.jobwall_free_partner),
+                'jobwall_free_main': int(settings_obj.jobwall_free_main),
             }, status=status.HTTP_200_OK)
         except Exception as e:
             logger.error(f"Error in JobwallPriceView.get: {e}", exc_info=True)
@@ -2306,8 +2391,18 @@ class LunchPriceView(APIView):
                 fire_cert_auto_reject_date = format_deadline_pl(
                     fire_cert_auto_reject_start(settings.day1_date)
                 )
+            company = _resolve_company_for_pricing_request(request)
+            lunches_free_per_day = (
+                get_free_lunches_per_day(company, settings)
+                if company
+                else int(settings.lunches_free_basic)
+            )
             return Response({
                 'lunch_price': str(settings.lunch_price),
+                'lunches_free_per_day': lunches_free_per_day,
+                'lunches_free_basic': int(settings.lunches_free_basic),
+                'lunches_free_partner': int(settings.lunches_free_partner),
+                'lunches_free_main': int(settings.lunches_free_main),
                 'day1': day_opt.get('day1', '09.03.2027'),
                 'day2': day_opt.get('day2', '10.03.2027'),
                 'fire_cert_deadline': fire_cert_deadline,
@@ -2364,6 +2459,25 @@ class InvitationReminderSettingsView(APIView):
             )
 
 
+def _build_order_summary_filename(company: Company, language: str) -> tuple[str, str]:
+    """Return (ascii_filename, utf8_filename) including the company name."""
+    raw_name = (getattr(company, 'name', '') or '').strip()
+    utf8_slug = re.sub(r'[<>:"/\\|?*\x00-\x1f]', '', raw_name)
+    utf8_slug = re.sub(r'\s+', '_', utf8_slug).strip('._-')[:80]
+    if not utf8_slug:
+        utf8_slug = f'company_{company.id}' if language == 'en' else f'firma_{company.id}'
+
+    ascii_base = utf8_slug.replace('ł', 'l').replace('Ł', 'L')
+    ascii_norm = unicodedata.normalize('NFKD', ascii_base).encode('ascii', 'ignore').decode('ascii')
+    ascii_slug = re.sub(r'[^A-Za-z0-9._-]+', '_', ascii_norm)
+    ascii_slug = re.sub(r'_+', '_', ascii_slug).strip('._-')
+    if not ascii_slug:
+        ascii_slug = f'company_{company.id}'
+
+    prefix = 'order_summary_' if language == 'en' else 'podsumowanie_zamowienia_'
+    return f'{prefix}{ascii_slug}.pdf', f'{prefix}{utf8_slug}.pdf'
+
+
 class OrderSummaryPDFView(APIView):
     """
     Generate and download order summary PDF for a company.
@@ -2392,14 +2506,16 @@ class OrderSummaryPDFView(APIView):
                     status=status.HTTP_404_NOT_FOUND
                 )
             
-            # Check that all stages are completed
-            all_stages_completed = all([
-                form.stage_1_completed,
-                form.stage_2_completed,
-                form.stage_3_completed,
-                form.stage_4_completed,
-                form.stage_5_completed,
-            ])
+            # Basic exhibitors skip Stage 3 (workshops); partners/main require all 5 stages.
+            required_stages = (
+                [1, 2, 3, 4, 5]
+                if company_can_access_stage3(company)
+                else [1, 2, 4, 5]
+            )
+            all_stages_completed = all(
+                getattr(form, f'stage_{stage_num}_completed')
+                for stage_num in required_stages
+            )
             
             if not all_stages_completed:
                 return Response(
@@ -2407,8 +2523,8 @@ class OrderSummaryPDFView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Check that all stages have accepted feedback
-            for stage_num in range(1, 6):
+            # Check that all required stages have accepted feedback
+            for stage_num in required_stages:
                 stage_feedback = get_latest_feedback(company, stage_num)
                 if not stage_feedback or stage_feedback.status != 'accepted':
                     return Response(
@@ -2438,8 +2554,11 @@ class OrderSummaryPDFView(APIView):
                 # Prepare response
                 from django.http import HttpResponse
                 response = HttpResponse(pdf_buffer, content_type='application/pdf')
-                filename = f"order_summary_{company.name.replace(' ', '_')}.pdf"
-                response['Content-Disposition'] = f'attachment; filename="{filename}"'
+                ascii_filename, utf8_filename = _build_order_summary_filename(company, user_language)
+                response['Content-Disposition'] = (
+                    f'attachment; filename="{ascii_filename}"; '
+                    f"filename*=UTF-8''{quote(utf8_filename)}"
+                )
                 
                 return response
                 
@@ -2629,13 +2748,13 @@ You can access your dashboard here: {dashboard_link}
 
 If you have any questions, please contact{' your staff contact at ' + staff_email + ' or' if staff_email else ''} us at {default_email}."""
         else:
-            plain_message = f"""Przypominamy, że {stage_name} dla {company.name} nie został jeszcze uzupełniony.
+            plain_message = f"""Przypominamy, że {stage_name} dla firmy {company.name} nie został jeszcze uzupełniony.
 
 Prosimy o uzupełnienie tego etapu zgłoszenia jak najszybciej, aby zapewnić Państwu udział w Inżynierskich Targach Pracy.
 
-Możesz uzyskać dostęp do panelu tutaj: {dashboard_link}
+Mogą Państwo uzyskać dostęp do panelu tutaj: {dashboard_link}
 
-Jeśli masz pytania, skontaktuj się{' ze swoim opiekunem pod adresem ' + staff_email + ' lub' if staff_email else ''} z nami pod adresem {default_email}."""
+W razie pytań prosimy o kontakt{' z przydzielonym opiekunem pod adresem ' + staff_email + ' lub' if staff_email else ''} z nami pod adresem {default_email}."""
         
         # Render HTML template
         try:
@@ -3458,3 +3577,78 @@ class WebsiteCatalogueRemoveView(APIView):
         except ValueError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(payload)
+
+
+class FAQListCreateView(APIView):
+    """
+    List FAQ items (all active for authenticated users; include_inactive=1 for FR/Admin)
+    or create a new FAQ entry (FR/Admin only).
+    """
+
+    def get_permissions(self):
+        if self.request.method == 'POST':
+            return [IsAuthenticated(), HasStaffRole('fr')()]
+        return [IsAuthenticated()]
+
+    def get(self, request):
+        include_inactive = str(request.query_params.get('include_inactive', '')).lower() in ('1', 'true', 'yes')
+        can_see_inactive = include_inactive and (
+            request.user.is_staff or user_has_staff_role(request.user, 'fr')
+        )
+        qs = FAQItem.objects.all() if can_see_inactive else FAQItem.objects.filter(is_active=True)
+        category = request.query_params.get('category')
+        if category:
+            qs = qs.filter(category=category)
+        return Response(FAQItemSerializer(qs, many=True).data, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        serializer = FAQItemSerializer(data=request.data)
+        if serializer.is_valid():
+            item = serializer.save()
+            return Response(FAQItemSerializer(item).data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class FAQDetailView(APIView):
+    """Retrieve, update, or delete an FAQ entry (FR/Admin only)."""
+
+    permission_classes = [IsAuthenticated, HasStaffRole('fr')]
+
+    def _get_item(self, pk):
+        try:
+            return FAQItem.objects.get(pk=pk)
+        except FAQItem.DoesNotExist:
+            return None
+
+    def get(self, request, pk):
+        item = self._get_item(pk)
+        if not item:
+            return Response({'detail': 'FAQ entry not found.'}, status=status.HTTP_404_NOT_FOUND)
+        return Response(FAQItemSerializer(item).data, status=status.HTTP_200_OK)
+
+    def patch(self, request, pk):
+        item = self._get_item(pk)
+        if not item:
+            return Response({'detail': 'FAQ entry not found.'}, status=status.HTTP_404_NOT_FOUND)
+        serializer = FAQItemSerializer(item, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def put(self, request, pk):
+        item = self._get_item(pk)
+        if not item:
+            return Response({'detail': 'FAQ entry not found.'}, status=status.HTTP_404_NOT_FOUND)
+        serializer = FAQItemSerializer(item, data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk):
+        item = self._get_item(pk)
+        if not item:
+            return Response({'detail': 'FAQ entry not found.'}, status=status.HTTP_404_NOT_FOUND)
+        item.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
