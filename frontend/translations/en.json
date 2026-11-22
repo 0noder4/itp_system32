@@ -166,7 +166,11 @@
       "completedStages": "Completed Stages",
       "createdAt": "System Entry Date"
     },
-    "filterByFrResp": "FR supervisor",
+    "filterByFrResp": "Responsible FR Member",
+    "filterByOpiekun": "Company Guardian",
+    "unassigned": "Unassigned",
+    "englishBadge": "EN",
+    "englishBadgeTooltip": "English-speaking company",
     "status": {
       "main": "Main Partner",
       "partner": "Partner",
@@ -397,7 +401,9 @@
       "day1": "Day 1",
       "day2": "Day 2",
       "noStandAssigned": "No stand assigned for this day",
-      "yourStand": "Your Stand"
+      "yourStand": "Your Stand",
+      "download": "Download map",
+      "downloadError": "Failed to download map image."
     },
     "stage1": {
       "title": "Stage 1: Basic Data",
@@ -641,8 +647,12 @@
       "selectFile": "Select a file to upload",
       "addJobwall": "Add Job Position",
       "jobwall": "Job Position",
-      "jobwallPricingDisclaimer": "Each job position posting has an additional cost.",
-      "jobwallPricingDisclaimerFree": "Free postings: {freeCount}.",
+      "jobwallPricingDisclaimer": "Each paid job position posting has an additional netto cost.",
+      "jobwallPricingDisclaimerFree": "Free JobWall postings included in your package: {freeCount}.",
+      "jobwallPricingNoFree": "No free JobWall postings are included for your registration tier (registered after the early deadline).",
+      "jobwallPricingPacksInfo": "Additional postings: a +2 pack costs {pack2} PLN netto, a +3 pack costs {pack3} PLN netto (maximum {maxExtra} extra postings).",
+      "jobwallMaxLimitReached": "Maximum JobWall posting limit reached for your package ({max}: {free} included + {maxExtra} extra).",
+      "jobwallPackBadge": "+{count} pack",
       "jobwallPricingDisclaimerPaid": "Additional postings cost {price} PLN each.",
       "jobwallPricePerPosting": "Price per paid posting",
       "jobwallCharCount": "{current}/{max} characters",
@@ -655,15 +665,15 @@
       "totalLunchCost": "Total cost of additional lunches",
       "extraLunchesCount": "Additional lunches: {count}",
       "lunchesDeclined": "I decline lunches",
-      "lunchesDeclinedWarning": "Declining means you lose free lunches included in the package (2 per day).",
+      "lunchesDeclinedWarning": "Declining means forfeiting the free lunches included in your package ({freePerDay} per day).",
       "lunchesDeclinedStatus": "Lunches declined",
       "lunchSummaryTitle": "Lunch summary",
-      "lunchSummaryDay1": "Day {date}: {used}/2 free used, {remaining} remaining",
-      "lunchSummaryDay2": "Day {date}: {used}/2 free used, {remaining} remaining",
+      "lunchSummaryDay1": "Day {date}: {used}/{freePerDay} free used, {remaining} remaining",
+      "lunchSummaryDay2": "Day {date}: {used}/{freePerDay} free used, {remaining} remaining",
       "lunchSummaryFreeRemaining": "Total free lunches remaining: {count}",
       "lunchSummaryPaid": "Paid lunches: {count}",
-      "lunchSummaryPaidDetail": "Paid lunches: {count} × {price} PLN = {amount} PLN",
-      "lunchSummaryTotal": "Total surcharge: {amount} PLN",
+      "lunchSummaryPaidDetail": "Paid lunches: {count} × {price} PLN = {amount} PLN netto",
+      "lunchSummaryTotal": "Total surcharge: {amount} PLN netto",
       "lunchPriceLoading": "Loading lunch price…",
       "mainRepTitle": "Main representative contact during the event",
       "mainRepDescription": "Contact person if there are issues reaching delegates.",
@@ -678,8 +688,27 @@
       "attendanceRequired": "At least one person from the company must attend each fair day.",
       "lunchPaymentDialogTitle": "Additional lunches cost summary",
       "lunchPaymentDialogText": "The additional amount due for lunches is {amount} PLN.",
-      "jobwallPaymentDialogTitle": "Job postings cost summary",
-      "jobwallPaymentDialogText": "The additional amount due for job postings is {amount} PLN.",
+      "jobwallPaymentDialogTitle": "Cost Summary — Stage 4",
+      "jobwallPaymentDialogText": "The netto amount for additional JobWall postings is {amount} PLN.",
+      "nettoLabel": "netto",
+      "stage1CostDialogTitle": "Cost Summary — Stage 1",
+      "stage1CostDialogText": "Please review your current cost breakdown before submitting Stage 1.",
+      "costSummaryTitle": "Order cost summary (netto)",
+      "costSummaryCurrentStage": "Current stage",
+      "costSummaryUnavailable": "Unable to load detailed cost summary.",
+      "costSummaryStage1Label": "Stage 1 — Package / stand",
+      "costSummaryStage2Label": "Stage 2 — Additional equipment",
+      "costSummaryStage4Label": "Stage 4 — Additional JobWall postings",
+      "costSummaryStage5Label": "Stage 5 — Additional lunches",
+      "costSummaryOneDay": "1 day",
+      "costSummaryTwoDays": "2 days",
+      "costSummaryPendingStand": "stand cost will appear once size and days are assigned",
+      "costSummaryPendingValue": "pending assignment",
+      "costSummaryIndividualPricing": "individual quote",
+      "costSummaryJobwallDetail": "Total {total} ({free} included, {extra} paid)",
+      "costSummaryLunchDetail": "Paid: {extra} ({freePerDay}/day included)",
+      "costSummaryTotalNetto": "Total (netto)",
+      "costSummaryVatNote": "All amounts shown are netto prices and exclude VAT.",
       "submitConfirmTitle": "Confirm submission",
       "submitConfirmText": "Are you sure you want to submit this stage?",
       "confirmSubmit": "Confirm and submit",
@@ -701,11 +730,13 @@
       "contactUs": "Contact us",
       "allCategories": "All",
       "seeAllQuestions": "See all questions",
+      "empty": "No questions available yet.",
       "categories": {
         "general": "General Information",
         "logistics": "Logistics",
         "materials": "Promotional Materials and Setup",
         "ownConstruction": "Own Construction",
+        "workshops": "Workshops",
         "support": "Support and Catering",
         "pdiVenue": "PDI Venue"
       },
@@ -716,7 +747,7 @@
         },
         "dates": {
           "question": "When is the fair taking place?",
-          "answer": "The fair takes place on March 10-11, 2026. The fair starts at 9:00 AM and ends at 4:00 PM on both days. The official opening is on March 10 at 10:00 AM."
+          "answer": "The fair takes place on March 9–10, 2027. The fair starts at 9:00 AM and ends at 4:00 PM on both days. The official opening is on March 9 at 10:00 AM."
         },
         "wifi": {
           "question": "What is the Wi-Fi password?",
@@ -744,7 +775,7 @@
         },
         "ownSetup": {
           "question": "When can I set up my own construction?",
-          "answer": "Exhibitors who have their own construction and are exhibiting on the first day can set it up on March 10. Exhibitors who are only exhibiting on the second day can set up their construction on March 11. The speciic timeslots will be consulted with assigned supervisor."
+          "answer": "Exhibitors who have their own construction and are exhibiting on the first day can set it up on March 9. Exhibitors who are only exhibiting on the second day can set up their construction on March 10. The specific timeslots should be agreed upon with your assigned supervisor."
         },
         "wallRestrictions": {
           "question": "Can I stick materials on the construction walls?",
@@ -758,7 +789,7 @@
         },
         "lunch": {
           "question": "Is lunch included in the package?",
-          "answer": "Yes, as part of the package, two of your delegates are provided with a lunch in the form of a hot meal (2 lunches per company per day, additional can be bought in the formular or during the fairs through your supervisor). The welcome package will contain vouchers that can be exchanged for lunch at the Central Canteen of Warsaw University of Technology \"Bistro Chochelka\" (Rektorska 2). The scheduled lunch hours are: 12:00-15:00."
+          "answer": "Yes, free hot lunches for each fair day are included according to your package (Exhibitor: 2/day, Partner: 6/day, Main Partner: 10/day; additional lunches can be purchased in the application form or during the fair through your supervisor). The welcome package will contain vouchers that can be exchanged for lunch at the Central Canteen of Warsaw University of Technology \"Bistro Chochelka\" (Rektorska 2). Scheduled lunch hours are 12:00–15:00."
         },
         "coffee": {
           "question": "Will there be a coffee point available?",
@@ -768,17 +799,49 @@
       "pdiVenue": {
         "gala": {
           "question": "When is the Employer for Engineer Gala taking place?",
-          "answer": "This year's gala presenting the results of the Employer for Engineer survey will take place on March 10 in the Small Hall of the Main Building of Warsaw University of Technology. During the gala, the results of the study on the expectations of students and graduates of technical universities regarding the job market will be presented."
+          "answer": "This year's gala presenting the results of the Employer for Engineer survey will take place on March 9, 2027 in the Small Hall of the Main Building of Warsaw University of Technology. During the gala, the results of the study on the expectations of students and graduates of technical universities regarding the job market will be presented."
         }
       }
     }
   },
   "staff": {
+    "faq": {
+      "navTitle": "FAQ",
+      "title": "FAQ Management",
+      "description": "Edit, add, reorder, or hide questions shown to exhibitors in the FAQ tab.",
+      "addButton": "Add question",
+      "editTitle": "Edit FAQ item",
+      "createTitle": "New FAQ item",
+      "dialogDescription": "Provide both Polish and English versions of the question and answer.",
+      "categoryLabel": "Category",
+      "orderLabel": "Order",
+      "activeLabel": "Visible to companies",
+      "questionPl": "Question (PL)",
+      "answerPl": "Answer (PL)",
+      "questionEn": "Question (EN)",
+      "answerEn": "Answer (EN)",
+      "active": "Active",
+      "inactive": "Hidden",
+      "show": "Show to companies",
+      "hide": "Hide from companies",
+      "empty": "No matching FAQ entries.",
+      "loadError": "Failed to load FAQ entries.",
+      "validationError": "Please fill in questions and answers in both languages.",
+      "createdSuccess": "FAQ entry added.",
+      "updatedSuccess": "FAQ entry updated.",
+      "deletedSuccess": "FAQ entry deleted.",
+      "saveError": "Failed to save FAQ entry.",
+      "deleteError": "Failed to delete FAQ entry.",
+      "deleteTitle": "Delete FAQ entry?",
+      "deleteConfirm": "Are you sure you want to delete \"{question}\"?"
+    },
     "map": {
       "title": "Map",
       "description": "Floor plan of the Main Building Great Hall (Wielka Aula). The main entrance is at the bottom center of the map. Stand assignments by day.",
       "day1": "Day 1",
-      "day2": "Day 2"
+      "day2": "Day 2",
+      "download": "Download map",
+      "downloadError": "Failed to download map image."
     },
     "companyDetail": {
       "title": "Company Details",
@@ -801,12 +864,16 @@
       "draftInProgressMessage": "The company is still editing a draft — you can preview the data, but accept / reject is available only after they click Submit.",
       "rejectStage": "Reject Stage",
       "rejectStageDescription": "Please provide a comment explaining why this stage is being rejected.",
+      "englishFeedbackHint": "Note: this company uses the English interface (EN) — please write your feedback in English (it will be emailed to the company).",
       "fireCertAutoRejectWarning": "Note: this company chose self construction. From {autoRejectDate} the system will automatically set stage 2 to “requires correction” and email the company if the fire-resistance certificate is still missing (fire-resistance certificate upload deadline: {deadlineDate}). Do not reject manually for that reason a few days earlier — the company would get a redundant reminder.",
       "fireCertAutoRejectWarningNoDate": "Note: this company chose self construction. Near the event the system will automatically set stage 2 to “requires correction” and email the company if the fire-resistance certificate is still missing. Do not reject manually for that reason a few days earlier.",
       "rejectSend": "Send",
       "noData": "No data available for this stage",
       "loadError": "Failed to load company data",
-      "notFound": "Company not found"
+      "notFound": "Company not found",
+      "orderSummary": "Order summary",
+      "downloadOrderSummary": "Download PDF",
+      "orderSummaryUnavailable": "Available after all stages are accepted and a stand is assigned"
     },
     "invitationDetail": {
       "title": "Invitation Details",
@@ -1167,6 +1234,35 @@
       "hint": "Select cells, then pick a fill colour.",
       "pickCells": "Select cells in the sheet first.",
       "error": "Could not save the cell fill colour."
+    },
+    "guests": {
+      "addButton": "Add person",
+      "deleteButton": "Delete person",
+      "deleteAction": "Remove manually added person",
+      "dialogTitle": "Add person without an account",
+      "dialogDescription": "Add a team member without a system account so their lunch vouchers can be tracked here.",
+      "fullNameLabel": "Full name",
+      "fullNamePlaceholder": "e.g. Jane Doe",
+      "day1Label": "Lunch voucher — Day 1",
+      "day2Label": "Lunch voucher — Day 2",
+      "noteLabel": "Notes",
+      "notePlaceholder": "e.g. vegetarian, core team",
+      "submit": "Add person",
+      "cancel": "Cancel",
+      "added": "Person added to the lunch list.",
+      "addError": "Could not add person.",
+      "deleteTitle": "Remove person from list?",
+      "deleteDescription": "“{name}” and all comments/history attached to this row will be permanently deleted.",
+      "deleteConfirm": "Delete",
+      "deleted": "Person removed from the list.",
+      "deleteError": "Could not remove person."
+    },
+    "historyKinds": {
+      "commit": "Saved",
+      "draft": "Draft",
+      "proposalProgress": "Proposal · pending",
+      "proposalAccepted": "Proposal · accepted",
+      "proposalRejected": "Proposal · rejected"
     }
   }
 }

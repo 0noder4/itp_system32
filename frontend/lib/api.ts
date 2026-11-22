@@ -271,6 +271,10 @@ export interface StageDeadlinesResponse {
 
 export interface LunchPriceResponse {
   lunch_price: string;
+  lunches_free_per_day?: number;
+  lunches_free_basic?: number;
+  lunches_free_partner?: number;
+  lunches_free_main?: number;
   day1: string;
   day2: string;
   /** DD.MM.YYYY — day1 minus 4 weeks; null if day1_date unset */
@@ -279,9 +283,67 @@ export interface LunchPriceResponse {
   fire_cert_auto_reject_date?: string | null;
 }
 
+export interface JobwallPriceResponse {
+  jobwall_price: string;
+  jobwall_free_count: number;
+  jobwall_pack_2_price?: string;
+  jobwall_pack_3_price?: string;
+  jobwall_max_extra_offers?: number;
+  jobwall_early_deadline?: string | null;
+  jobwall_free_basic_early?: number;
+  jobwall_free_basic_late?: number;
+  jobwall_free_partner?: number;
+  jobwall_free_main?: number;
+}
+
+export function extractDownloadFilename(
+  contentDisposition: string | undefined,
+  fallback: string
+): string {
+  if (!contentDisposition) return fallback;
+
+  const utf8Match = contentDisposition.match(
+    /filename\*\s*=\s*(?:UTF-8''|utf-8'')([^;]+)/i
+  );
+  if (utf8Match?.[1]) {
+    const raw = utf8Match[1].trim().replace(/^["']|["']$/g, "");
+    try {
+      const decoded = decodeURIComponent(raw).replace(/[/\\]/g, "");
+      if (decoded) return decoded;
+    } catch {
+      const cleaned = raw.replace(/[/\\]/g, "");
+      if (cleaned) return cleaned;
+    }
+  }
+
+  const quotedMatch = contentDisposition.match(/filename\s*=\s*"([^"]+)"/i);
+  if (quotedMatch?.[1]) {
+    const cleaned = quotedMatch[1].trim().replace(/[/\\]/g, "");
+    if (cleaned) return cleaned;
+  }
+
+  const plainMatch = contentDisposition.match(/filename\s*=\s*([^;\s]+)/i);
+  if (plainMatch?.[1]) {
+    const cleaned = plainMatch[1].trim().replace(/^["']|["']$/g, "").replace(/[/\\]/g, "");
+    if (cleaned) return cleaned;
+  }
+
+  return fallback;
+}
+
+export function sanitizeCompanySlug(name: string): string {
+  return name
+    .trim()
+    .replace(/[<>:"/\\|?*]+/g, "")
+    .replace(/\s+/g, "_")
+    .replace(/^[._-]+|[._-]+$/g, "")
+    .slice(0, 80);
+}
+
 // Download order summary PDF
 export const downloadOrderSummaryPDF = async (
-  companyId: number
+  companyId: number,
+  companyName?: string
 ): Promise<void> => {
   try {
     const response = await apiClient.get(
@@ -299,15 +361,14 @@ export const downloadOrderSummaryPDF = async (
     const link = document.createElement("a");
     link.href = url;
 
-    // Extract filename from Content-Disposition header if available
-    const contentDisposition = response.headers["content-disposition"];
-    let filename = `order_summary_${companyId}.pdf`;
-    if (contentDisposition) {
-      const filenameMatch = contentDisposition.match(/filename="?(.+)"?/i);
-      if (filenameMatch) {
-        filename = filenameMatch[1];
-      }
-    }
+    const slug = companyName ? sanitizeCompanySlug(companyName) : "";
+    const fallback = slug
+      ? `podsumowanie_zamowienia_${slug}.pdf`
+      : `order_summary_${companyId}.pdf`;
+    const filename = extractDownloadFilename(
+      response.headers["content-disposition"],
+      fallback
+    );
 
     link.setAttribute("download", filename);
     document.body.appendChild(link);
@@ -315,7 +376,7 @@ export const downloadOrderSummaryPDF = async (
 
     // Cleanup
     link.parentNode?.removeChild(link);
-    window.URL.revokeObjectURL(url);
+    window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
   } catch (error: any) {
     const errorMessage =
       error.response?.data?.detail ||

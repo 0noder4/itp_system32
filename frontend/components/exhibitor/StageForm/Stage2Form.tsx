@@ -26,7 +26,13 @@ import {
 } from "@/components/ui/dialog";
 import { StageDraftSaveButton } from "./StageDraftSaveButton";
 import { CarpetSelectionDialog } from "./CarpetSelectionDialog";
-import { fetchInvoiceTotal } from "@/lib/invoice-cost-utils";
+import { CostSummaryBox } from "./CostSummaryBox";
+import {
+  applyStageOverridesToSummary,
+  CompanyCostPaidEquipmentItem,
+  CompanyCostSummary,
+  fetchCompanyCostSummary,
+} from "@/lib/invoice-cost-utils";
 import { fetcher, LunchPriceResponse } from "@/lib/api";
 import useSWR from "swr";
 import {
@@ -178,7 +184,8 @@ export function Stage2Form({
   const [pendingFormData, setPendingFormData] =
     React.useState<Stage2FormData | null>(null);
   const [pendingAdditionalCost, setPendingAdditionalCost] = React.useState(0);
-  const [pendingInvoiceTotal, setPendingInvoiceTotal] = React.useState(0);
+  const [pendingCostSummary, setPendingCostSummary] =
+    React.useState<CompanyCostSummary | null>(null);
   const [isPreparingDialog, setIsPreparingDialog] = React.useState(false);
   const [scDimensions, setScDimensions] = React.useState<ScDimensions>(() =>
     parseScDimensions(initialData?.stand_details?.sc_details)
@@ -431,7 +438,7 @@ export function Stage2Form({
     const item = equipmentItems.find((i) => i.id === itemId);
     const standType = (watchStandType || "provided_stand") as StandTypeValue;
     const minQty = item ? getMinEquipmentQty(item, standType) : 0;
-    const nextQty = Math.max(minQty, quantity);
+    const nextQty = Math.min(50, Math.max(minQty, quantity));
     const currentSelections = form.getValues("equipment_selections") || [];
     const existingIndex = currentSelections.findIndex(
       (sel) => sel.equipment_item === itemId
@@ -522,6 +529,34 @@ export function Stage2Form({
       }
       return total;
     }, 0);
+  };
+
+  const getLivePaidEquipmentItems = (): CompanyCostPaidEquipmentItem[] => {
+    return watchEquipmentSelections.reduce<CompanyCostPaidEquipmentItem[]>(
+      (acc, sel) => {
+        const item = equipmentItems.find((i) => i.id === sel.equipment_item);
+        if (!item) return acc;
+        const qty = Number(sel.quantity) || 0;
+        const included = Number(item.included_quantity) || 0;
+        const paidQty = Math.max(0, qty - included);
+        const unitPrice = parseFloat(String(item.price)) || 0;
+        const cost = paidQty * unitPrice;
+        if (paidQty <= 0 || cost <= 0) return acc;
+        acc.push({
+          id: item.id,
+          code: item.code ?? null,
+          name_pl: item.name,
+          name_en: item.name,
+          quantity: qty,
+          included_quantity: included,
+          paid_quantity: paidQty,
+          unit_price: unitPrice.toFixed(2),
+          cost: cost.toFixed(2),
+        });
+        return acc;
+      },
+      []
+    );
   };
 
   const groupedEquipment = React.useMemo(() => {
@@ -695,14 +730,22 @@ export function Stage2Form({
   const handleFormSubmit = async (data: Stage2FormData) => {
     const dataWithFiles = buildSubmitPayload(data);
     const stageCost = calculateTotalAdditionalCost();
+    const livePaidItems = getLivePaidEquipmentItems();
     setPendingFormData(dataWithFiles);
     setPendingAdditionalCost(stageCost);
     setIsPreparingDialog(true);
     try {
-      const invoiceTotal = companyId
-        ? await fetchInvoiceTotal(companyId, { equipment: stageCost })
-        : stageCost;
-      setPendingInvoiceTotal(invoiceTotal);
+      const summary = companyId
+        ? await fetchCompanyCostSummary(companyId)
+        : null;
+      setPendingCostSummary(
+        summary
+          ? applyStageOverridesToSummary(summary, {
+              equipment: stageCost,
+              equipmentPaidItems: livePaidItems,
+            })
+          : null
+      );
       setShowCostDialog(true);
     } finally {
       setIsPreparingDialog(false);
@@ -1339,6 +1382,7 @@ export function Stage2Form({
                                   id={`equipment_qty_${item.id}`}
                                   type="number"
                                   min={minQty}
+                                  max={50}
                                   value={quantity}
                                   onChange={(e) =>
                                     handleQuantityChange(
@@ -1413,7 +1457,8 @@ export function Stage2Form({
             <div className="rounded-md bg-amber-50 p-4 border border-amber-200">
               <p className="text-sm font-medium text-amber-900">
                 {t("exhibitor.form.totalAdditionalCost")}:{" "}
-                {calculateTotalAdditionalCost().toFixed(2)} PLN
+                {calculateTotalAdditionalCost().toFixed(2)} PLN (
+                {t("exhibitor.form.nettoLabel")})
               </p>
             </div>
           )}
@@ -1501,19 +1546,13 @@ export function Stage2Form({
             <DialogTitle>
               {t("exhibitor.form.equipmentPaymentDialogTitle")}
             </DialogTitle>
-            <DialogDescription className="space-y-2">
-              <span className="block">
-                {t("exhibitor.form.equipmentPaymentDialogText", {
-                  amount: pendingAdditionalCost.toFixed(2),
-                })}
-              </span>
-              <span className="block">
-                {t("exhibitor.form.invoiceTotalDialogText", {
-                  amount: pendingInvoiceTotal.toFixed(2),
-                })}
-              </span>
+            <DialogDescription>
+              {t("exhibitor.form.equipmentPaymentDialogText", {
+                amount: pendingAdditionalCost.toFixed(2),
+              })}
             </DialogDescription>
           </DialogHeader>
+          <CostSummaryBox summary={pendingCostSummary} highlightStage={2} />
           <DialogFooter className="gap-2 sm:gap-0">
             <Button
               type="button"

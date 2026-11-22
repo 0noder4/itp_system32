@@ -34,84 +34,84 @@
   },
   "auth": {
     "login": {
-      "title": "Zaloguj się do swojego konta",
-      "description": "Wprowadź login lub e-mail oraz hasło poniżej",
+      "title": "Logowanie do konta",
+      "description": "Proszę wprowadzić login lub adres e-mail oraz hasło poniżej",
       "usernameLabel": "Login lub e-mail",
-      "usernamePlaceholder": "Wprowadź login lub e-mail",
+      "usernamePlaceholder": "Proszę wprowadzić login lub e-mail",
       "passwordLabel": "Hasło",
-      "passwordPlaceholder": "Wprowadź hasło",
-      "forgotPassword": "Zapomniałeś hasła?",
+      "passwordPlaceholder": "Proszę wprowadzić hasło",
+      "forgotPassword": "Nie pamiętają Państwo hasła?",
       "submitButton": "Zaloguj",
       "submitting": "Logowanie...",
       "success": "Zalogowano pomyślnie!",
       "successDescription": "Przekierowywanie do panelu...",
       "error": "Logowanie nieudane",
-      "errorDescription": "Nieprawidłowy login, e-mail lub hasło. Spróbuj ponownie."
+      "errorDescription": "Nieprawidłowy login, e-mail lub hasło. Proszę spróbować ponownie."
     },
     "register": {
-      "title": "Dokończ rejestrację",
-      "description": "Dokończ rejestrację dla firmy {companyName} ({email})",
+      "title": "Dokończenie rejestracji",
+      "description": "Proszę dokończyć rejestrację dla firmy {companyName} ({email})",
       "staffTitle": "Dokończ rejestrację opiekuna",
       "staffDescription": "Uzupełnij dane konta opiekuna ({email}). Login to część adresu przed @.",
       "firstNameLabel": "Imię",
-      "firstNamePlaceholder": "Wprowadź swoje imię",
+      "firstNamePlaceholder": "Proszę podać imię",
       "lastNameLabel": "Nazwisko",
-      "lastNamePlaceholder": "Wprowadź swoje nazwisko",
+      "lastNamePlaceholder": "Proszę podać nazwisko",
       "phoneLabel": "Numer telefonu",
-      "phonePlaceholder": "Wprowadź swój numer telefonu",
+      "phonePlaceholder": "Proszę podać numer telefonu",
       "usernameLabel": "Login",
       "usernamePlaceholder": "Login",
       "emailLabel": "E-mail",
       "emailPlaceholder": "Adres e-mail",
       "passwordLabel": "Hasło",
-      "passwordPlaceholder": "Wprowadź silne hasło",
+      "passwordPlaceholder": "Proszę wprowadzić silne hasło",
       "confirmPasswordLabel": "Potwierdź hasło",
-      "confirmPasswordPlaceholder": "Wprowadź hasło ponownie",
+      "confirmPasswordPlaceholder": "Proszę wprowadzić hasło ponownie",
       "submitButton": "Utwórz konto",
       "submitting": "Tworzenie konta...",
       "success": "Konto utworzone!",
-      "successDescription": "Możesz się zalogować podanym loginem.",
+      "successDescription": "Mogą się Państwo zalogować podanym loginem.",
       "error": "Rejestracja nieudana",
-      "errorDescription": "Nie udało się dokończyć rejestracji. Spróbuj ponownie.",
+      "errorDescription": "Nie udało się dokończyć rejestracji. Proszę spróbować ponownie.",
       "loadingInvitation": "Ładowanie zaproszenia...",
       "invitationNotFound": "Nie znaleziono zaproszenia",
       "invitationNotFoundDescription": "To zaproszenie jest nieprawidłowe lub wygasło.",
       "missingToken": "Brak tokenu",
-      "missingTokenDescription": "Link rejestracyjny jest nieprawidłowy. Skontaktuj się z pomocą techniczną.",
+      "missingTokenDescription": "Link rejestracyjny jest nieprawidłowy. Proszę skontaktować się z pomocą techniczną.",
       "invalidInvitation": "Nieprawidłowe zaproszenie",
-      "invalidInvitationDescription": "Zaproszenie jest nieprawidłowe lub wygasło. Poproś o nowe zaproszenie."
+      "invalidInvitationDescription": "Zaproszenie jest nieprawidłowe lub wygasło. Proszę skontaktować się z opiekunem w celu uzyskania nowego zaproszenia."
     },
     "resetPassword": {
-      "title": "Zresetuj hasło",
-      "description": "Wprowadź swój adres e-mail, a wyślemy Ci link do zresetowania hasła.",
+      "title": "Resetowanie hasła",
+      "description": "Proszę wprowadzić adres e-mail, a wyślemy Państwu link do zresetowania hasła.",
       "emailLabel": "E-mail",
-      "emailPlaceholder": "Wprowadź swój adres e-mail",
+      "emailPlaceholder": "Proszę wprowadzić adres e-mail",
       "submitButton": "Wyślij link resetowania",
       "submitting": "Wysyłanie...",
       "success": "Link wysłany!",
       "successDescription": "Jeśli adres e-mail istnieje w systemie, link do resetowania hasła został wysłany."
     },
     "resetPasswordConfirm": {
-      "title": "Ustaw nowe hasło",
-      "description": "Wprowadź nowe hasło dla {email}",
+      "title": "Ustawienie nowego hasła",
+      "description": "Proszę wprowadzić nowe hasło dla {email}",
       "newPasswordLabel": "Nowe hasło",
-      "newPasswordPlaceholder": "Wprowadź silne hasło",
+      "newPasswordPlaceholder": "Proszę wprowadzić silne hasło",
       "confirmPasswordLabel": "Potwierdź hasło",
-      "confirmPasswordPlaceholder": "Wprowadź hasło ponownie",
+      "confirmPasswordPlaceholder": "Proszę wprowadzić hasło ponownie",
       "submitButton": "Zresetuj hasło",
       "submitting": "Resetowanie hasła...",
       "success": "Hasło zresetowane!",
-      "successDescription": "Możesz teraz zalogować się nowym hasłem.",
+      "successDescription": "Mogą się Państwo teraz zalogować nowym hasłem.",
       "error": "Reset hasła nieudany",
-      "errorDescription": "Nie udało się zresetować hasła. Spróbuj ponownie.",
+      "errorDescription": "Nie udało się zresetować hasła. Proszę spróbować ponownie.",
       "validating": "Weryfikacja tokenu...",
       "invalidLink": "Nieprawidłowy link resetowania",
       "invalidLinkDescription": "Ten link resetowania hasła jest nieprawidłowy lub wygasł.",
-      "requestNew": "Poproś o nowy link",
+      "requestNew": "Zamów nowy link",
       "missingToken": "Brak tokenu",
-      "missingTokenDescription": "Link resetowania hasła jest nieprawidłowy. Poproś o nowy.",
+      "missingTokenDescription": "Link resetowania hasła jest nieprawidłowy. Proszę zamówić nowy link.",
       "invalidToken": "Nieprawidłowy token",
-      "invalidTokenDescription": "Token jest nieprawidłowy lub wygasł. Poproś o nowy link resetowania hasła."
+      "invalidTokenDescription": "Token jest nieprawidłowy lub wygasł. Proszę zamówić nowy link resetowania hasła."
     },
     "validation": {
       "usernameRequired": "Login lub e-mail jest wymagany.",
@@ -131,7 +131,7 @@
   "dashboard": {
     "partner": {
       "title": "Panel firmy",
-      "description": "Witaj w panelu swojej firmy. To jest Twoja dedykowana przestrzeń robocza."
+      "description": "Witamy w panelu Państwa firmy. Jest to dedykowana przestrzeń robocza."
     }
   },
   "companies": {
@@ -166,7 +166,11 @@
       "completedStages": "Ukończone etapy",
       "createdAt": "Data wejścia do systemu"
     },
-    "filterByFrResp": "Opiekun FR",
+    "filterByFrResp": "Odpowiedzialny FR-owiec",
+    "filterByOpiekun": "Opiekun firmy",
+    "unassigned": "Nieprzypisany",
+    "englishBadge": "EN",
+    "englishBadgeTooltip": "Firma anglojęzyczna",
     "status": {
       "main": "Główny Partner",
       "partner": "Partner",
@@ -340,7 +344,7 @@
   },
   "exhibitor": {
     "panelTitle": "Panel wystawcy",
-    "panelDescription": "Uzupełnij wszystkie etapy formularza zgłoszeniowego",
+    "panelDescription": "Proszę uzupełnić wszystkie etapy formularza zgłoszeniowego",
     "navigation": {
       "dashboard": "Panel główny",
       "forms": "Formularze",
@@ -348,56 +352,58 @@
       "map": "Mapa"
     },
     "dashboard": {
-      "description": "Przeglądaj informacje o swojej firmie, status zgłoszenia oraz postęp w uzupełnianiu formularzy."
+      "description": "Przegląd informacji o Państwa firmie, statusu zgłoszenia oraz postępu w uzupełnianiu formularzy."
     },
     "faqCard": {
-      "title": "Masz pytania?",
-      "description": "Sprawdź sekcję FAQ lub skontaktuj się z opiekunem wydarzenia."
+      "title": "Mają Państwo pytania?",
+      "description": "Prosimy sprawdzić sekcję FAQ lub skontaktować się z opiekunem wydarzenia."
     },
     "forms": {
-      "description": "Uzupełnij wszystkie etapy formularza zgłoszeniowego w odpowiedniej kolejności."
+      "description": "Proszę uzupełnić wszystkie etapy formularza zgłoszeniowego w odpowiedniej kolejności."
     },
     "overview": {
-      "companyInfo": "Twoje informacje",
+      "companyInfo": "Informacje o firmie",
       "companyName": "Nazwa systemowa",
       "status": "Status",
       "standDay1": "Stoisko - Dzień 1",
       "standDay2": "Stoisko - Dzień 2",
       "registrationDate": "Data rejestracji",
-      "representative": "Twoje konto",
+      "representative": "Państwa konto",
       "supervisor": "Opiekun wydarzenia"
     },
     "welcome": {
       "title": "Witamy w Panelu Wystawcy",
-      "description": "To jest centrum zarządzania Twoim udziałem w wydarzeniu. Oto krótki przewodnik, który pomoże Ci rozpocząć:",
+      "description": "Centrum zarządzania Państwa udziałem w wydarzeniu. Poniżej znajdą Państwo krótki przewodnik:",
       "instructions": {
-        "dashboard": "Przeglądaj informacje o swojej firmie i status zgłoszenia na tym panelu.",
-        "forms": "Uzupełnij wszystkie 5 etapów formularza zgłoszeniowego, przechodząc do sekcji Formularze.",
-        "stages": "Każdy etap musi być uzupełniony w kolejności. Możesz zobaczyć status każdego etapu poniżej.",
-        "feedback": "Jeśli etap wymaga poprawek, zobaczysz komentarze zwrotne. Rozpatrz uwagi i prześlij ponownie.",
-        "support": "Jeśli potrzebujesz pomocy, skontaktuj się z opiekunem wydarzenia lub zespołem wsparcia."
+        "dashboard": "Mogą Państwo przeglądać informacje o swojej firmie i status zgłoszenia na tym panelu.",
+        "forms": "Proszę uzupełnić wszystkie 5 etapów formularza zgłoszeniowego, przechodząc do sekcji Formularze.",
+        "stages": "Każdy etap musi zostać uzupełniony w odpowiedniej kolejności. Status każdego etapu jest widoczny poniżej.",
+        "feedback": "Jeśli etap wymaga poprawek, poniżej pojawią się uwagi zespołu. Prosimy je uwzględnić i przesłać etap ponownie.",
+        "support": "Jeśli potrzebują Państwo pomocy, prosimy o kontakt z opiekunem wydarzenia lub zespołem wsparcia."
       }
     },
     "stagesOverview": "Etapy zgłoszenia",
-    "currentStageFormTitle": "Uzupełnij bieżący etap",
-    "loadError": "Nie udało się załadować danych formularza. Spróbuj ponownie później.",
+    "currentStageFormTitle": "Bieżący etap zgłoszenia",
+    "loadError": "Nie udało się załadować danych formularza. Proszę spróbować ponownie później.",
     "noCompanyTitle": "Nie znaleziono firmy",
-    "noCompanyDescription": "Twoje konto nie jest powiązane z żadną firmą. Skontaktuj się z pomocą techniczną.",
+    "noCompanyDescription": "Państwa konto nie jest powiązane z żadną firmą. Proszę skontaktować się z pomocą techniczną.",
     "allCompletedTitle": "Zgłoszenie kompletne!",
-    "allCompletedDescription": "Uzupełniłeś wszystkie etapy zgłoszenia. Dziękujemy za przesłanie formularza.",
+    "allCompletedDescription": "Wszystkie etapy zgłoszenia zostały uzupełnione. Dziękujemy za przesłanie formularza.",
     "downloadOrderSummary": "Pobierz podsumowanie zamówienia",
     "downloadingPDF": "Generowanie PDF...",
     "pdfDownloadSuccess": "PDF pobrany",
     "pdfDownloadSuccessDescription": "Podsumowanie zamówienia PDF zostało pobrane pomyślnie.",
     "pdfDownloadError": "Błąd pobierania",
-    "pdfDownloadErrorDescription": "Nie udało się pobrać podsumowania zamówienia PDF. Spróbuj ponownie.",
+    "pdfDownloadErrorDescription": "Nie udało się pobrać podsumowania zamówienia PDF. Proszę spróbować ponownie.",
     "map": {
       "title": "Mapa stoisk Wielkiej Auli Gmachu Głównego",
       "description": "Główne wejście jest na dole na środku mapy.",
       "day1": "Dzień 1",
       "day2": "Dzień 2",
       "noStandAssigned": "Brak przypisanego stoiska na ten dzień",
-      "yourStand": "Twoje stoisko"
+      "yourStand": "Państwa stoisko",
+      "download": "Pobierz mapę",
+      "downloadError": "Nie udało się pobrać grafiki mapy."
     },
     "stage1": {
       "title": "Etap 1: Dane podstawowe",
@@ -421,7 +427,7 @@
     },
     "status": {
       "notStarted": "Nierozpoczęty",
-      "inProgress": "Firemka wciąż edytuje",
+      "inProgress": "W trakcie edycji (wersja robocza)",
       "pendingApproval": "Oczekuje na akceptację",
       "accepted": "Zaakceptowany",
       "rejected": "Wymaga poprawy",
@@ -432,14 +438,14 @@
       "invalidEmail": "Proszę podać prawidłowy adres e-mail",
       "invalidUrl": "Proszę podać prawidłowy adres URL lub adres e-mail",
       "saveSuccess": "Formularz zapisany pomyślnie",
-      "saveError": "Nie udało się zapisać formularza. Spróbuj ponownie.",
+      "saveError": "Nie udało się zapisać formularza. Proszę spróbować ponownie.",
       "rejectionReason": "Powód odrzucenia:",
       "pendingReviewMessage": "Ten etap oczekuje na weryfikację i nie może być edytowany. Proszę poczekać na opinię zespołu.",
-      "draftSavedMessage": "Zapisano wersję roboczą. Wyślij etap przyciskiem „Prześlij”, gdy będzie gotowy do weryfikacji.",
+      "draftSavedMessage": "Zapisano wersję roboczą. Proszę przesłać etap przyciskiem „Prześlij”, gdy będzie gotowy do weryfikacji.",
       "completePreviousStages": "Proszę przesłać wcześniejsze etapy przed przesłaniem tego etapu",
-      "completeStagesList": "Najpierw prześlij następujące etapy: {stages}",
+      "completeStagesList": "Proszę najpierw przesłać następujące etapy: {stages}",
       "editAcceptedWarningTitle": "Edytować zaakceptowany etap?",
-      "editAcceptedWarningMessage": "Edycja tego zaakceptowanego etapu spowoduje jego reset do statusu oczekującego i będzie wymagała ponownej akceptacji przez zespół. Czy na pewno chcesz kontynuować?",
+      "editAcceptedWarningMessage": "Edycja tego zaakceptowanego etapu spowoduje jego reset do statusu oczekującego i będzie wymagała ponownej akceptacji przez zespół. Czy na pewno chcą Państwo kontynuować?",
       "confirmEdit": "Tak, kontynuuj edycję",
       "basicData": "Podstawowe dane firmy",
       "fullName": "Pełna nazwa firmy",
@@ -466,7 +472,7 @@
       "selectStandTypeMessage": "Proszę wybrać typ stoiska powyżej, aby kontynuować",
       "ourStand": "Standardowa zabudowa (dostarczona przez organizatorów)",
       "selfConstruction": "Własna zabudowa",
-      "ourStandHint": "Ścianki i konstrukcja od organizatora („inbox”). Wybierz też, gdy przywozisz tylko sprzęt (monitor, roll-up) bez własnej konstrukcji.",
+      "ourStandHint": "Ścianki i konstrukcja od organizatora („inbox”). Opcja odpowiednia również wtedy, gdy przywożą Państwo wyłącznie sprzęt (monitor, roll-up) bez własnej konstrukcji.",
       "selfConstructionHint": "Własne ścianki lub konstrukcja. Wymaga wizualizacji stoiska. Certyfikat niepalności — najpóźniej 4 tygodnie przed pierwszym dniem finału.",
       "ourStandDetails": "Personalizacja stoiska",
       "selfConstructionDetails": "Szczegóły własnej zabudowy",
@@ -480,21 +486,21 @@
       "nameSignText": "Tekst szyldu",
       "uploadLogo": "Logotyp na szyldzie",
       "uploadFireCert": "Prześlij certyfikat o niepalności",
-      "fireCertDeadlineHint": "Certyfikat o niepalności należy przesłać najpóźniej do {date} (4 tygodnie przed pierwszym dniem finału). Możesz dodać go teraz lub później — pole nie blokuje przesłania etapu.",
-      "fireCertDeadlineHintNoDate": "Certyfikat o niepalności należy przesłać najpóźniej 4 tygodnie przed pierwszym dniem finału. Możesz dodać go teraz lub później — pole nie blokuje przesłania etapu.",
+      "fireCertDeadlineHint": "Certyfikat o niepalności należy przesłać najpóźniej do {date} (4 tygodnie przed pierwszym dniem finału). Dokument można dodać teraz lub później — pole nie blokuje przesłania etapu.",
+      "fireCertDeadlineHintNoDate": "Certyfikat o niepalności należy przesłać najpóźniej 4 tygodnie przed pierwszym dniem finału. Dokument można dodać teraz lub później — pole nie blokuje przesłania etapu.",
       "uploadStandVisualization": "Wizualizacja zabudowy",
       "broughtEquipment": "Lista przywożonego sprzętu",
-      "broughtEquipmentHint": "Opcjonalnie: co nietypowego przywozicie na stoisko o czym powinniśmy wiedzieć.",
+      "broughtEquipmentHint": "Opcjonalnie: nietypowy sprzęt przywożony na stoisko, o którym organizatorzy powinni wiedzieć.",
       "carpetSection": "Wykładzina",
-      "carpetSectionHint": "Wykładzina jest obowiązkowa. Wybierz typ i kolor z katalogu.",
-      "carpetSectionHintNonPartner": "Wykładzina jest obowiązkowa. Twoje stoisko dostaje automatycznie RIPS EXPO 892 szary.",
+      "carpetSectionHint": "Wykładzina jest obowiązkowa. Proszę wybrać typ i kolor z katalogu.",
+      "carpetSectionHintNonPartner": "Wykładzina jest obowiązkowa. Państwa stoisko otrzymuje automatycznie wykładzinę RIPS EXPO 892 szary.",
       "carpetSelectButton": "Wybierz wykładzinę",
       "carpetChangeButton": "Zmień wybór wykładziny",
       "carpetDialogTitle": "Wybór wykładziny",
-      "carpetDialogDescription": "Przejrzyj rozpiskę, wybierz typ (RIPS EXPO lub WELUR EXPO), a następnie jeden kolor. Wykładzina jest obowiązkowa.",
+      "carpetDialogDescription": "Proszę przejrzeć katalog, wybrać typ (RIPS EXPO lub WELUR EXPO), a następnie jeden kolor. Wykładzina jest obowiązkowa.",
       "carpetDialogDescriptionStaffUnset": "Katalog wykładzin. Firma nie dokonała jeszcze wyboru.",
       "carpetCatalogAlt": "Katalog kolorów wykładzin RIPS EXPO i WELUR EXPO",
-      "carpetCatalogMissing": "Brak wgranego obrazu katalogu. Możesz nadal wybrać typ i kolor z listy.",
+      "carpetCatalogMissing": "Brak wgranego obrazu katalogu. Nadal można wybrać typ i kolor z listy.",
       "carpetType": "Typ wykładziny",
       "carpetTypeRips": "RIPS EXPO",
       "carpetTypeWelur": "WELUR EXPO",
@@ -531,12 +537,12 @@
       "trashbin": "Kosz na śmieci",
       "hanger": "Wieszak",
       "workshopInfo": "Informacje o warsztatach",
-      "workshopDescription": "Warsztaty to dobra okazja, by zaprezentować firmę studentom. Na potrzeby warsztatu udostępniamy salę z miejscami siedzącymi. Wybierz jedną z opcji poniżej — jeśli chcecie prowadzić warsztat, uzupełnijcie szczegóły.",
+      "workshopDescription": "Warsztaty to dobra okazja, by zaprezentować firmę studentom. Na potrzeby warsztatu udostępniamy salę z miejscami siedzącymi. Proszę wybrać jedną z opcji poniżej — jeśli planują Państwo prowadzić warsztat, prosimy o uzupełnienie szczegółów.",
       "workshopParticipation": "Udział w warsztatach",
       "willConductWorkshop": "Jesteśmy zainteresowani prowadzeniem warsztatów",
       "willNotConductWorkshop": "Nie potrzebujemy warsztatów",
       "workshopClearConfirmTitle": "Zrezygnować z warsztatów?",
-      "workshopClearConfirmText": "Wpisane dane warsztatu zostaną usunięte. Czy na pewno chcesz kontynuować?",
+      "workshopClearConfirmText": "Wpisane dane warsztatu zostaną usunięte. Czy na pewno chcą Państwo kontynuować?",
       "workshopClearConfirmButton": "Tak, wyczyść dane",
       "workshopTitle": "Nazwa warsztatu",
       "workshopAbout": "O czym jest warsztat? (opis)",
@@ -549,23 +555,23 @@
       "workshopSkills": "Jakie praktyczne umiejętności zdobędą uczestnicy?",
       "workshopStudyMajors": "Jakie kierunki studiów są mile widziane?",
       "workshopRoomAmenities": "Udogodnienia sali",
-      "workshopRoomAmenitiesHint": "Zaznacz, czego potrzebujecie. Sale mogą nie mieć rzutnika na stałe.",
+      "workshopRoomAmenitiesHint": "Proszę zaznaczyć potrzebne wyposażenie. Sale mogą nie być wyposażone w rzutnik na stałe.",
       "roomProjector": "Rzutnik",
       "roomHdmi": "Kabel HDMI",
       "roomOther": "Inne (opcjonalnie)",
       "workshopContactPhone": "Telefon kontaktowy ds. warsztatów",
       "contactPhoneSameAsFacilitator": "Dodaj numery prowadzących",
-      "contactPhoneSelectFacilitators": "Zaznacz numery, które mają trafić do pola kontaktowego:",
-      "contactPhoneFacilitatorEmpty": "Uzupełnij najpierw numer prowadzącego",
+      "contactPhoneSelectFacilitators": "Proszę zaznaczyć numery, które mają trafić do pola kontaktowego:",
+      "contactPhoneFacilitatorEmpty": "Proszę uzupełnić najpierw numer prowadzącego",
       "workshopNotes": "Dodatkowe uwagi dotyczące warsztatów",
       "stage3Unavailable": "Niedostępny",
-      "stage3UnavailableDescription": "Etap warsztatów jest dostępny tylko dla partnerów wydarzenia. Możesz przejść do kolejnego etapu.",
+      "stage3UnavailableDescription": "Etap warsztatów jest dostępny tylko dla partnerów wydarzenia. Mogą Państwo przejść do kolejnego etapu.",
       "stage3UnavailableTooltip": "Opcja dostępna tylko dla partnerów i partnera głównego",
       "workshopSkippedBasic": "Etap pominięty — warsztaty niedostępne dla zwykłych wystawców.",
       "jobwallInfo": "Publikacja ofert pracy",
       "jobwallDescriptionBefore": "Zachęcamy do zamieszczania ofert pracy w naszym Jobwallu, który znajdzie się fizycznie w czasie wydarzenia, a także na stronie targów pracy w zakładce ",
       "jobwallDescriptionLink": "Oferty Pracy",
-      "jobwallDescriptionAfter": ". To doskonała okazja, aby dotrzeć bezpośrednio do wykwalifikowanych kandydatów podczas wydarzenia. Możesz dodać wiele ofert pracy, każdą z szczegółowymi informacjami, w tym nazwą stanowiska, formą pracy, wymiarem czasu pracy, rodzajem umowy, opisem, benefitami, wymaganiami i szczegółami aplikacji.",
+      "jobwallDescriptionAfter": ". To doskonała okazja, aby dotrzeć bezpośrednio do wykwalifikowanych kandydatów podczas wydarzenia. Mogą Państwo dodać oferty pracy wraz ze szczegółowymi informacjami, w tym nazwą stanowiska, formą pracy, wymiarem czasu pracy, rodzajem umowy, opisem, benefitami, wymaganiami i szczegółami aplikacji.",
       "positionName": "Nazwa stanowiska",
       "workForm": "Forma pracy",
       "workFormOnsite": "Stacjonarnie",
@@ -592,13 +598,13 @@
       "description": "Opis firmy do katalogu",
       "catalogueDescriptionBefore": "Katalog (wersja papierowa) oraz e-katalog (na stronie targów pracy w zakładce ",
       "catalogueDescriptionLink": "Katalog",
-      "catalogueDescriptionAfter": ") to lista wszystkich wystawców Inżynierkich Targów Pracy. Zadbaj o widoczność swojej formy i prześlij angażujący opis firmy i logo.",
+      "catalogueDescriptionAfter": ") to lista wszystkich wystawców Inżynierskich Targów Pracy. Prosimy zadbać o widoczność swojej firmy i przesłać angażujący opis firmy oraz logo.",
       "uploadCatalogueLogo": "Prześlij logo do katalogu",
       "finalData": "Dane końcowe",
       "needsParking": "Potrzebujemy wjazdu na parking",
       "electricDevices": "Urządzenia elektryczne podczas targów",
       "electricDevicesTitle": "Urządzenia elektryczne",
-      "electricDevicesDescription": "Jeśli łączna moc to około 100 W lub mniej, zaznacz opcję poniżej. Przy większej mocy wypisz urządzenia po przecinku i podaj łączną moc w watach.",
+      "electricDevicesDescription": "Jeśli łączna moc to około 100 W lub mniej, proszę zaznaczyć opcję poniżej. Przy większej mocy prosimy wypisać urządzenia po przecinku i podać łączną moc w watach.",
       "electricDevicesPlaceholder": "np. czajnik, laptop",
       "electricLowPower": "Łącznie około 100 watów lub mniej (np. komputer + ładowarka do telefonu). Wtedy nie trzeba podawać szczegółów.",
       "electricLowPowerDefaultDevices": "≤100 W (np. komputer + ładowarka)",
@@ -606,7 +612,7 @@
       "electricPower": "Przybliżona łączna moc urządzeń (w watach)",
       "electricPowerPlaceholder": "np. 1550",
       "arrivalTimesTitle": "Godzina przyjazdu",
-      "arrivalTimesDescription": "Podaj planowaną godzinę przyjazdu na montaż lub rozładunek w każdym dniu targów.",
+      "arrivalTimesDescription": "Proszę podać planowaną godzinę przyjazdu na montaż lub rozładunek w każdym dniu targów.",
       "arrivalTimeDay1": "Dzień 1 ({date})",
       "arrivalTimeDay2": "Dzień 2 ({date})",
       "arrivalHour": "Godzina",
@@ -614,7 +620,7 @@
       "arrivalHourPlaceholder": "GG",
       "arrivalMinutePlaceholder": "MM",
       "lunches": "Obiady",
-      "lunchesDescription": "Możesz zamówić obiady dla swojego zespołu podczas targów. Obiady będą dostarczane przez Bistro Chochelka. Podaj liczbę obiadów na każdy dzień targów. Rodzaj diety wybierzesz na miejscu w Chochelce.",
+      "lunchesDescription": "Mogą Państwo zamówić obiady dla swojego zespołu podczas targów. Obiady będą dostarczane przez Bistro Chochelka. Proszę podać liczbę obiadów na każdy dzień targów. Rodzaj diety wybiera się na miejscu w Chochelce.",
       "addLunch": "Dodaj obiad",
       "day": "Dzień",
       "quantity": "Ilość",
@@ -630,10 +636,10 @@
       "addYourself": "Dodaj siebie",
       "acceptTerms": "Akceptuję regulamin",
       "viewTerms": "Zobacz regulamin",
-      "termsUnavailable": "Regulamin nie jest jeszcze dostępny. Skontaktuj się z organizatorem.",
+      "termsUnavailable": "Regulamin nie jest jeszcze dostępny. Proszę skontaktować się z organizatorem.",
       "termsDialogTitle": "Akceptacja Regulaminu",
-      "termsDialogText": "Kontynuując zapisanie tego formularza, potwierdzasz, że przeczytałeś, zrozumiałeś i zgadzasz się być zobowiązany do przestrzegania Regulaminu Inżynierskich Targów Pracy. Przesłanie tego formularza stanowi Twoją akceptację wszystkich warunków, postanowień i regulacji określonych w oficjalnym dokumencie Regulaminu.",
-      "termsDialogLegalNotice": "Klikając 'Akceptuj i Zapisz', potwierdzasz, że zapoznałeś się z Regulaminem i zgadzasz się przestrzegać wszystkich zawartych w nim postanowień. Ta akceptacja jest prawnie wiążąca i zostanie odnotowana jako część Twojego zgłoszenia.",
+      "termsDialogText": "Kontynuując zapisanie tego formularza, potwierdzają Państwo, że zapoznali się z Regulaminem Inżynierskich Targów Pracy, rozumieją jego treść i zobowiązują się do jego przestrzegania. Przesłanie tego formularza stanowi akceptację wszystkich warunków, postanowień i regulacji określonych w oficjalnym dokumencie Regulaminu.",
+      "termsDialogLegalNotice": "Klikając „Akceptuj i Zapisz”, potwierdzają Państwo zapoznanie się z Regulaminem i zobowiązują się przestrzegać wszystkich zawartych w nim postanowień. Ta akceptacja jest prawnie wiążąca i zostanie odnotowana jako część Państwa zgłoszenia.",
       "acceptAndSave": "Akceptuj i Zapisz",
       "currentFile": "Aktualny plik",
       "viewCurrentFile": "Zobacz aktualny plik",
@@ -641,8 +647,12 @@
       "selectFile": "Wybierz plik do przesłania",
       "addJobwall": "Dodaj ofertę pracy",
       "jobwall": "Oferta pracy",
-      "jobwallPricingDisclaimer": "Każda oferta pracy wiąże się z dodatkowym kosztem.",
-      "jobwallPricingDisclaimerFree": "Darmowych ogłoszeń: {freeCount}.",
+      "jobwallPricingDisclaimer": "Każda płatna oferta pracy wiąże się z dodatkowym kosztem netto.",
+      "jobwallPricingDisclaimerFree": "Darmowe oferty JobWall w ramach Państwa pakietu: {freeCount}.",
+      "jobwallPricingNoFree": "W ramach wybranego pakietu brak darmowych ofert JobWall (rejestracja po terminie wczesnej rejestracji).",
+      "jobwallPricingPacksInfo": "Dodatkowe oferty: pakiet +2 kosztuje {pack2} PLN netto, pakiet +3 kosztuje {pack3} PLN netto (maksymalnie {maxExtra} dodatkowych ofert).",
+      "jobwallMaxLimitReached": "Osiągnięto maksymalny limit ofert dla pakietu ({max}: {free} w pakiecie + {maxExtra} dodatkowych).",
+      "jobwallPackBadge": "pakiet +{count}",
       "jobwallPricingDisclaimerPaid": "Kolejne kosztują {price} PLN za sztukę.",
       "jobwallPricePerPosting": "Cena za ogłoszenie płatne",
       "jobwallCharCount": "{current}/{max} znaków",
@@ -654,16 +664,16 @@
       "lunchFreeIncluded": "Pierwsze 2 obiady dziennie są wliczone w pakiet (4 obiady za 2 dni).",
       "totalLunchCost": "Całkowity koszt dodatkowych obiadów",
       "extraLunchesCount": "Dodatkowych obiadów: {count}",
-      "lunchesDeclined": "Rezygnuję z obiadów",
-      "lunchesDeclinedWarning": "Rezygnacja oznacza utratę darmowych obiadów z pakietu (2 obiady na dzień).",
+      "lunchesDeclined": "Rezygnacja z obiadów",
+      "lunchesDeclinedWarning": "Rezygnacja oznacza utratę darmowych obiadów z Państwa pakietu ({freePerDay} na dzień).",
       "lunchesDeclinedStatus": "Rezygnacja z obiadów",
       "lunchSummaryTitle": "Podsumowanie obiadów",
-      "lunchSummaryDay1": "Dzień {date}: wykorzystano {used}/2 darmowych, pozostało {remaining}",
-      "lunchSummaryDay2": "Dzień {date}: wykorzystano {used}/2 darmowych, pozostało {remaining}",
+      "lunchSummaryDay1": "Dzień {date}: wykorzystano {used}/{freePerDay} darmowych, pozostało {remaining}",
+      "lunchSummaryDay2": "Dzień {date}: wykorzystano {used}/{freePerDay} darmowych, pozostało {remaining}",
       "lunchSummaryFreeRemaining": "Pozostało darmowych obiadów łącznie: {count}",
       "lunchSummaryPaid": "Obiady płatne: {count}",
-      "lunchSummaryPaidDetail": "Obiady płatne: {count} × {price} PLN = {amount} PLN",
-      "lunchSummaryTotal": "Kwota do dopłaty: {amount} PLN",
+      "lunchSummaryPaidDetail": "Obiady płatne: {count} × {price} PLN = {amount} PLN netto",
+      "lunchSummaryTotal": "Kwota do dopłaty: {amount} PLN netto",
       "lunchPriceLoading": "Ładowanie ceny obiadów…",
       "mainRepTitle": "Dane kontaktowe głównego przedstawiciela w dniach wydarzenia",
       "mainRepDescription": "Osoba kontaktowa w razie problemów z kontaktem z delegatami.",
@@ -678,10 +688,29 @@
       "attendanceRequired": "Każdego dnia targów musi być obecna co najmniej jedna osoba z firmy.",
       "lunchPaymentDialogTitle": "Podsumowanie dopłaty za obiady",
       "lunchPaymentDialogText": "Kwota do dopłacenia za dodatkowe obiady wynosi {amount} PLN.",
-      "jobwallPaymentDialogTitle": "Podsumowanie dopłaty za oferty pracy",
-      "jobwallPaymentDialogText": "Kwota do dopłacenia za oferty pracy wynosi {amount} PLN.",
+      "jobwallPaymentDialogTitle": "Podsumowanie kosztów — Etap 4",
+      "jobwallPaymentDialogText": "Kwota netto za dodatkowe oferty JobWall wynosi {amount} PLN.",
+      "nettoLabel": "netto",
+      "stage1CostDialogTitle": "Podsumowanie kosztów — Etap 1",
+      "stage1CostDialogText": "Proszę zweryfikować bieżące zestawienie kosztów przed przesłaniem etapu 1.",
+      "costSummaryTitle": "Zestawienie kosztów zamówienia (netto)",
+      "costSummaryCurrentStage": "Bieżący etap",
+      "costSummaryUnavailable": "Nie udało się pobrać szczegółowego podsumowania kosztów.",
+      "costSummaryStage1Label": "Etap 1 — Pakiet / stoisko",
+      "costSummaryStage2Label": "Etap 2 — Dodatkowe wyposażenie",
+      "costSummaryStage4Label": "Etap 4 — Dodatkowe oferty JobWall",
+      "costSummaryStage5Label": "Etap 5 — Dodatkowe obiady",
+      "costSummaryOneDay": "1 dzień",
+      "costSummaryTwoDays": "2 dni",
+      "costSummaryPendingStand": "koszt stoiska zostanie uzupełniony po przypisaniu rozmiaru i dni",
+      "costSummaryPendingValue": "do przypisania",
+      "costSummaryIndividualPricing": "wycena indywidualna",
+      "costSummaryJobwallDetail": "Łącznie {total} (w pakiecie: {free}, płatnych: {extra})",
+      "costSummaryLunchDetail": "Płatne: {extra} (w pakiecie: {freePerDay}/dzień)",
+      "costSummaryTotalNetto": "Suma łączna (netto)",
+      "costSummaryVatNote": "Podane kwoty są cenami netto i nie zawierają podatku VAT.",
       "submitConfirmTitle": "Potwierdzenie wysłania",
-      "submitConfirmText": "Czy na pewno chcesz przesłać ten etap formularza?",
+      "submitConfirmText": "Czy na pewno chcą Państwo przesłać ten etap formularza?",
       "confirmSubmit": "Potwierdź i prześlij",
       "catalogue": "Dane do katalogu",
       "deadline": {
@@ -697,15 +726,17 @@
     },
     "faq": {
       "title": "Najczęściej zadawane pytania",
-      "description": "Znajdź odpowiedzi na najczęściej zadawane pytania dotyczące Inżynierskich Targów Pracy.",
-      "contactUs": "Skontaktuj się",
+      "description": "Odpowiedzi na najczęściej zadawane pytania dotyczące Inżynierskich Targów Pracy.",
+      "contactUs": "Kontakt",
       "allCategories": "Wszystkie",
       "seeAllQuestions": "Zobacz wszystkie pytania",
+      "empty": "Brak pytań w tej sekcji.",
       "categories": {
         "general": "Informacje ogólne",
         "logistics": "Logistyka",
         "materials": "Materiały promocyjne i zabudowa",
         "ownConstruction": "Własna zabudowa",
+        "workshops": "Warsztaty",
         "support": "Wsparcie i catering",
         "pdiVenue": "Gala PDI"
       },
@@ -716,7 +747,7 @@
         },
         "dates": {
           "question": "Kiedy odbywają się targi?",
-          "answer": "Targi odbywają się w dniach 10-11 marca 2026 r. Targi rozpoczynają się o godzinie 9:00 i kończą o 16:00 w obu dniach. Oficjalne otwarcie ma miejsce 10 marca o godzinie 10:00."
+          "answer": "Targi odbywają się w dniach 09–10 marca 2027 r. Wydarzenie trwa w godzinach 9:00–16:00 w obu dniach. Oficjalne otwarcie odbędzie się 9 marca o godzinie 10:00."
         },
         "wifi": {
           "question": "Jakie jest hasło do Wi-Fi?",
@@ -725,11 +756,11 @@
       },
       "logistics": {
         "unloading": {
-          "question": "Gdzie mogę rozładować materiały?",
+          "question": "Gdzie można rozładować materiały?",
           "answer": "W celu rozładunku samochodu możliwy jest krótki postój (5 min) przy Gmachu Głównym od strony ulicy Noakowskiego. Wjazd na Plac odbywa się od strony ulicy Stanisława Noakowskiego."
         },
         "parking": {
-          "question": "Czy zapewniacie miejsca parkingowe?",
+          "question": "Czy organizator zapewnia miejsca parkingowe?",
           "answer": "Nie zapewniamy miejsc parkingowych. W okolicy Gmachu Głównego Politechniki Warszawskiej dostępne są płatne parkingi. Szczegółowe informacje o lokalizacji i cenach znajdują się w odpowiedzi na pytanie o ceny parkingów."
         },
         "parkingPrices": {
@@ -739,26 +770,26 @@
       },
       "materials": {
         "setupTime": {
-          "question": "Kiedy mogę rozstawić materiały promocyjne?",
+          "question": "Kiedy można rozstawić materiały promocyjne?",
           "answer": "W dniu targowym istnieje możliwość pojawienia się od godziny 6:30 w celu rozstawienia materiałów promocyjnych (roll-up, ścianki, plakaty, gadżety)."
         },
         "ownSetup": {
-          "question": "Kiedy mogę rozstawić własną zabudowę?",
-          "answer": "Wystawcy, którzy posiadają własną zabudowę i wystawiają się pierwszego dnia mogą rozstawiać ją 10 marca. Wystawcy, którzy wystawiają się jedynie drugiego dnia mogą rozkładać swoją zabudowę 11 marca. Szczegóły i dokładne godziny należy ustalić z opiekunem firmy."
+          "question": "Kiedy można rozstawić własną zabudowę?",
+          "answer": "Wystawcy posiadający własną zabudowę, którzy wystawiają się pierwszego dnia, mogą rozstawiać ją 9 marca. Wystawcy obecni jedynie drugiego dnia mogą rozkładać swoją zabudowę 10 marca. Szczegóły i dokładne godziny należy ustalić z opiekunem firmy."
         },
         "wallRestrictions": {
-          "question": "Czy mogę przyklejać materiały na ściankach zabudowy?",
-          "answer": "Na ściankach zabudowy nie można przyklejać materiałów drukowanych – prowadzi to do zniszczenia ścianki. W przypadku zniszczenia ścianki wynikające z naklejenia na nią materiałów promocyjnych, firma poniesie dodatkowy koszt."
+          "question": "Czy można przyklejać materiały na ściankach zabudowy?",
+          "answer": "Na ściankach zabudowy nie można przyklejać materiałów drukowanych – prowadzi to do zniszczenia ścianki. W przypadku zniszczenia ścianki wynikającego z naklejenia na nią materiałów promocyjnych, firma poniesie dodatkowy koszt."
         }
       },
       "support": {
         "supervisor": {
-          "question": "Czy będę miał przydzielonego opiekuna?",
-          "answer": "Tak, podczas trwania wydarzenia będziecie mieli Państwo przydzielonego opiekuna firmy z grona organizatorów. Ta osoba będzie do Państwa dyspozycji w przypadku pytań bądź uwag dotyczących przebiegu Inżynierskich Targów Pracy. Prosimy o zapisanie kontaktu do przydzielonego Państwu opiekuna oraz kontaktowanie się z nim w razie problemów."
+          "question": "Czy firma będzie miała przydzielonego opiekuna?",
+          "answer": "Tak, podczas trwania wydarzenia będą mieli Państwo przydzielonego opiekuna firmy z grona organizatorów. Osoba ta będzie do Państwa dyspozycji w przypadku pytań bądź uwag dotyczących przebiegu Inżynierskich Targów Pracy. Prosimy o zapisanie kontaktu do przydzielonego Państwu opiekuna oraz kontaktowanie się z nim w razie problemów."
         },
         "lunch": {
           "question": "Czy obiad jest wliczony w pakiet?",
-          "answer": "Tak, w ramach pakietu przewidziane są lunche dla dwóch przedstawicieli twojej firmy w postaci ciepłego posiłku (2 obiady na firmę na dzień, dodatkowe można dokupić w formularzu zgłoszeniowym lub w czasie targów przez opiekuna firmy). W zestawie powitalnym będą znajdować się bony, które będzie można wymienić na lunch w Stołówce Centralnej Politechniki Warszawskiej „Bistro Chochelka” (Rektorska 2). Przewidziane godziny na lunch to: 12:00-15:00."
+          "answer": "Tak, w ramach pakietu przewidziane są darmowe obiady na każdy dzień targów (Wystawca: 2 dziennie, Partner: 6 dziennie, Partner Główny: 10 dziennie; dodatkowe obiady można dokupić w formularzu zgłoszeniowym lub w czasie targów przez opiekuna firmy). W zestawie powitalnym znajdą Państwo bony, które można wymienić na obiad w Stołówce Centralnej Politechniki Warszawskiej „Bistro Chochelka” (ul. Rektorska 2). Przewidziane godziny na obiad to 12:00–15:00."
         },
         "coffee": {
           "question": "Czy będzie dostępny coffee point?",
@@ -768,17 +799,49 @@
       "pdiVenue": {
         "gala": {
           "question": "Kiedy odbędzie się Gala Plebiscytu Pracodawca Dla Inżyniera?",
-          "answer": "Tegoroczna gala przedstawienia wyników ankiety Pracodawca dla Inżyniera odbędzie się 10 marca w Małej Auli Gmachu Głównego Politechniki Warszawskiej. Podczas gali zostaną zaprezentowane wyniki badania dotyczącego oczekiwań studentów i absolwentów uczelni technicznych wobec rynku pracy."
+          "answer": "Tegoroczna gala prezentująca wyniki plebiscytu Pracodawca dla Inżyniera odbędzie się 9 marca 2027 r. w Małej Auli Gmachu Głównego Politechniki Warszawskiej. Podczas gali zostaną zaprezentowane wyniki badania dotyczącego oczekiwań studentów i absolwentów uczelni technicznych wobec rynku pracy."
         }
       }
     }
   },
   "staff": {
+    "faq": {
+      "navTitle": "FAQ",
+      "title": "Zarządzanie FAQ",
+      "description": "Edytuj, dodawaj i ukrywaj pytania wyświetlane wystawcy w zakładce FAQ.",
+      "addButton": "Dodaj pytanie",
+      "editTitle": "Edytuj wpis FAQ",
+      "createTitle": "Nowy wpis FAQ",
+      "dialogDescription": "Wpisz treść pytania oraz odpowiedzi po polsku i po angielsku.",
+      "categoryLabel": "Kategoria",
+      "orderLabel": "Kolejność",
+      "activeLabel": "Widoczne dla firm",
+      "questionPl": "Pytanie (PL)",
+      "answerPl": "Odpowiedź (PL)",
+      "questionEn": "Pytanie (EN)",
+      "answerEn": "Odpowiedź (EN)",
+      "active": "Aktywne",
+      "inactive": "Ukryte",
+      "show": "Pokaż firmom",
+      "hide": "Ukryj przed firmami",
+      "empty": "Brak pasujących wpisów FAQ.",
+      "loadError": "Nie udało się pobrać listy FAQ.",
+      "validationError": "Uzupełnij pytania i odpowiedzi w obu językach.",
+      "createdSuccess": "Dodano wpis FAQ.",
+      "updatedSuccess": "Zaktualizowano wpis FAQ.",
+      "deletedSuccess": "Usunięto wpis FAQ.",
+      "saveError": "Nie udało się zapisać wpisu FAQ.",
+      "deleteError": "Nie udało się usunąć wpisu FAQ.",
+      "deleteTitle": "Usunąć wpis FAQ?",
+      "deleteConfirm": "Czy na pewno usunąć pytanie „{question}”?"
+    },
     "map": {
       "title": "Mapa",
       "description": "Plan Wielkiej Auli Gmachu Głównego. Główne wejście jest na dole na środku mapy. Przypisania stoisk według dnia.",
       "day1": "Dzień 1",
-      "day2": "Dzień 2"
+      "day2": "Dzień 2",
+      "download": "Pobierz mapę",
+      "downloadError": "Nie udało się pobrać grafiki mapy."
     },
     "companyDetail": {
       "title": "Szczegóły firmy",
@@ -801,12 +864,16 @@
       "draftInProgressMessage": "Firma zapisuje wersję roboczą — możesz podejrzeć dane, ale akceptacja / odrzucenie będzie dostępne dopiero po „Prześlij”.",
       "rejectStage": "Odrzuć etap",
       "rejectStageDescription": "Proszę podać komentarz wyjaśniający, dlaczego ten etap jest odrzucany.",
+      "englishFeedbackHint": "Uwaga: firma korzysta z angielskiej wersji systemu (EN) — prosimy napisać uwagi po angielsku (zostaną wysłane w e-mailu do firmy).",
       "fireCertAutoRejectWarning": "Uwaga: firma ma własną zabudowę. Od {autoRejectDate} system sam ustawi etap 2 na „wymaga poprawy” i wyśle mail, jeśli nadal nie będzie certyfikatu niepalności (termin przesłania certyfikatu o niepalności: {deadlineDate}). Nie odrzucaj ręcznie tylko z tego powodu kilka dni wcześniej — firma dostałaby zbędne przypomnienie.",
       "fireCertAutoRejectWarningNoDate": "Uwaga: firma ma własną zabudowę. System automatycznie ustawi etap 2 na „wymaga poprawy” i wyśle mail, jeśli blisko finału nadal nie będzie certyfikatu niepalności. Nie odrzucaj ręcznie tylko z tego powodu kilka dni wcześniej.",
       "rejectSend": "Wyślij",
       "noData": "Brak danych dla tego etapu",
       "loadError": "Nie udało się załadować danych firmy",
-      "notFound": "Nie znaleziono firmy"
+      "notFound": "Nie znaleziono firmy",
+      "orderSummary": "Podsumowanie zamówienia",
+      "downloadOrderSummary": "Pobierz PDF",
+      "orderSummaryUnavailable": "Dostępne po akceptacji wszystkich etapów i przypisaniu stoiska"
     },
     "invitationDetail": {
       "title": "Szczegóły zaproszenia",
@@ -1167,6 +1234,35 @@
       "hint": "Zaznacz komórki, potem wybierz kolor tła.",
       "pickCells": "Najpierw zaznacz komórki w arkuszu.",
       "error": "Nie udało się zapisać koloru komórki."
+    },
+    "guests": {
+      "addButton": "Dodaj osobę",
+      "deleteButton": "Usuń osobę",
+      "deleteAction": "Usuń osobę dodaną ręcznie",
+      "dialogTitle": "Dodaj osobę bez konta",
+      "dialogDescription": "Wpisz osobę spoza systemu (np. współpracownika albo Beściaka bez konta), aby uwzględnić ją na liście obiadów.",
+      "fullNameLabel": "Imię i nazwisko",
+      "fullNamePlaceholder": "np. Jan Kowalski",
+      "day1Label": "Bon na obiad — dzień 1",
+      "day2Label": "Bon na obiad — dzień 2",
+      "noteLabel": "Uwagi",
+      "notePlaceholder": "np. dieta wegetariańska, core team",
+      "submit": "Dodaj osobę",
+      "cancel": "Anuluj",
+      "added": "Dodano osobę do listy obiadów.",
+      "addError": "Nie udało się dodać osoby.",
+      "deleteTitle": "Usunąć osobę z listy?",
+      "deleteDescription": "Osoba „{name}” oraz powiązane komentarze i historia tego wiersza zostaną trwale usunięte.",
+      "deleteConfirm": "Usuń",
+      "deleted": "Usunięto osobę z listy.",
+      "deleteError": "Nie udało się usunąć osoby."
+    },
+    "historyKinds": {
+      "commit": "Zapisano",
+      "draft": "Wersja robocza",
+      "proposalProgress": "Propozycja · w toku",
+      "proposalAccepted": "Propozycja · zaakceptowana",
+      "proposalRejected": "Propozycja · odrzucona"
     }
   }
 }

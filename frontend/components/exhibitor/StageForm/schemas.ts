@@ -119,7 +119,10 @@ export function createStage2Schema(options?: { requiresCarpet?: boolean }) {
       .array(
         z.object({
           equipment_item: z.number(),
-          quantity: z.number().min(0, "Quantity must be 0 or greater"),
+          quantity: z
+            .number()
+            .min(0, "Quantity must be 0 or greater")
+            .max(50, "Quantity must be 50 or less"),
           mount_type: z.enum(["stand", "wall"]).nullable().optional(),
         })
       )
@@ -421,7 +424,8 @@ export const stage5Schema = z
         }),
         lunch_quantity: z
           .number()
-          .min(0, "Lunch quantity must be 0 or greater"),
+          .min(0, "Lunch quantity must be 0 or greater")
+          .max(100, "Lunch quantity must be 100 or less"),
         diet_info: z.string().optional(),
       })
     ),

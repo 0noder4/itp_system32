@@ -4,6 +4,7 @@ export interface Company {
   name: string;
   status: "main" | "partner" | "basic";
   email: string;
+  language?: "en" | "pl";
   representative: number | null;
   representative_name: string | null;
   representative_surname: string | null;
@@ -16,6 +17,9 @@ export interface Company {
   fr_resp_phone_number: string | null;
   fr_resp_username: string | null;
   opiekun: number | null;
+  opiekun_name?: string | null;
+  opiekun_surname?: string | null;
+  opiekun_username?: string | null;
   day1_stand: { stand_number: string; stand_size: string } | null;
   day2_stand: { stand_number: string; stand_size: string } | null;
   completed_stages_count: number;
@@ -39,6 +43,7 @@ export interface StaffUser {
   first_name: string;
   last_name: string;
   type: "admin" | "staff";
+  staff_roles?: string[];
 }
 
 // Company info included in user validation response
@@ -346,4 +351,26 @@ export interface Stage5Data {
   pdi: PDI | null;
   pdi_attendees: PDIAttendee[];
   exhibitors: Exhibitor[];
+}
+
+export type FAQCategory =
+  | "general"
+  | "logistics"
+  | "materials"
+  | "ownConstruction"
+  | "workshops"
+  | "support"
+  | "pdiVenue";
+
+export interface FAQItem {
+  id: number;
+  category: FAQCategory;
+  question_pl: string;
+  answer_pl: string;
+  question_en: string;
+  answer_en: string;
+  order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
 }

@@ -26,6 +26,7 @@ import {
   ARRIVAL_MINUTES,
   calculateLunchSummary,
   fetchDefaultMainRepContact,
+  FREE_LUNCHES_PER_DAY,
   hasSavedMainRep,
   joinArrivalTime,
   parseLunchPrice,
@@ -33,7 +34,12 @@ import {
   toFixedLunchRows,
   toTimeInputValue,
 } from "@/lib/stage5-utils";
-import { fetchInvoiceTotal } from "@/lib/invoice-cost-utils";
+import { CostSummaryBox } from "./CostSummaryBox";
+import {
+  applyStageOverridesToSummary,
+  CompanyCostSummary,
+  fetchCompanyCostSummary,
+} from "@/lib/invoice-cost-utils";
 import { StageDraftSaveButton } from "./StageDraftSaveButton";
 import {
   nativeCheckboxClassName,
@@ -151,13 +157,19 @@ export function Stage5Form({
   const [pendingFormData, setPendingFormData] =
     React.useState<Stage5FormData | null>(null);
   const [pendingLunchCost, setPendingLunchCost] = React.useState(0);
-  const [pendingInvoiceTotal, setPendingInvoiceTotal] = React.useState(0);
+  const [pendingCostSummary, setPendingCostSummary] =
+    React.useState<CompanyCostSummary | null>(null);
   const [isPreparingDialog, setIsPreparingDialog] = React.useState(false);
 
   const { data: lunchSettings, isLoading: isLoadingSettings } =
-    useSWR<LunchPriceResponse>("/api/lunch-price/", fetcher);
+    useSWR<LunchPriceResponse>(
+      companyId ? `/api/lunch-price/?company_id=${companyId}` : "/api/lunch-price/",
+      fetcher
+    );
 
   const lunchPrice = parseLunchPrice(lunchSettings?.lunch_price);
+  const freePerDay =
+    lunchSettings?.lunches_free_per_day ?? FREE_LUNCHES_PER_DAY;
   const day1Label = lunchSettings?.day1 || "09.03.2027";
   const day2Label = lunchSettings?.day2 || "10.03.2027";
 
@@ -225,7 +237,11 @@ export function Stage5Form({
   const noOtherDelegates = form.watch("final_data.no_other_delegates");
   const elLowPower = form.watch("final_data.el_low_power");
   const watchLunches = form.watch("lunches") || [];
-  const lunchSummary = calculateLunchSummary(watchLunches, lunchPrice);
+  const lunchSummary = calculateLunchSummary(
+    watchLunches,
+    lunchPrice,
+    freePerDay
+  );
 
   const attendanceOptions = (
     day1: string,
@@ -377,15 +393,25 @@ export function Stage5Form({
     }
     const stageCost = normalized.final_data.lunches_declined
       ? 0
-      : calculateLunchSummary(normalized.lunches || [], lunchPrice).totalCost;
+      : calculateLunchSummary(
+          normalized.lunches || [],
+          lunchPrice,
+          freePerDay
+        ).totalCost;
     setPendingFormData(normalized);
     setPendingLunchCost(stageCost);
     setIsPreparingDialog(true);
     try {
-      const invoiceTotal = await fetchInvoiceTotal(companyId, {
-        lunch: stageCost,
-      });
-      setPendingInvoiceTotal(invoiceTotal);
+      const summary = await fetchCompanyCostSummary(companyId);
+      setPendingCostSummary(
+        summary
+          ? applyStageOverridesToSummary(summary, {
+              lunches: normalized.lunches || [],
+              lunchesDeclined: normalized.final_data.lunches_declined,
+              lunchCostOverride: stageCost,
+            })
+          : null
+      );
       setShowSubmitDialog(true);
     } finally {
       setIsPreparingDialog(false);
@@ -650,7 +676,7 @@ export function Stage5Form({
                   {t("exhibitor.form.lunchesDeclined")}
                 </FieldLabel>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {t("exhibitor.form.lunchesDeclinedWarning")}
+                  {t("exhibitor.form.lunchesDeclinedWarning", { freePerDay })}
                 </p>
               </div>
             </div>
@@ -683,6 +709,7 @@ export function Stage5Form({
                       id={`lunch_quantity_${day}`}
                       type="number"
                       min="0"
+                      max="100"
                       {...form.register(`lunches.${index}.lunch_quantity`, {
                         valueAsNumber: true,
                       })}
@@ -708,6 +735,7 @@ export function Stage5Form({
                       date: day1Label,
                       used: lunchSummary.day1FreeUsed,
                       remaining: lunchSummary.day1FreeRemaining,
+                      freePerDay,
                     })}
                   </p>
                   <p>
@@ -715,6 +743,7 @@ export function Stage5Form({
                       date: day2Label,
                       used: lunchSummary.day2FreeUsed,
                       remaining: lunchSummary.day2FreeRemaining,
+                      freePerDay,
                     })}
                   </p>
                   <p>
@@ -1060,19 +1089,13 @@ export function Stage5Form({
             <DialogTitle>
               {t("exhibitor.form.lunchPaymentDialogTitle")}
             </DialogTitle>
-            <DialogDescription className="space-y-2">
-              <span className="block">
-                {t("exhibitor.form.lunchPaymentDialogText", {
-                  amount: pendingLunchCost.toFixed(2),
-                })}
-              </span>
-              <span className="block">
-                {t("exhibitor.form.invoiceTotalDialogText", {
-                  amount: pendingInvoiceTotal.toFixed(2),
-                })}
-              </span>
+            <DialogDescription>
+              {t("exhibitor.form.lunchPaymentDialogText", {
+                amount: pendingLunchCost.toFixed(2),
+              })}
             </DialogDescription>
           </DialogHeader>
+          <CostSummaryBox summary={pendingCostSummary} highlightStage={5} />
           <DialogFooter className="gap-2 sm:gap-0">
             <Button
               type="button"

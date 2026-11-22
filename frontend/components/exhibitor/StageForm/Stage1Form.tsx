@@ -21,6 +21,11 @@ import {
 } from "@/components/ui/dialog";
 import { Loader2, Save, FileText, ExternalLink } from "lucide-react";
 import { StageDraftSaveButton } from "./StageDraftSaveButton";
+import { CostSummaryBox } from "./CostSummaryBox";
+import {
+  CompanyCostSummary,
+  fetchCompanyCostSummary,
+} from "@/lib/invoice-cost-utils";
 
 interface Stage1FormProps {
   companyId?: number;
@@ -35,6 +40,7 @@ interface Stage1FormProps {
 }
 
 export function Stage1Form({
+  companyId,
   initialData,
   onSubmit,
   isSubmitting,
@@ -62,8 +68,12 @@ export function Stage1Form({
   });
 
   const [showTermsDialog, setShowTermsDialog] = React.useState(false);
+  const [showCostDialog, setShowCostDialog] = React.useState(false);
   const [pendingFormData, setPendingFormData] =
     React.useState<Stage1FormData | null>(null);
+  const [pendingCostSummary, setPendingCostSummary] =
+    React.useState<CompanyCostSummary | null>(null);
+  const [isPreparingDialog, setIsPreparingDialog] = React.useState(false);
   const [termsPdfUrl, setTermsPdfUrl] = React.useState<string | null>(null);
 
   React.useEffect(() => {
@@ -86,77 +96,80 @@ export function Stage1Form({
     };
   }, []);
 
-  const handleFormSubmit = async (data: Stage1FormData) => {
-    // Always show terms dialog if terms_accepted is not explicitly true
-    // This ensures the dialog shows on first save, even if the field is false/undefined
-    if (data.terms_accepted === true) {
-      // Terms already accepted, submit directly
-      try {
-        await onSubmit(data);
-      } catch (error: any) {
-        // Handle backend validation errors and set them on form fields
-        if (error.response?.status === 400 && error.response?.data) {
-          const errorData = error.response.data;
-          let hasFieldErrors = false;
-          
-          // Handle basic_data errors
-          if (errorData.basic_data && typeof errorData.basic_data === 'object') {
-            Object.keys(errorData.basic_data).forEach((field) => {
-              const fieldErrors = errorData.basic_data[field];
-              const errorMessage = Array.isArray(fieldErrors) 
-                ? fieldErrors[0] 
-                : typeof fieldErrors === 'string' 
-                ? fieldErrors 
-                : String(fieldErrors);
-              
-              form.setError(`basic_data.${field}` as any, {
-                type: 'server',
-                message: errorMessage,
-              });
-              hasFieldErrors = true;
-            });
-          }
-          
-          // Handle address errors
-          if (errorData.address && typeof errorData.address === 'object') {
-            Object.keys(errorData.address).forEach((field) => {
-              const fieldErrors = errorData.address[field];
-              const errorMessage = Array.isArray(fieldErrors) 
-                ? fieldErrors[0] 
-                : typeof fieldErrors === 'string' 
-                ? fieldErrors 
-                : String(fieldErrors);
-              
-              form.setError(`address.${field}` as any, {
-                type: 'server',
-                message: errorMessage,
-              });
-              hasFieldErrors = true;
-            });
-          }
-          
-          // Handle general errors
-          if (errorData.detail && typeof errorData.detail === 'string') {
-            form.setError('root', {
-              type: 'server',
-              message: errorData.detail,
-            });
-            hasFieldErrors = true;
-          }
-          
-          if (hasFieldErrors) {
-            return;
-          }
-        }
-        throw error;
-      }
-      return;
+  const applyStage1ServerErrors = (error: any): boolean => {
+    if (error.response?.status !== 400 || !error.response?.data) {
+      return false;
     }
-    // Show terms dialog before submitting
-    // Store the form data temporarily
+    const errorData = error.response.data;
+    let hasFieldErrors = false;
+
+    const mapGroupErrors = (group: "basic_data" | "address") => {
+      const groupErrors = errorData[group];
+      if (!groupErrors || typeof groupErrors !== "object") return;
+      Object.keys(groupErrors).forEach((field) => {
+        const fieldErrors = groupErrors[field];
+        const errorMessage = Array.isArray(fieldErrors)
+          ? fieldErrors[0]
+          : typeof fieldErrors === "string"
+            ? fieldErrors
+            : String(fieldErrors);
+
+        form.setError(`${group}.${field}` as any, {
+          type: "server",
+          message: errorMessage,
+        });
+        hasFieldErrors = true;
+      });
+    };
+
+    mapGroupErrors("basic_data");
+    mapGroupErrors("address");
+
+    if (errorData.detail && typeof errorData.detail === "string") {
+      form.setError("root", {
+        type: "server",
+        message: errorData.detail,
+      });
+      hasFieldErrors = true;
+    }
+    return hasFieldErrors;
+  };
+
+  const handleFormSubmit = async (data: Stage1FormData) => {
     setPendingFormData(data);
-    // Show the dialog
-    setShowTermsDialog(true);
+    if (companyId) {
+      setIsPreparingDialog(true);
+      try {
+        const summary = await fetchCompanyCostSummary(companyId);
+        setPendingCostSummary(summary);
+      } finally {
+        setIsPreparingDialog(false);
+      }
+    } else {
+      setPendingCostSummary(null);
+    }
+
+    if (data.terms_accepted === true) {
+      setShowCostDialog(true);
+    } else {
+      setShowTermsDialog(true);
+    }
+  };
+
+  const handleConfirmCostSubmit = async () => {
+    if (!pendingFormData) return;
+    try {
+      await onSubmit(pendingFormData);
+      setShowCostDialog(false);
+      setPendingFormData(null);
+    } catch (error: any) {
+      if (applyStage1ServerErrors(error)) {
+        setShowCostDialog(false);
+        setPendingFormData(null);
+        return;
+      }
+      throw error;
+    }
   };
 
   const handleSaveDraft = async () => {
@@ -182,61 +195,10 @@ export function Stage1Form({
         setShowTermsDialog(false);
         setPendingFormData(null);
       } catch (error: any) {
-        // Handle backend validation errors and set them on form fields
-        if (error.response?.status === 400 && error.response?.data) {
-          const errorData = error.response.data;
-          let hasFieldErrors = false;
-          
-          // Handle basic_data errors
-          if (errorData.basic_data && typeof errorData.basic_data === 'object') {
-            Object.keys(errorData.basic_data).forEach((field) => {
-              const fieldErrors = errorData.basic_data[field];
-              const errorMessage = Array.isArray(fieldErrors) 
-                ? fieldErrors[0] 
-                : typeof fieldErrors === 'string' 
-                ? fieldErrors 
-                : String(fieldErrors);
-              
-              form.setError(`basic_data.${field}` as any, {
-                type: 'server',
-                message: errorMessage,
-              });
-              hasFieldErrors = true;
-            });
-          }
-          
-          // Handle address errors
-          if (errorData.address && typeof errorData.address === 'object') {
-            Object.keys(errorData.address).forEach((field) => {
-              const fieldErrors = errorData.address[field];
-              const errorMessage = Array.isArray(fieldErrors) 
-                ? fieldErrors[0] 
-                : typeof fieldErrors === 'string' 
-                ? fieldErrors 
-                : String(fieldErrors);
-              
-              form.setError(`address.${field}` as any, {
-                type: 'server',
-                message: errorMessage,
-              });
-              hasFieldErrors = true;
-            });
-          }
-          
-          // Handle general errors
-          if (errorData.detail && typeof errorData.detail === 'string') {
-            form.setError('root', {
-              type: 'server',
-              message: errorData.detail,
-            });
-            hasFieldErrors = true;
-          }
-          
-          if (hasFieldErrors) {
-            setShowTermsDialog(false);
-            setPendingFormData(null);
-            return;
-          }
+        if (applyStage1ServerErrors(error)) {
+          setShowTermsDialog(false);
+          setPendingFormData(null);
+          return;
         }
         throw error;
       }
@@ -382,6 +344,11 @@ export function Stage1Form({
         <p className="text-sm text-muted-foreground">
           {t("exhibitor.form.invoiceIssuedOnAboveData")}
         </p>
+        {form.formState.errors.root && (
+          <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive border border-destructive/20">
+            {form.formState.errors.root.message}
+          </div>
+        )}
         {!disabled && (
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             {!isAccepted && (
@@ -392,23 +359,24 @@ export function Stage1Form({
             )}
             <Button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || isPreparingDialog}
               className="w-full md:w-auto text-white"
               style={{
-                backgroundColor: isSubmitting ? undefined : ACCENT_COLOR,
+                backgroundColor:
+                  isSubmitting || isPreparingDialog ? undefined : ACCENT_COLOR,
               }}
               onMouseEnter={(e) => {
-                if (!isSubmitting) {
+                if (!isSubmitting && !isPreparingDialog) {
                   e.currentTarget.style.backgroundColor = "#E04E15";
                 }
               }}
               onMouseLeave={(e) => {
-                if (!isSubmitting) {
+                if (!isSubmitting && !isPreparingDialog) {
                   e.currentTarget.style.backgroundColor = ACCENT_COLOR;
                 }
               }}
             >
-              {isSubmitting ? (
+              {isSubmitting || isPreparingDialog ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   {t("common.loading")}
@@ -443,6 +411,7 @@ export function Stage1Form({
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 pt-4">
+            <CostSummaryBox summary={pendingCostSummary} highlightStage={1} />
             <div className="pt-2">
               {termsPdfUrl ? (
                 <a
@@ -485,6 +454,57 @@ export function Stage1Form({
               }}
             >
               {t("exhibitor.form.acceptAndSave")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cost Confirmation Dialog (when terms already accepted) */}
+      <Dialog
+        open={showCostDialog}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowCostDialog(false);
+            setPendingFormData(null);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {t("exhibitor.form.stage1CostDialogTitle")}
+            </DialogTitle>
+            <DialogDescription>
+              {t("exhibitor.form.stage1CostDialogText")}
+            </DialogDescription>
+          </DialogHeader>
+          <CostSummaryBox summary={pendingCostSummary} highlightStage={1} />
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setShowCostDialog(false);
+                setPendingFormData(null);
+              }}
+            >
+              {t("common.cancel")}
+            </Button>
+            <Button
+              type="button"
+              onClick={handleConfirmCostSubmit}
+              disabled={isSubmitting}
+              className="text-white"
+              style={{ backgroundColor: ACCENT_COLOR }}
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  {t("common.loading")}
+                </>
+              ) : (
+                t("exhibitor.form.confirmSubmit")
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

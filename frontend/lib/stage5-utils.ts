@@ -90,14 +90,17 @@ export interface LunchSummary {
   day1FreeRemaining: number;
   day2FreeRemaining: number;
   totalFreeRemaining: number;
+  freePerDay: number;
   paidLunches: number;
   totalCost: number;
 }
 
 export function calculateLunchSummary(
   lunches: Array<{ day?: DayOption | string; lunch_quantity?: number }>,
-  lunchPrice: number
+  lunchPrice: number,
+  freePerDay: number = FREE_LUNCHES_PER_DAY
 ): LunchSummary {
+  const safeFreePerDay = Math.max(0, Number(freePerDay) || 0);
   const day1Ordered = lunches
     .filter((l) => l.day === "day1")
     .reduce((sum, l) => sum + (Number(l.lunch_quantity) || 0), 0);
@@ -105,14 +108,14 @@ export function calculateLunchSummary(
     .filter((l) => l.day === "day2")
     .reduce((sum, l) => sum + (Number(l.lunch_quantity) || 0), 0);
 
-  const day1FreeUsed = Math.min(day1Ordered, FREE_LUNCHES_PER_DAY);
-  const day2FreeUsed = Math.min(day2Ordered, FREE_LUNCHES_PER_DAY);
-  const day1FreeRemaining = Math.max(0, FREE_LUNCHES_PER_DAY - day1Ordered);
-  const day2FreeRemaining = Math.max(0, FREE_LUNCHES_PER_DAY - day2Ordered);
+  const day1FreeUsed = Math.min(day1Ordered, safeFreePerDay);
+  const day2FreeUsed = Math.min(day2Ordered, safeFreePerDay);
+  const day1FreeRemaining = Math.max(0, safeFreePerDay - day1Ordered);
+  const day2FreeRemaining = Math.max(0, safeFreePerDay - day2Ordered);
 
   const paidLunches =
-    Math.max(0, day1Ordered - FREE_LUNCHES_PER_DAY) +
-    Math.max(0, day2Ordered - FREE_LUNCHES_PER_DAY);
+    Math.max(0, day1Ordered - safeFreePerDay) +
+    Math.max(0, day2Ordered - safeFreePerDay);
 
   return {
     day1Ordered,
@@ -122,6 +125,7 @@ export function calculateLunchSummary(
     day1FreeRemaining,
     day2FreeRemaining,
     totalFreeRemaining: day1FreeRemaining + day2FreeRemaining,
+    freePerDay: safeFreePerDay,
     paidLunches,
     totalCost: paidLunches * lunchPrice,
   };

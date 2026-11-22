@@ -35,10 +35,15 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { JobwallPriceResponse } from "@/lib/api";
 import { StageDraftSaveButton } from "./StageDraftSaveButton";
+import { CostSummaryBox } from "./CostSummaryBox";
 import {
-  calculateJobwallCost,
-  fetchInvoiceTotal,
+  applyStageOverridesToSummary,
+  calculateJobwallPackCost,
+  CompanyCostSummary,
+  fetchCompanyCostSummary,
+  parseMoney,
 } from "@/lib/invoice-cost-utils";
 
 interface Stage4FormProps {
@@ -62,14 +67,18 @@ export function Stage4Form({
   isAccepted = false,
 }: Stage4FormProps) {
   const { t } = useTranslation();
-  const [jobwallPrice, setJobwallPrice] = React.useState<number>(0);
-  const [jobwallFreeCount, setJobwallFreeCount] = React.useState<number>(2);
+  const [jobwallFreeCount, setJobwallFreeCount] = React.useState<number>(0);
+  const [jobwallPack2Price, setJobwallPack2Price] = React.useState<number>(480);
+  const [jobwallPack3Price, setJobwallPack3Price] = React.useState<number>(630);
+  const [jobwallMaxExtraOffers, setJobwallMaxExtraOffers] =
+    React.useState<number>(3);
   const [isLoadingPrice, setIsLoadingPrice] = React.useState(true);
   const [showCostDialog, setShowCostDialog] = React.useState(false);
   const [pendingFormData, setPendingFormData] =
     React.useState<Stage4FormData | null>(null);
   const [pendingJobwallCost, setPendingJobwallCost] = React.useState(0);
-  const [pendingInvoiceTotal, setPendingInvoiceTotal] = React.useState(0);
+  const [pendingCostSummary, setPendingCostSummary] =
+    React.useState<CompanyCostSummary | null>(null);
   const [isPreparingDialog, setIsPreparingDialog] = React.useState(false);
   const [selectedLogoFileName, setSelectedLogoFileName] = React.useState<
     string | null
@@ -146,25 +155,48 @@ export function Stage4Form({
     name: "jobwalls",
   });
 
-  // Fetch jobwall price and free count on mount
+  // Fetch jobwall package quota & pack pricing on mount
   React.useEffect(() => {
-    async function fetchJobwallPrice() {
+    async function fetchJobwallPricing() {
       try {
-        const response = await apiClient.get("/api/jobwall-price/");
-        setJobwallPrice(parseFloat(response.data.jobwall_price) || 0);
+        if (companyId) {
+          const summary = await fetchCompanyCostSummary(companyId);
+          if (summary) {
+            setJobwallFreeCount(summary.jobwall.free_count);
+            setJobwallPack2Price(parseMoney(summary.jobwall.pack_2_price) || 480);
+            setJobwallPack3Price(parseMoney(summary.jobwall.pack_3_price) || 630);
+            setJobwallMaxExtraOffers(summary.jobwall.max_extra_offers ?? 3);
+            return;
+          }
+        }
+        const response = await apiClient.get<JobwallPriceResponse>(
+          "/api/jobwall-price/",
+          companyId ? { params: { company_id: companyId } } : undefined
+        );
         setJobwallFreeCount(
-          Math.max(0, Number(response.data.jobwall_free_count ?? 2) || 0)
+          Math.max(0, Number(response.data.jobwall_free_count ?? 0) || 0)
+        );
+        setJobwallPack2Price(
+          parseMoney(response.data.jobwall_pack_2_price) || 480
+        );
+        setJobwallPack3Price(
+          parseMoney(response.data.jobwall_pack_3_price) || 630
+        );
+        setJobwallMaxExtraOffers(
+          Math.max(0, Number(response.data.jobwall_max_extra_offers ?? 3) || 3)
         );
       } catch (error) {
-        console.error("Error fetching jobwall price:", error);
-        setJobwallPrice(0);
-        setJobwallFreeCount(2);
+        console.error("Error fetching jobwall pricing:", error);
+        setJobwallFreeCount(0);
+        setJobwallPack2Price(480);
+        setJobwallPack3Price(630);
+        setJobwallMaxExtraOffers(3);
       } finally {
         setIsLoadingPrice(false);
       }
     }
-    fetchJobwallPrice();
-  }, []);
+    fetchJobwallPricing();
+  }, [companyId]);
 
   const workFormOptions = [
     { value: "s", label: t("exhibitor.form.workFormOnsite") },
@@ -191,11 +223,15 @@ export function Stage4Form({
 
   const watchJobwalls = form.watch("jobwalls") || [];
   const watchCatalogueDescr = form.watch("description.descr") || "";
-  const totalJobwallCost = calculateJobwallCost(
+  const maxTotalOffers = jobwallFreeCount + jobwallMaxExtraOffers;
+  const canAddMoreJobwalls = jobwallFields.length < maxTotalOffers;
+  const jobwallCalc = calculateJobwallPackCost(
     watchJobwalls.length,
-    jobwallPrice,
-    jobwallFreeCount
+    jobwallFreeCount,
+    jobwallPack2Price,
+    jobwallPack3Price
   );
+  const totalJobwallCost = jobwallCalc.cost;
 
   const handleFileChange = (file: File | null) => {
     if (file) {
@@ -245,9 +281,21 @@ export function Stage4Form({
         let hasFieldErrors = false;
 
         if (errorData.jobwalls) {
-          if (Array.isArray(errorData.jobwalls)) {
+          if (typeof errorData.jobwalls === "string") {
+            form.setError("root", {
+              type: "server",
+              message: errorData.jobwalls,
+            });
+            hasFieldErrors = true;
+          } else if (Array.isArray(errorData.jobwalls)) {
             errorData.jobwalls.forEach((jobwallErrors: any, index: number) => {
-              if (jobwallErrors && typeof jobwallErrors === "object") {
+              if (typeof jobwallErrors === "string") {
+                form.setError("root", {
+                  type: "server",
+                  message: jobwallErrors,
+                });
+                hasFieldErrors = true;
+              } else if (jobwallErrors && typeof jobwallErrors === "object") {
                 Object.keys(jobwallErrors).forEach((field) => {
                   const fieldErrors = jobwallErrors[field];
                   const errorMessage = Array.isArray(fieldErrors)
@@ -396,19 +444,28 @@ export function Stage4Form({
 
   const handleFormSubmit = async (data: Stage4FormData) => {
     const dataWithFiles = buildSubmitPayload(data);
-    const stageCost = calculateJobwallCost(
-      dataWithFiles.jobwalls?.length ?? 0,
-      jobwallPrice,
-      jobwallFreeCount
-    );
+    const jobwallCount = dataWithFiles.jobwalls?.length ?? 0;
+    const stageCost = calculateJobwallPackCost(
+      jobwallCount,
+      jobwallFreeCount,
+      jobwallPack2Price,
+      jobwallPack3Price
+    ).cost;
     setPendingFormData(dataWithFiles);
     setPendingJobwallCost(stageCost);
     setIsPreparingDialog(true);
     try {
-      const invoiceTotal = companyId
-        ? await fetchInvoiceTotal(companyId, { jobwall: stageCost })
-        : stageCost;
-      setPendingInvoiceTotal(invoiceTotal);
+      const summary = companyId
+        ? await fetchCompanyCostSummary(companyId)
+        : null;
+      setPendingCostSummary(
+        summary
+          ? applyStageOverridesToSummary(summary, {
+              jobwallCount,
+              jobwallCostOverride: stageCost,
+            })
+          : null
+      );
       setShowCostDialog(true);
     } finally {
       setIsPreparingDialog(false);
@@ -584,12 +641,13 @@ export function Stage4Form({
           </a>
           {t("exhibitor.form.jobwallDescriptionAfter")}
         </p>
-        <div className="flex justify-start">
+        <div className="flex flex-wrap items-center gap-3">
           <Button
             type="button"
             variant="outline"
             size="sm"
-            onClick={() =>
+            onClick={() => {
+              if (!canAddMoreJobwalls) return;
               appendJobwall({
                 name: "",
                 form: "s",
@@ -599,36 +657,43 @@ export function Stage4Form({
                 benefits: "",
                 requirements: "",
                 url: "",
-              })
-            }
-            disabled={disabled}
+              });
+            }}
+            disabled={disabled || (!isLoadingPrice && !canAddMoreJobwalls)}
           >
             <Plus className="mr-1 h-4 w-4" />
             {t("exhibitor.form.addJobwall")}
           </Button>
+          {!isLoadingPrice && !canAddMoreJobwalls && (
+            <span className="text-xs text-muted-foreground">
+              {t("exhibitor.form.jobwallMaxLimitReached", {
+                max: String(maxTotalOffers),
+                free: String(jobwallFreeCount),
+                maxExtra: String(jobwallMaxExtraOffers),
+              })}
+            </span>
+          )}
         </div>
-        {!isLoadingPrice && jobwallPrice > 0 && (
+        {!isLoadingPrice && (
           <div className="rounded-md bg-information/10 p-3 text-sm text-information border border-information/20 dark:bg-information/20 dark:text-information-foreground dark:border-information/30 space-y-1">
             {jobwallFreeCount > 0 ? (
-              <>
-                <p className="font-medium">
-                  {t("exhibitor.form.jobwallPricingDisclaimerFree", {
-                    freeCount: String(jobwallFreeCount),
-                  })}
-                </p>
-                <p className="font-medium">
-                  {t("exhibitor.form.jobwallPricingDisclaimerPaid", {
-                    price: jobwallPrice.toFixed(2),
-                  })}
-                </p>
-              </>
+              <p className="font-medium">
+                {t("exhibitor.form.jobwallPricingDisclaimerFree", {
+                  freeCount: String(jobwallFreeCount),
+                })}
+              </p>
             ) : (
               <p className="font-medium">
-                {`${t("exhibitor.form.jobwallPricingDisclaimer")} ${t(
-                  "exhibitor.form.jobwallPricePerPosting"
-                )}: ${jobwallPrice.toFixed(2)} PLN`}
+                {t("exhibitor.form.jobwallPricingNoFree")}
               </p>
             )}
+            <p className="font-medium">
+              {t("exhibitor.form.jobwallPricingPacksInfo", {
+                pack2: jobwallPack2Price.toFixed(2),
+                pack3: jobwallPack3Price.toFixed(2),
+                maxExtra: String(jobwallMaxExtraOffers),
+              })}
+            </p>
           </div>
         )}
         {jobwallFields.map((field, index) => (
@@ -840,11 +905,18 @@ export function Stage4Form({
           <div className="rounded-md bg-amber-50 p-4 border border-amber-200">
             <p className="text-sm font-medium text-amber-900">
               {t("exhibitor.form.totalJobwallCost")}:{" "}
-              {totalJobwallCost.toFixed(2)} PLN
+              {totalJobwallCost.toFixed(2)} PLN ({t("exhibitor.form.nettoLabel")}
+              {jobwallCalc.pack ? `, ${t("exhibitor.form.jobwallPackBadge", { count: String(jobwallCalc.pack) })}` : ""})
             </p>
           </div>
         )}
       </div>
+
+      {form.formState.errors.root && (
+        <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive border border-destructive/20">
+          {form.formState.errors.root.message}
+        </div>
+      )}
 
       {!disabled && (
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -903,19 +975,13 @@ export function Stage4Form({
             <DialogTitle>
               {t("exhibitor.form.jobwallPaymentDialogTitle")}
             </DialogTitle>
-            <DialogDescription className="space-y-2">
-              <span className="block">
-                {t("exhibitor.form.jobwallPaymentDialogText", {
-                  amount: pendingJobwallCost.toFixed(2),
-                })}
-              </span>
-              <span className="block">
-                {t("exhibitor.form.invoiceTotalDialogText", {
-                  amount: pendingInvoiceTotal.toFixed(2),
-                })}
-              </span>
+            <DialogDescription>
+              {t("exhibitor.form.jobwallPaymentDialogText", {
+                amount: pendingJobwallCost.toFixed(2),
+              })}
             </DialogDescription>
           </DialogHeader>
+          <CostSummaryBox summary={pendingCostSummary} highlightStage={4} />
           <DialogFooter className="gap-2 sm:gap-0">
             <Button
               type="button"

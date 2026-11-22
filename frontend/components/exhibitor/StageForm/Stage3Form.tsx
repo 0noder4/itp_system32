@@ -3,6 +3,7 @@
 import React from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { toast } from "sonner";
 import { useTranslation } from "@/lib/i18n";
 import { Stage3Data } from "@/lib/types";
 import { stage3Schema, Stage3FormData } from "./schemas";
@@ -256,13 +257,13 @@ export function Stage3Form({
   };
 
   const handleFormSubmit = async (data: Stage3FormData) => {
-    const payload: Stage3FormData = data.workshop
+    const payload: Record<string, any> = data.workshop
       ? {
           workshop: true,
           title: data.title || "",
           description: data.description || "",
           preferred_day: data.preferred_day || "",
-          preferred_time: data.preferred_time || "",
+          preferred_time: data.preferred_time || null,
           skills: data.skills || "",
           study_majors: data.study_majors || "",
           room_projector: data.room_projector || false,
@@ -284,7 +285,7 @@ export function Stage3Form({
           title: "",
           description: "",
           preferred_day: "",
-          preferred_time: "",
+          preferred_time: null,
           skills: "",
           study_majors: "",
           room_projector: false,
@@ -297,22 +298,27 @@ export function Stage3Form({
         };
 
     try {
-      await onSubmit(payload);
+      await onSubmit(payload as Stage3FormData);
     } catch (error: any) {
       if (error.response?.status === 400 && error.response?.data) {
         const errorData = error.response.data;
         let hasFieldErrors = false;
+        const hiddenMessages: string[] = [];
 
         const setFieldError = (field: keyof Stage3FormData, raw: unknown) => {
+          const message = Array.isArray(raw)
+            ? String(raw[0])
+            : typeof raw === "string"
+              ? raw
+              : String(raw);
           form.setError(field, {
             type: "server",
-            message: Array.isArray(raw)
-              ? String(raw[0])
-              : typeof raw === "string"
-                ? raw
-                : String(raw),
+            message,
           });
           hasFieldErrors = true;
+          if (field !== "workshop" && watchWorkshop !== true) {
+            hiddenMessages.push(message);
+          }
         };
 
         (
@@ -340,13 +346,17 @@ export function Stage3Form({
             (row: Record<string, unknown>, index: number) => {
               if (!row || typeof row !== "object") return;
               Object.entries(row).forEach(([field, messages]) => {
+                const msg = Array.isArray(messages)
+                  ? String(messages[0])
+                  : String(messages);
                 form.setError(`facilitators.${index}.${field}` as any, {
                   type: "server",
-                  message: Array.isArray(messages)
-                    ? String(messages[0])
-                    : String(messages),
+                  message: msg,
                 });
                 hasFieldErrors = true;
+                if (watchWorkshop !== true) {
+                  hiddenMessages.push(msg);
+                }
               });
             }
           );
@@ -359,6 +369,9 @@ export function Stage3Form({
             message: errorData.facilitators,
           });
           hasFieldErrors = true;
+          if (watchWorkshop !== true) {
+            hiddenMessages.push(errorData.facilitators);
+          }
         } else if (
           Array.isArray(errorData.facilitators) &&
           typeof errorData.facilitators[0] === "string"
@@ -368,6 +381,9 @@ export function Stage3Form({
             message: errorData.facilitators[0],
           });
           hasFieldErrors = true;
+          if (watchWorkshop !== true) {
+            hiddenMessages.push(errorData.facilitators[0]);
+          }
         }
 
         if (errorData.detail && typeof errorData.detail === "string") {
@@ -378,6 +394,15 @@ export function Stage3Form({
           hasFieldErrors = true;
         }
 
+        if (hiddenMessages.length > 0) {
+          const combined = hiddenMessages[0];
+          form.setError("root", {
+            type: "server",
+            message: combined,
+          });
+          toast.error(combined);
+        }
+
         if (hasFieldErrors) return;
       }
       throw error;
@@ -386,7 +411,12 @@ export function Stage3Form({
 
   const handleSaveDraft = async () => {
     try {
-      await onSubmit(form.getValues(), { draft: true });
+      const current = form.getValues();
+      const draftPayload = {
+        ...current,
+        preferred_time: current.preferred_time ? current.preferred_time : null,
+      };
+      await onSubmit(draftPayload as Stage3FormData, { draft: true });
     } catch (error: any) {
       if (error.response?.status === 400 && error.response?.data?.detail) {
         form.setError("root", {

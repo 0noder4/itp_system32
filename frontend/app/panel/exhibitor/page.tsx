@@ -244,7 +244,10 @@ export default function ExhibitorDashboardPage() {
 
     setIsDownloadingPDF(true);
     try {
-      await downloadOrderSummaryPDF(companyId);
+      await downloadOrderSummaryPDF(
+        companyId,
+        company?.name || companyName || undefined
+      );
       toast.success(t("exhibitor.pdfDownloadSuccess"), {
         description: t("exhibitor.pdfDownloadSuccessDescription"),
       });
@@ -486,9 +489,7 @@ export default function ExhibitorDashboardPage() {
                           name={company.fr_resp_name}
                           surname={company.fr_resp_surname}
                           email={company.fr_resp_email || company.email}
-                          username={company.fr_resp_username}
                           phoneNumber={company.fr_resp_phone_number}
-                          dateJoined={company.created_at}
                         />
                       </div>
                     </div>
