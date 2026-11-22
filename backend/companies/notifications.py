@@ -142,7 +142,7 @@ def send_stage_rejected_email(company, stage_num, comment):
     if staff_email:
         contact_text_en = f" your staff contact at {staff_email} or us at {default_email}"
         contact_text_pl = (
-            f" ze swoim opiekunem pod adresem {staff_email} "
+            f" z przydzielonym opiekunem pod adresem {staff_email} "
             f"lub z nami pod adresem {default_email}"
         )
     else:
@@ -170,9 +170,9 @@ def send_stage_rejected_email(company, stage_num, comment):
 
             {f'Komentarz: {display_comment}' if display_comment else ''}
 
-            Sprawdź i zaktualizuj etap w panelu: {dashboard_link}
+            Prosimy o sprawdzenie i zaktualizowanie etapu w panelu: {dashboard_link}
 
-            Jeśli masz pytania, skontaktuj się{contact_text_pl}.
+            W razie pytań prosimy o kontakt{contact_text_pl}.
             """
         ).strip()
 
@@ -211,10 +211,10 @@ def send_invitation_expiry_reminder_exhibitor(invitation, days_before):
         subject = f"Przypomnienie: zaproszenie wygasa za {days_before} dni - ITP System"
         plain_message = dedent(
             f"""
-            Twoje zaproszenie do platformy wystawców Inżynierskich Targów Pracy wygasa za {days_before} dni.
-            Twój login: {invitation.company_name}
+            Państwa zaproszenie do platformy wystawców Inżynierskich Targów Pracy wygasa za {days_before} dni.
+            Państwa login: {invitation.company_name}
 
-            Dokończ rejestrację:
+            Prosimy o dokończenie rejestracji:
             {registration_link}
             """
         ).strip()

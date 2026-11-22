@@ -23,14 +23,14 @@
                                 Aktualizacja przypisania stoiska
                             </h1>
                             <p style="margin: 0 0 16px; font-size: 15px; line-height: 1.6; color: #4a4a4a;">
-                                Twoje przypisanie stoiska dla <strong>{{ company_name }}</strong> zostało zaktualizowane:
+                                Przypisanie stoiska dla firmy <strong>{{ company_name }}</strong> zostało zaktualizowane:
                             </p>
                             
                             {% if day1_stand %}
                             <table role="presentation" style="width: 100%; margin: 20px 0; border-collapse: collapse;">
                                 <tr>
                                     <td style="padding: 12px 16px; background-color: #f9f9f9; border-radius: 6px; border-left: 3px solid #F55718;">
-                                        <p style="margin: 0 0 8px; font-size: 13px; color: #666; font-weight: 500;">Stoisko dzień 1 (10.03.2025)</p>
+                                        <p style="margin: 0 0 8px; font-size: 13px; color: #666; font-weight: 500;">Stoisko dzień 1 ({{ day1_display }})</p>
                                         <p style="margin: 0 0 4px; font-size: 15px; font-weight: 500; color: #1a1a1a;">Numer stoiska: {{ day1_stand.stand_number }}</p>
                                         <p style="margin: 0; font-size: 14px; color: #4a4a4a;">Rozmiar: {{ day1_stand.stand_size_display }}</p>
                                     </td>
@@ -42,7 +42,7 @@
                             <table role="presentation" style="width: 100%; margin: 20px 0; border-collapse: collapse;">
                                 <tr>
                                     <td style="padding: 12px 16px; background-color: #f9f9f9; border-radius: 6px; border-left: 3px solid #F55718;">
-                                        <p style="margin: 0 0 8px; font-size: 13px; color: #666; font-weight: 500;">Stoisko dzień 2 (11.03.2025)</p>
+                                        <p style="margin: 0 0 8px; font-size: 13px; color: #666; font-weight: 500;">Stoisko dzień 2 ({{ day2_display }})</p>
                                         <p style="margin: 0 0 4px; font-size: 15px; font-weight: 500; color: #1a1a1a;">Numer stoiska: {{ day2_stand.stand_number }}</p>
                                         <p style="margin: 0; font-size: 14px; color: #4a4a4a;">Rozmiar: {{ day2_stand.stand_size_display }}</p>
                                     </td>
@@ -52,12 +52,12 @@
                             
                             {% if not day1_stand and not day2_stand %}
                             <p style="margin: 16px 0; font-size: 15px; line-height: 1.6; color: #4a4a4a;">
-                                Twoje przypisania stoisk zostały usunięte.
+                                Przypisania stoisk dla Państwa firmy zostały usunięte.
                             </p>
                             {% endif %}
                             
                             <p style="margin: 24px 0 0; font-size: 15px; line-height: 1.6; color: #4a4a4a;">
-                                Możesz zobaczyć informacje o swoim stoisku i inne szczegóły firmy w panelu:
+                                Mogą Państwo zobaczyć informacje o swoim stoisku i inne szczegóły firmy w panelu:
                             </p>
                             <!-- CTA Button -->
                             <table role="presentation" style="width: 100%; border-collapse: collapse; margin: 20px 0;">
@@ -75,7 +75,7 @@
                     <tr>
                         <td style="padding: 24px 40px; background-color: #f9f9f9; border-top: 1px solid #eaeaea;">
                             <p style="margin: 0; font-size: 12px; line-height: 1.5; color: #888; text-align: center;">
-                                Jeśli masz pytania, skontaktuj się{% if staff_email %} ze swoim opiekunem pod adresem <a href="mailto:{{ staff_email }}">{{ staff_email }}</a>{% if default_email %} lub{% endif %}{% endif %}{% if default_email %} z nami pod adresem <a href="mailto:{{ default_email }}">{{ default_email }}</a>{% endif %}.
+                                W razie pytań prosimy o kontakt{% if staff_email %} z przydzielonym opiekunem pod adresem <a href="mailto:{{ staff_email }}">{{ staff_email }}</a>{% if default_email %} lub{% endif %}{% endif %}{% if default_email %} z nami pod adresem <a href="mailto:{{ default_email }}">{{ default_email }}</a>{% endif %}.
                             </p>
                         </td>
                     </tr>
