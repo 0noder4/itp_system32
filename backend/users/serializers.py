@@ -70,9 +70,14 @@ class CustomTokenObtainPairView(TokenObtainPairView):
 
 class UserSerializer(serializers.ModelSerializer):
     """Serializer for user information"""
+    staff_roles = serializers.SerializerMethodField()
+
     class Meta:
         model = User
-        fields = ('id', 'username', 'email', 'first_name', 'last_name', 'type')
+        fields = ('id', 'username', 'email', 'first_name', 'last_name', 'type', 'staff_roles')
+
+    def get_staff_roles(self, obj):
+        return sorted(obj.get_staff_roles())
 
 
 class PasswordResetRequestSerializer(serializers.Serializer):
@@ -120,12 +125,12 @@ This link will expire in 24 hours.
 If you did not request a password reset, you can safely ignore this email."""
             else:
                 subject = "Reset hasła - ITP System"
-                plain_message = f"""Otrzymaliśmy prośbę o reset hasła. Kliknij poniższy link, aby ustawić nowe hasło:
+                plain_message = f"""Otrzymaliśmy prośbę o reset hasła. Prosimy kliknąć poniższy link, aby ustawić nowe hasło:
 {reset_link}
 
 Link wygaśnie za 24 godziny.
 
-Jeśli nie prosiłeś o reset hasła, możesz zignorować tę wiadomość."""
+Jeśli nie prosili Państwo o reset hasła, prosimy zignorować tę wiadomość."""
 
             # Get staff contact email if user is a company user
             staff_email = None

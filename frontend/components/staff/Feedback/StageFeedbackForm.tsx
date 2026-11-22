@@ -35,6 +35,7 @@ const REJECT_HOVER_COLOR = "#B91C1C";
 interface StageFeedbackFormProps {
   companyId: number;
   stageNumber: number;
+  companyLanguage?: string;
   currentFeedback?: StageFeedback;
   dataExists?: boolean;
   onSuccess?: () => void;
@@ -50,6 +51,7 @@ type FeedbackFormData = z.infer<typeof feedbackSchema>;
 export function StageFeedbackForm({
   companyId,
   stageNumber,
+  companyLanguage,
   currentFeedback,
   dataExists = false,
   onSuccess,
@@ -250,6 +252,11 @@ export function StageFeedbackForm({
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
+            {companyLanguage === "en" && (
+              <div className="rounded-md border border-sky-300 bg-sky-50 p-3 text-sm text-sky-900 dark:border-sky-700 dark:bg-sky-950/40 dark:text-sky-100">
+                {t("staff.companyDetail.englishFeedbackHint")}
+              </div>
+            )}
             {showFireCertAutoRejectWarning && (
               <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100">
                 {autoRejectDate && deadlineDate

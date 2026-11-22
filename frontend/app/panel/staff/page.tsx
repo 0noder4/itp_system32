@@ -60,6 +60,11 @@ export default function Index() {
   } = useSWR<StaffUser[]>("/api/staff/", fetcher);
 
   const {
+    data: opiekunMembers,
+    isLoading: isLoadingOpiekun,
+  } = useSWR<StaffUser[]>("/api/staff/?role=opiekun", fetcher);
+
+  const {
     filters: {
       searchQuery,
       statusFilter,
@@ -67,6 +72,7 @@ export default function Index() {
       stageStatusFilter,
       stageStatusScope,
       frRespFilter,
+      opiekunFilter,
       showInvitations,
     },
     setSearchQuery,
@@ -75,6 +81,7 @@ export default function Index() {
     setStageStatusFilter,
     setStageStatusScope,
     setFrRespFilter,
+    setOpiekunFilter,
     setShowInvitations,
   } = useStaffDashboardFilters();
 
@@ -84,6 +91,7 @@ export default function Index() {
     searchQuery,
     statusFilter,
     frRespFilter,
+    opiekunFilter,
     invitationStatusFilter,
     stageStatusFilter,
     stageStatusScope,
@@ -183,7 +191,7 @@ export default function Index() {
   };
 
   const isLoading =
-    isLoadingCompanies || isLoadingInvitations || isLoadingStaff;
+    isLoadingCompanies || isLoadingInvitations || isLoadingStaff || isLoadingOpiekun;
   const hasError = error || invitationsError;
   const hasData = companies !== undefined || invitations !== undefined;
 
@@ -272,9 +280,12 @@ export default function Index() {
                 onStageStatusScopeChange={setStageStatusScope}
                 frRespFilter={frRespFilter}
                 onFrRespFilterChange={setFrRespFilter}
+                opiekunFilter={opiekunFilter}
+                onOpiekunFilterChange={setOpiekunFilter}
                 showInvitations={showInvitations}
                 onShowInvitationsChange={setShowInvitations}
                 staffMembers={staffMembers}
+                opiekunMembers={opiekunMembers}
                 filteredCount={filteredRows.length}
                 totalCount={totalCount}
                 onSendReminders={() => setReminderDialogOpen(true)}

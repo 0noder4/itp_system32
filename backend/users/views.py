@@ -180,16 +180,36 @@ class PasswordResetConfirmView(APIView):
 
 class StaffListView(APIView):
     """
-    API endpoint to get all staff members (admin and staff users).
-    Used for filtering companies by responsible staff member.
+    API endpoint to get staff members (admin and staff users).
+    Supports ?role=fr (default), ?role=opiekun, ?role=lg, ?role=tr, or ?role=all.
     """
     permission_classes = [IsAuthenticated, HasStaffRole("fr")]
 
     def get(self, request):
-        candidates = User.objects.filter(type__in=['admin', 'staff'], is_active=True).order_by(
-            'first_name', 'last_name', 'username'
+        from users.models import ALL_STAFF_ROLES
+        from companies.models import Company
+
+        role = (request.query_params.get('role') or 'fr').strip().lower()
+        candidates = list(
+            User.objects.filter(type__in=['admin', 'staff'], is_active=True).order_by(
+                'first_name', 'last_name', 'username'
+            )
         )
-        staff_users = [user for user in candidates if user.has_staff_role('fr')]
+        if role == 'all':
+            staff_users = candidates
+        elif role == 'opiekun':
+            assigned_ids = set(
+                Company.objects.exclude(opiekun__isnull=True).values_list('opiekun_id', flat=True)
+            )
+            staff_users = [
+                user
+                for user in candidates
+                if user.has_staff_role('opiekun') or user.id in assigned_ids
+            ]
+        elif role in ALL_STAFF_ROLES:
+            staff_users = [user for user in candidates if user.has_staff_role(role)]
+        else:
+            staff_users = [user for user in candidates if user.has_staff_role('fr')]
         serializer = UserSerializer(staff_users, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 

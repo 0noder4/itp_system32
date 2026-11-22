@@ -16,7 +16,11 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { StatusBadges, TableRow as TableRowType } from "./StatusBadges";
+import {
+  CompanyLanguageBadge,
+  StatusBadges,
+  TableRow as TableRowType,
+} from "./StatusBadges";
 import { formatDate, formatDateWithTime, formatFrRespName, formatRepresentativeName } from "./utils";
 import {
   nativeCheckboxClassName,
@@ -192,9 +196,14 @@ export function CompaniesTable({
                       />
                     </TableCell>
                     <TableCell className="text-xs sm:text-sm px-2 sm:px-4 whitespace-nowrap">
-                      {row.type === "company"
-                        ? row.data.name
-                        : row.data.company_name}
+                      <span className="inline-flex items-center gap-1.5">
+                        <span>
+                          {row.type === "company"
+                            ? row.data.name
+                            : row.data.company_name}
+                        </span>
+                        <CompanyLanguageBadge language={row.data.language} />
+                      </span>
                     </TableCell>
                     <TableCell className="px-2 sm:px-4 whitespace-nowrap">
                       <StatusBadges row={row} />

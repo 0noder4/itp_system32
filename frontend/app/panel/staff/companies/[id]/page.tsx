@@ -3,7 +3,9 @@
 import React from "react";
 import { useParams, useRouter } from "next/navigation";
 import useSWR from "swr";
-import { fetcher } from "@/lib/api";
+import { downloadOrderSummaryPDF, fetcher } from "@/lib/api";
+import { hasStaffRole } from "@/lib/auth";
+import { toast } from "sonner";
 import {
   Company,
   FormStatusResponse,
@@ -21,11 +23,19 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Building2, ChevronDown, ChevronRight } from "lucide-react";
+import {
+  ArrowLeft,
+  Building2,
+  ChevronDown,
+  ChevronRight,
+  Download,
+  Loader2,
+} from "lucide-react";
 import { StageViewer } from "@/components/staff/StageViewer";
 import { StageFeedbackForm } from "@/components/staff/Feedback/StageFeedbackForm";
 import { UserAccountCard } from "@/components/staff/UserAccountCard";
 import { StandEditDialog } from "@/components/staff/Stand/StandEditDialog";
+import { CompanyLanguageBadge } from "@/components/staff/Companies/StatusBadges";
 import { STAFF_ACCENT_COLOR } from "@/lib/colors";
 
 // Stage titles for display
@@ -165,6 +175,7 @@ export default function CompanyDetailPage() {
   );
 
   const [expandedStage, setExpandedStage] = React.useState<number | null>(null);
+  const [isDownloadingPDF, setIsDownloadingPDF] = React.useState(false);
 
   const isLoading = isLoadingCompany || isLoadingFormStatus;
   const isError = !!companyError || !!formError;
@@ -172,6 +183,40 @@ export default function CompanyDetailPage() {
   const stages = React.useMemo(() => {
     return convertFormStatusToStages(formStatus, t);
   }, [formStatus, t]);
+
+  const canAccessOrderPdf = hasStaffRole("fr");
+  const isAllStagesAccepted =
+    Boolean(formStatus) &&
+    stages.length > 0 &&
+    stages.every((s) => s.unavailable || (s.isCompleted && s.status === "accepted"));
+  const hasStandsAssigned = Boolean(
+    company?.day1_stand?.stand_number || company?.day2_stand?.stand_number
+  );
+  const canDownloadOrderSummary =
+    canAccessOrderPdf && isAllStagesAccepted && hasStandsAssigned;
+
+  const handleDownloadPDF = async () => {
+    if (!companyId || !company || !canDownloadOrderSummary || isDownloadingPDF) {
+      return;
+    }
+    setIsDownloadingPDF(true);
+    try {
+      await downloadOrderSummaryPDF(companyId, company.name);
+      toast.success(t("exhibitor.pdfDownloadSuccess"), {
+        description: t("exhibitor.pdfDownloadSuccessDescription"),
+      });
+    } catch (error: unknown) {
+      const msg =
+        error instanceof Error
+          ? error.message
+          : t("exhibitor.pdfDownloadErrorDescription");
+      toast.error(t("exhibitor.pdfDownloadError"), {
+        description: msg,
+      });
+    } finally {
+      setIsDownloadingPDF(false);
+    }
+  };
 
   const formatStandSize = (size: string): string => {
     return t(`companies.stand.sizes.${size}`) || size;
@@ -290,7 +335,10 @@ export default function CompanyDetailPage() {
                 <p className="text-sm font-medium text-muted-foreground">
                   {t("companies.table.name")}
                 </p>
-                <p className="text-lg">{company.name}</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-lg">{company.name}</p>
+                  <CompanyLanguageBadge language={company.language} />
+                </div>
               </div>
               <div>
                 <p className="text-sm font-medium text-muted-foreground">
@@ -343,6 +391,39 @@ export default function CompanyDetailPage() {
                 </p>
                 <p className="text-lg">{formatDate(company.created_at)}</p>
               </div>
+              {canAccessOrderPdf && (
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground mb-1">
+                    {t("staff.companyDetail.orderSummary")}
+                  </p>
+                  {canDownloadOrderSummary ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={isDownloadingPDF}
+                      onClick={handleDownloadPDF}
+                      className="text-white hover:opacity-90"
+                      style={{ backgroundColor: STAFF_ACCENT_COLOR }}
+                    >
+                      {isDownloadingPDF ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          {t("exhibitor.downloadingPDF")}
+                        </>
+                      ) : (
+                        <>
+                          <Download className="mr-2 h-4 w-4" />
+                          {t("staff.companyDetail.downloadOrderSummary")}
+                        </>
+                      )}
+                    </Button>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      {t("staff.companyDetail.orderSummaryUnavailable")}
+                    </p>
+                  )}
+                </div>
+              )}
               <div className="md:col-span-2">
                 <div className="grid gap-4 md:grid-cols-2">
                   <div>
@@ -467,6 +548,7 @@ export default function CompanyDetailPage() {
                         <StageFeedbackForm
                           companyId={companyId!}
                           stageNumber={stage.stageNumber}
+                          companyLanguage={company.language}
                           currentFeedback={stage.feedback}
                           dataExists={stage.dataExists}
                           onSuccess={() => {

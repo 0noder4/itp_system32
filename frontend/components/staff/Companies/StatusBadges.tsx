@@ -72,6 +72,24 @@ export function InvitationStatusBadge({ status }: InvitationStatusBadgeProps) {
   );
 }
 
+export function CompanyLanguageBadge({
+  language,
+}: {
+  language?: string | null;
+}) {
+  const { t } = useTranslation();
+  if (language !== "en") return null;
+
+  return (
+    <span
+      title={t("companies.englishBadgeTooltip")}
+      className="inline-flex items-center rounded border border-sky-300 bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-800 dark:border-sky-700 dark:bg-sky-900/60 dark:text-sky-200"
+    >
+      {t("companies.englishBadge")}
+    </span>
+  );
+}
+
 export type TableRow =
   | { type: "company"; data: Company }
   | { type: "invitation"; data: CompanyInvitation };

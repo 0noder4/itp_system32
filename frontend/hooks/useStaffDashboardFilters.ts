@@ -4,6 +4,26 @@ const STORAGE_KEY = "staff_dashboard_filters";
 
 export type CompletedStageNumber = 1 | 2 | 3 | 4 | 5;
 
+export const COMPANY_STATUS_FILTER_OPTIONS = [
+  "main",
+  "partner",
+  "basic",
+] as const;
+
+export type CompanyStatusFilterValue =
+  (typeof COMPANY_STATUS_FILTER_OPTIONS)[number];
+
+export const INVITATION_STATUS_FILTER_OPTIONS = [
+  "accepted",
+  "expired",
+  "not accepted",
+  "cancelled",
+  "resigned",
+] as const;
+
+export type InvitationStatusFilterValue =
+  (typeof INVITATION_STATUS_FILTER_OPTIONS)[number];
+
 export const STAGE_STATUS_FILTER_OPTIONS = [
   "not_started",
   "in_progress",
@@ -14,47 +34,87 @@ export const STAGE_STATUS_FILTER_OPTIONS = [
 
 export type StageStatusFilterValue = (typeof STAGE_STATUS_FILTER_OPTIONS)[number];
 
-export type StageStatusScope = CompletedStageNumber | "any";
+export type StaffMemberFilterValue = number | "unassigned";
 
 export interface StaffDashboardFilters {
   searchQuery: string;
-  statusFilter: "all" | "main" | "partner" | "basic";
-  invitationStatusFilter:
-    | "all"
-    | "accepted"
-    | "expired"
-    | "not accepted"
-    | "cancelled"
-    | "resigned";
+  statusFilter: CompanyStatusFilterValue[];
+  invitationStatusFilter: InvitationStatusFilterValue[];
   stageStatusFilter: StageStatusFilterValue[];
-  stageStatusScope: StageStatusScope;
-  frRespFilter: number | "all";
+  stageStatusScope: CompletedStageNumber[];
+  frRespFilter: StaffMemberFilterValue[];
+  opiekunFilter: StaffMemberFilterValue[];
   showInvitations: boolean;
 }
 
 const defaultFilters: StaffDashboardFilters = {
   searchQuery: "",
-  statusFilter: "all",
-  invitationStatusFilter: "all",
+  statusFilter: [],
+  invitationStatusFilter: [],
   stageStatusFilter: [],
-  stageStatusScope: "any",
-  frRespFilter: "all",
+  stageStatusScope: [],
+  frRespFilter: [],
+  opiekunFilter: [],
   showInvitations: true,
 };
 
-function normalizeStageStatusFilter(value: unknown): StageStatusFilterValue[] {
-  if (!Array.isArray(value)) {
-    return defaultFilters.stageStatusFilter;
+function normalizeStringArray<T extends string>(
+  value: unknown,
+  allowed: readonly T[]
+): T[] {
+  if (Array.isArray(value)) {
+    return allowed.filter((option) => value.includes(option));
   }
-  return STAGE_STATUS_FILTER_OPTIONS.filter((option) => value.includes(option));
+  if (typeof value === "string" && value !== "all") {
+    return allowed.includes(value as T) ? [value as T] : [];
+  }
+  return [];
 }
 
-function normalizeStageStatusScope(value: unknown): StageStatusScope {
-  if (value === "any") return "any";
+function normalizeStageStatusFilter(value: unknown): StageStatusFilterValue[] {
+  return normalizeStringArray(value, STAGE_STATUS_FILTER_OPTIONS);
+}
+
+function normalizeStageStatusScope(value: unknown): CompletedStageNumber[] {
+  const validStages: CompletedStageNumber[] = [1, 2, 3, 4, 5];
+  if (Array.isArray(value)) {
+    const picked = value
+      .map((item) => Number(item))
+      .filter((n): n is CompletedStageNumber =>
+        validStages.includes(n as CompletedStageNumber)
+      );
+    return validStages.filter((n) => picked.includes(n));
+  }
+  if (value === "any" || value === undefined || value === null) return [];
   const n = typeof value === "number" ? value : Number(value);
-  return [1, 2, 3, 4, 5].includes(n)
-    ? (n as CompletedStageNumber)
-    : defaultFilters.stageStatusScope;
+  return validStages.includes(n as CompletedStageNumber)
+    ? [n as CompletedStageNumber]
+    : [];
+}
+
+function normalizeStaffFilter(value: unknown): StaffMemberFilterValue[] {
+  const items = Array.isArray(value)
+    ? value
+    : value === "all" || value === undefined || value === null
+      ? []
+      : [value];
+  const result: StaffMemberFilterValue[] = [];
+  const seen = new Set<StaffMemberFilterValue>();
+  for (const item of items) {
+    if (item === "unassigned") {
+      if (!seen.has("unassigned")) {
+        seen.add("unassigned");
+        result.push("unassigned");
+      }
+      continue;
+    }
+    const n = typeof item === "number" ? item : Number(item);
+    if (Number.isInteger(n) && n > 0 && !seen.has(n)) {
+      seen.add(n);
+      result.push(n);
+    }
+  }
+  return result;
 }
 
 function loadFiltersFromStorage(): StaffDashboardFilters {
@@ -66,35 +126,22 @@ function loadFiltersFromStorage(): StaffDashboardFilters {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       const parsed = JSON.parse(stored);
-      // Drop the removed "completed stages" filter if an older browser saved it.
       delete parsed.completedStagesFilter;
-      // Validate and merge with defaults to handle schema changes
       return {
-        ...defaultFilters,
-        ...parsed,
-        // Ensure types match
-        statusFilter:
-          parsed.statusFilter && ["all", "main", "partner", "basic"].includes(parsed.statusFilter)
-            ? parsed.statusFilter
-            : defaultFilters.statusFilter,
-        invitationStatusFilter:
-          parsed.invitationStatusFilter &&
-          [
-            "all",
-            "accepted",
-            "expired",
-            "not accepted",
-            "cancelled",
-            "resigned",
-          ].includes(parsed.invitationStatusFilter)
-            ? parsed.invitationStatusFilter
-            : defaultFilters.invitationStatusFilter,
+        searchQuery:
+          typeof parsed.searchQuery === "string" ? parsed.searchQuery : "",
+        statusFilter: normalizeStringArray(
+          parsed.statusFilter,
+          COMPANY_STATUS_FILTER_OPTIONS
+        ),
+        invitationStatusFilter: normalizeStringArray(
+          parsed.invitationStatusFilter,
+          INVITATION_STATUS_FILTER_OPTIONS
+        ),
         stageStatusFilter: normalizeStageStatusFilter(parsed.stageStatusFilter),
         stageStatusScope: normalizeStageStatusScope(parsed.stageStatusScope),
-        frRespFilter:
-          parsed.frRespFilter === "all" || typeof parsed.frRespFilter === "number"
-            ? parsed.frRespFilter
-            : defaultFilters.frRespFilter,
+        frRespFilter: normalizeStaffFilter(parsed.frRespFilter),
+        opiekunFilter: normalizeStaffFilter(parsed.opiekunFilter),
         showInvitations:
           typeof parsed.showInvitations === "boolean"
             ? parsed.showInvitations
@@ -126,14 +173,12 @@ export function useStaffDashboardFilters() {
   );
   const [isInitialized, setIsInitialized] = React.useState(false);
 
-  // Load from storage on mount
   React.useEffect(() => {
     const loaded = loadFiltersFromStorage();
     setFilters(loaded);
     setIsInitialized(true);
   }, []);
 
-  // Save to storage whenever filters change (after initialization)
   React.useEffect(() => {
     if (isInitialized) {
       saveFiltersToStorage(filters);
@@ -161,20 +206,23 @@ export function useStaffDashboardFilters() {
       [updateFilters]
     ),
     setStatusFilter: React.useCallback(
-      (status: "all" | "main" | "partner" | "basic") =>
-        updateFilters({ statusFilter: status }),
+      (statuses: CompanyStatusFilterValue[]) =>
+        updateFilters({
+          statusFilter: normalizeStringArray(
+            statuses,
+            COMPANY_STATUS_FILTER_OPTIONS
+          ),
+        }),
       [updateFilters]
     ),
     setInvitationStatusFilter: React.useCallback(
-      (
-        status:
-          | "all"
-          | "accepted"
-          | "expired"
-          | "not accepted"
-          | "cancelled"
-          | "resigned"
-      ) => updateFilters({ invitationStatusFilter: status }),
+      (statuses: InvitationStatusFilterValue[]) =>
+        updateFilters({
+          invitationStatusFilter: normalizeStringArray(
+            statuses,
+            INVITATION_STATUS_FILTER_OPTIONS
+          ),
+        }),
       [updateFilters]
     ),
     setStageStatusFilter: React.useCallback(
@@ -185,11 +233,20 @@ export function useStaffDashboardFilters() {
       [updateFilters]
     ),
     setStageStatusScope: React.useCallback(
-      (scope: StageStatusScope) => updateFilters({ stageStatusScope: scope }),
+      (scope: CompletedStageNumber[]) =>
+        updateFilters({
+          stageStatusScope: normalizeStageStatusScope(scope),
+        }),
       [updateFilters]
     ),
     setFrRespFilter: React.useCallback(
-      (frResp: number | "all") => updateFilters({ frRespFilter: frResp }),
+      (frResp: StaffMemberFilterValue[]) =>
+        updateFilters({ frRespFilter: normalizeStaffFilter(frResp) }),
+      [updateFilters]
+    ),
+    setOpiekunFilter: React.useCallback(
+      (opiekun: StaffMemberFilterValue[]) =>
+        updateFilters({ opiekunFilter: normalizeStaffFilter(opiekun) }),
       [updateFilters]
     ),
     setShowInvitations: React.useCallback(

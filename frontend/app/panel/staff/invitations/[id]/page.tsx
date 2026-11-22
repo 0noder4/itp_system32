@@ -22,6 +22,7 @@ import { ArrowLeft, Mail, X } from "lucide-react";
 import { Copy, Check } from "lucide-react";
 import { toast } from "sonner";
 import {
+  CompanyLanguageBadge,
   CompanyStatusBadge,
   InvitationStatusBadge,
 } from "@/components/staff/Companies/StatusBadges";
@@ -228,7 +229,10 @@ export default function InvitationDetailPage() {
                 <p className="text-sm font-medium text-muted-foreground">
                   {t("companies.table.name")}
                 </p>
-                <p className="text-lg">{invitation.company_name}</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-lg">{invitation.company_name}</p>
+                  <CompanyLanguageBadge language={invitation.language} />
+                </div>
               </div>
               {/* Additional Information */}
               <div>

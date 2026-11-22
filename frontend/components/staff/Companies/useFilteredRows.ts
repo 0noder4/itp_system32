@@ -1,8 +1,11 @@
 import React from "react";
 import { Company, CompanyInvitation, StageKey } from "@/lib/types";
 import {
+  CompanyStatusFilterValue,
+  CompletedStageNumber,
+  InvitationStatusFilterValue,
+  StaffMemberFilterValue,
   StageStatusFilterValue,
-  StageStatusScope,
 } from "@/hooks/useStaffDashboardFilters";
 import { TableRow } from "./StatusBadges";
 
@@ -18,32 +21,36 @@ interface UseFilteredRowsParams {
   companies?: Company[];
   invitations?: CompanyInvitation[];
   searchQuery: string;
-  statusFilter: "all" | "main" | "partner" | "basic";
-  frRespFilter: number | "all";
-  invitationStatusFilter:
-    | "all"
-    | "accepted"
-    | "expired"
-    | "not accepted"
-    | "cancelled"
-    | "resigned";
+  statusFilter: CompanyStatusFilterValue[];
+  frRespFilter: StaffMemberFilterValue[];
+  opiekunFilter: StaffMemberFilterValue[];
+  invitationStatusFilter: InvitationStatusFilterValue[];
   stageStatusFilter: StageStatusFilterValue[];
-  stageStatusScope: StageStatusScope;
+  stageStatusScope: CompletedStageNumber[];
   showInvitations: boolean;
+}
+
+function matchesStaffFilter(
+  assignedId: number | null | undefined,
+  filter: StaffMemberFilterValue[]
+): boolean {
+  if (filter.length === 0) return true;
+  if (assignedId == null) return filter.includes("unassigned");
+  return filter.includes(assignedId);
 }
 
 function companyMatchesStageStatus(
   company: Company,
   stageStatusFilter: StageStatusFilterValue[],
-  stageStatusScope: StageStatusScope
+  stageStatusScope: CompletedStageNumber[]
 ): boolean {
   if (stageStatusFilter.length === 0) {
     return true;
   }
   const stageKeys =
-    stageStatusScope === "any"
+    stageStatusScope.length === 0
       ? ALL_STAGE_KEYS
-      : [`stage_${stageStatusScope}` as StageKey];
+      : stageStatusScope.map((stage) => `stage_${stage}` as StageKey);
   return stageKeys.some((key) => {
     const status = company.stage_statuses?.[key];
     return (
@@ -59,6 +66,7 @@ export function useFilteredRows({
   searchQuery,
   statusFilter,
   frRespFilter,
+  opiekunFilter,
   invitationStatusFilter,
   stageStatusFilter,
   stageStatusScope,
@@ -67,7 +75,6 @@ export function useFilteredRows({
   const filteredRows = React.useMemo(() => {
     const rows: TableRow[] = [];
 
-    // Get set of company emails to avoid duplicates
     const companyEmails = new Set<string>();
     if (companies) {
       companies.forEach((company) => {
@@ -75,27 +82,29 @@ export function useFilteredRows({
       });
     }
 
-    // Add companies (treat them as accepted invitations)
     if (companies) {
       companies.forEach((company) => {
-        // Status filter
-        if (statusFilter !== "all" && company.status !== statusFilter) {
+        if (
+          statusFilter.length > 0 &&
+          !statusFilter.includes(company.status)
+        ) {
           return;
         }
 
-        // FR Resp filter - only apply to companies
-        if (frRespFilter !== "all") {
-          if (!company.fr_resp || company.fr_resp !== frRespFilter) {
-            return;
-          }
+        if (!matchesStaffFilter(company.fr_resp, frRespFilter)) {
+          return;
         }
 
-        // Invitation status filter - companies are treated as accepted invitations
-        if (invitationStatusFilter !== "all") {
-          if (invitationStatusFilter !== "accepted") {
-            // Hide companies when filter is "expired" or "not accepted"
-            return;
-          }
+        if (!matchesStaffFilter(company.opiekun, opiekunFilter)) {
+          return;
+        }
+
+        // Registered companies correspond to "accepted" invitations.
+        if (
+          invitationStatusFilter.length > 0 &&
+          !invitationStatusFilter.includes("accepted")
+        ) {
+          return;
         }
 
         if (
@@ -104,7 +113,6 @@ export function useFilteredRows({
           return;
         }
 
-        // Search filter
         if (searchQuery.trim() !== "") {
           const query = searchQuery.toLowerCase();
           if (
@@ -120,15 +128,12 @@ export function useFilteredRows({
       });
     }
 
-    // Add invitations (only if showInvitations is true)
-    // Invitations have no stages — hide them when any stage filter is active
     if (
       showInvitations &&
       invitations &&
       stageStatusFilter.length === 0
     ) {
       invitations.forEach((invitation) => {
-        // Skip accepted invitations if company exists (avoid duplicates)
         if (
           invitation.invitation_status === "accepted" &&
           companyEmails.has(invitation.email.toLowerCase())
@@ -136,30 +141,29 @@ export function useFilteredRows({
           return;
         }
 
-        // Invitation status filter
         if (
-          invitationStatusFilter !== "all" &&
-          invitation.invitation_status !== invitationStatusFilter
+          invitationStatusFilter.length > 0 &&
+          !invitationStatusFilter.includes(invitation.invitation_status)
         ) {
           return;
         }
 
-        // FR Resp filter
-        if (frRespFilter !== "all") {
-          if (!invitation.fr_resp || invitation.fr_resp !== frRespFilter) {
-            return;
-          }
+        if (!matchesStaffFilter(invitation.fr_resp, frRespFilter)) {
+          return;
         }
 
-        // Status filter (for company status)
+        // Invitations do not have an assigned opiekun yet.
+        if (opiekunFilter.length > 0 && !opiekunFilter.includes("unassigned")) {
+          return;
+        }
+
         if (
-          statusFilter !== "all" &&
-          invitation.company_status !== statusFilter
+          statusFilter.length > 0 &&
+          !statusFilter.includes(invitation.company_status)
         ) {
           return;
         }
 
-        // Search filter
         if (searchQuery.trim() !== "") {
           const query = searchQuery.toLowerCase();
           if (
@@ -175,7 +179,6 @@ export function useFilteredRows({
       });
     }
 
-    // Sort by created_at descending (newest first)
     return rows.sort((a, b) => {
       const dateA = new Date(a.data.created_at).getTime();
       const dateB = new Date(b.data.created_at).getTime();
@@ -187,6 +190,7 @@ export function useFilteredRows({
     searchQuery,
     statusFilter,
     frRespFilter,
+    opiekunFilter,
     invitationStatusFilter,
     stageStatusFilter,
     stageStatusScope,
@@ -194,7 +198,6 @@ export function useFilteredRows({
   ]);
 
   const totalCount = React.useMemo(() => {
-    // Get set of company emails to identify duplicates
     const companyEmails = new Set<string>();
     if (companies) {
       companies.forEach((company) => {
@@ -204,10 +207,8 @@ export function useFilteredRows({
 
     let count = companies?.length || 0;
 
-    // Add invitations, but exclude accepted ones that have corresponding companies
     if (showInvitations && invitations) {
       invitations.forEach((invitation) => {
-        // Skip accepted invitations if company exists (avoid duplicates)
         if (
           invitation.invitation_status === "accepted" &&
           companyEmails.has(invitation.email.toLowerCase())

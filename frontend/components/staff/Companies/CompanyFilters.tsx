@@ -21,16 +21,21 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { STAFF_ACCENT_COLOR } from "@/lib/colors";
+import { cn } from "@/lib/utils";
 import {
   nativeCheckboxClassName,
   nativeChoiceAppearanceStyle,
 } from "@/lib/native-choice-styles";
 
 import {
+  COMPANY_STATUS_FILTER_OPTIONS,
+  INVITATION_STATUS_FILTER_OPTIONS,
   STAGE_STATUS_FILTER_OPTIONS,
+  type CompanyStatusFilterValue,
   type CompletedStageNumber,
+  type InvitationStatusFilterValue,
+  type StaffMemberFilterValue,
   type StageStatusFilterValue,
-  type StageStatusScope,
 } from "@/hooks/useStaffDashboardFilters";
 
 const COMPLETED_STAGE_OPTIONS: CompletedStageNumber[] = [1, 2, 3, 4, 5];
@@ -43,32 +48,27 @@ const STAGE_STATUS_TRANSLATION_KEY: Record<StageStatusFilterValue, string> = {
   accepted: "exhibitor.status.accepted",
 };
 
-type CompanyStatusFilter = "all" | "main" | "partner" | "basic";
-
-type InvitationStatusFilter =
-  | "all"
-  | "accepted"
-  | "expired"
-  | "not accepted"
-  | "cancelled"
-  | "resigned";
-
 interface CompanyFiltersProps {
   searchQuery: string;
   onSearchChange: (query: string) => void;
-  statusFilter: CompanyStatusFilter;
-  onStatusFilterChange: (status: CompanyStatusFilter) => void;
-  invitationStatusFilter: InvitationStatusFilter;
-  onInvitationStatusFilterChange: (status: InvitationStatusFilter) => void;
+  statusFilter: CompanyStatusFilterValue[];
+  onStatusFilterChange: (statuses: CompanyStatusFilterValue[]) => void;
+  invitationStatusFilter: InvitationStatusFilterValue[];
+  onInvitationStatusFilterChange: (
+    statuses: InvitationStatusFilterValue[]
+  ) => void;
   stageStatusFilter: StageStatusFilterValue[];
   onStageStatusFilterChange: (statuses: StageStatusFilterValue[]) => void;
-  stageStatusScope: StageStatusScope;
-  onStageStatusScopeChange: (scope: StageStatusScope) => void;
-  frRespFilter: number | "all";
-  onFrRespFilterChange: (frResp: number | "all") => void;
+  stageStatusScope: CompletedStageNumber[];
+  onStageStatusScopeChange: (scope: CompletedStageNumber[]) => void;
+  frRespFilter: StaffMemberFilterValue[];
+  onFrRespFilterChange: (frResp: StaffMemberFilterValue[]) => void;
+  opiekunFilter: StaffMemberFilterValue[];
+  onOpiekunFilterChange: (opiekun: StaffMemberFilterValue[]) => void;
   showInvitations: boolean;
   onShowInvitationsChange: (show: boolean) => void;
   staffMembers?: StaffUser[];
+  opiekunMembers?: StaffUser[];
   filteredCount: number;
   totalCount: number;
   onSendReminders?: () => void;
@@ -93,29 +93,11 @@ function FilterChip({
       size="sm"
       aria-pressed={active}
       onClick={onClick}
-      style={
+      className={cn(
         active
-          ? { backgroundColor: STAFF_ACCENT_COLOR, color: "#ffffff" }
-          : undefined
-      }
-      onMouseEnter={(e) => {
-        if (active) {
-          e.currentTarget.style.backgroundColor = "#C84FA8";
-          e.currentTarget.style.color = "#ffffff";
-        } else {
-          e.currentTarget.style.borderColor = STAFF_ACCENT_COLOR;
-          e.currentTarget.style.color = STAFF_ACCENT_COLOR;
-        }
-      }}
-      onMouseLeave={(e) => {
-        if (active) {
-          e.currentTarget.style.backgroundColor = STAFF_ACCENT_COLOR;
-          e.currentTarget.style.color = "#ffffff";
-        } else {
-          e.currentTarget.style.borderColor = "";
-          e.currentTarget.style.color = "";
-        }
-      }}
+          ? "border-[#DB5ABA] bg-[#DB5ABA] text-white hover:border-[#C84FA8] hover:bg-[#C84FA8]"
+          : "hover:border-[#DB5ABA] hover:text-[#DB5ABA]"
+      )}
     >
       {children}
     </Button>
@@ -173,6 +155,18 @@ function AccentActionButton({
   );
 }
 
+function toggleArrayItem<T>(items: T[], item: T): T[] {
+  return items.includes(item)
+    ? items.filter((entry) => entry !== item)
+    : [...items, item];
+}
+
+function staffDisplayName(staff: StaffUser): string {
+  return staff.first_name || staff.last_name
+    ? `${staff.first_name || ""} ${staff.last_name || ""}`.trim()
+    : staff.username;
+}
+
 export function CompanyFilters({
   searchQuery,
   onSearchChange,
@@ -186,9 +180,12 @@ export function CompanyFilters({
   onStageStatusScopeChange,
   frRespFilter,
   onFrRespFilterChange,
+  opiekunFilter,
+  onOpiekunFilterChange,
   showInvitations,
   onShowInvitationsChange,
   staffMembers,
+  opiekunMembers,
   filteredCount,
   totalCount,
   onSendReminders,
@@ -199,41 +196,28 @@ export function CompanyFilters({
   const { t } = useTranslation();
   const [dialogOpen, setDialogOpen] = React.useState(false);
 
-  const getStatusLabel = (status: CompanyStatusFilter) => {
-    if (status === "all") return t("common.all");
-    return t(`companies.status.${status}`);
-  };
-
-  const getInvitationStatusLabel = (status: InvitationStatusFilter) => {
-    if (status === "all") return t("common.all");
-    // Map status value to translation key (status has space, key doesn't)
+  const getInvitationStatusLabel = (status: InvitationStatusFilterValue) => {
     const statusKey = status === "not accepted" ? "notAccepted" : status;
     return t(`companies.invitations.status.${statusKey}`);
   };
 
-  const toggleStageStatus = (status: StageStatusFilterValue) => {
-    if (stageStatusFilter.includes(status)) {
-      onStageStatusFilterChange(stageStatusFilter.filter((s) => s !== status));
-    } else {
-      onStageStatusFilterChange([...stageStatusFilter, status]);
-    }
-  };
-
   const activeFilterCount =
-    (statusFilter !== "all" ? 1 : 0) +
-    (frRespFilter !== "all" ? 1 : 0) +
-    (showInvitations && invitationStatusFilter !== "all" ? 1 : 0) +
+    (statusFilter.length > 0 ? 1 : 0) +
+    (frRespFilter.length > 0 ? 1 : 0) +
+    (opiekunFilter.length > 0 ? 1 : 0) +
+    (showInvitations && invitationStatusFilter.length > 0 ? 1 : 0) +
     (stageStatusFilter.length > 0 ? 1 : 0);
 
   const hasActiveFilters = Boolean(searchQuery) || activeFilterCount > 0;
 
   const handleClearFilters = () => {
     onSearchChange("");
-    onStatusFilterChange("all");
-    onFrRespFilterChange("all");
-    onInvitationStatusFilterChange("all");
+    onStatusFilterChange([]);
+    onFrRespFilterChange([]);
+    onOpiekunFilterChange([]);
+    onInvitationStatusFilterChange([]);
     onStageStatusFilterChange([]);
-    onStageStatusScopeChange("any");
+    onStageStatusScopeChange([]);
   };
 
   const resultsText = t("companies.showingResults", {
@@ -269,12 +253,10 @@ export function CompanyFilters({
             type="button"
             variant="outline"
             size="sm"
-            className="text-xs sm:text-sm whitespace-nowrap"
-            style={
-              activeFilterCount > 0
-                ? { borderColor: STAFF_ACCENT_COLOR, color: STAFF_ACCENT_COLOR }
-                : undefined
-            }
+            className={cn(
+              "text-xs sm:text-sm whitespace-nowrap",
+              activeFilterCount > 0 && "border-[#DB5ABA] text-[#DB5ABA]"
+            )}
             onClick={() => setDialogOpen(true)}
           >
             <SlidersHorizontal className="mr-1 h-4 w-4" />
@@ -294,13 +276,7 @@ export function CompanyFilters({
               variant="ghost"
               size="sm"
               onClick={handleClearFilters}
-              className="text-xs sm:text-sm"
-              onMouseEnter={(e) => {
-                e.currentTarget.style.color = STAFF_ACCENT_COLOR;
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.color = "";
-              }}
+              className="text-xs sm:text-sm hover:text-[#DB5ABA]"
             >
               {t("common.clearFilters")}
             </Button>
@@ -365,33 +341,42 @@ export function CompanyFilters({
             </div>
 
             <FilterSection label={t("companies.filterByStatus")}>
-              {(["all", "main", "partner", "basic"] as const).map((status) => (
+              <FilterChip
+                active={statusFilter.length === 0}
+                onClick={() => onStatusFilterChange([])}
+              >
+                {t("common.all")}
+              </FilterChip>
+              {COMPANY_STATUS_FILTER_OPTIONS.map((status) => (
                 <FilterChip
                   key={status}
-                  active={statusFilter === status}
-                  onClick={() => onStatusFilterChange(status)}
+                  active={statusFilter.includes(status)}
+                  onClick={() =>
+                    onStatusFilterChange(toggleArrayItem(statusFilter, status))
+                  }
                 >
-                  {getStatusLabel(status)}
+                  {t(`companies.status.${status}`)}
                 </FilterChip>
               ))}
             </FilterSection>
 
             {showInvitations && (
               <FilterSection label={t("companies.invitations.filterByStatus")}>
-                {(
-                  [
-                    "all",
-                    "accepted",
-                    "expired",
-                    "not accepted",
-                    "cancelled",
-                    "resigned",
-                  ] as const
-                ).map((status) => (
+                <FilterChip
+                  active={invitationStatusFilter.length === 0}
+                  onClick={() => onInvitationStatusFilterChange([])}
+                >
+                  {t("common.all")}
+                </FilterChip>
+                {INVITATION_STATUS_FILTER_OPTIONS.map((status) => (
                   <FilterChip
                     key={status}
-                    active={invitationStatusFilter === status}
-                    onClick={() => onInvitationStatusFilterChange(status)}
+                    active={invitationStatusFilter.includes(status)}
+                    onClick={() =>
+                      onInvitationStatusFilterChange(
+                        toggleArrayItem(invitationStatusFilter, status)
+                      )
+                    }
                   >
                     {getInvitationStatusLabel(status)}
                   </FilterChip>
@@ -403,11 +388,21 @@ export function CompanyFilters({
               label={t("companies.filterByStageStatus")}
               hint={t("companies.filterByStageStatusHint")}
             >
+              <FilterChip
+                active={stageStatusFilter.length === 0}
+                onClick={() => onStageStatusFilterChange([])}
+              >
+                {t("common.all")}
+              </FilterChip>
               {STAGE_STATUS_FILTER_OPTIONS.map((status) => (
                 <FilterChip
                   key={status}
                   active={stageStatusFilter.includes(status)}
-                  onClick={() => toggleStageStatus(status)}
+                  onClick={() =>
+                    onStageStatusFilterChange(
+                      toggleArrayItem(stageStatusFilter, status)
+                    )
+                  }
                 >
                   {t(STAGE_STATUS_TRANSLATION_KEY[status])}
                 </FilterChip>
@@ -416,16 +411,20 @@ export function CompanyFilters({
 
             <FilterSection label={t("companies.stageStatusScope")}>
               <FilterChip
-                active={stageStatusScope === "any"}
-                onClick={() => onStageStatusScopeChange("any")}
+                active={stageStatusScope.length === 0}
+                onClick={() => onStageStatusScopeChange([])}
               >
                 {t("companies.stageStatusScopeAny")}
               </FilterChip>
               {COMPLETED_STAGE_OPTIONS.map((stage) => (
                 <FilterChip
                   key={stage}
-                  active={stageStatusScope === stage}
-                  onClick={() => onStageStatusScopeChange(stage)}
+                  active={stageStatusScope.includes(stage)}
+                  onClick={() =>
+                    onStageStatusScopeChange(
+                      toggleArrayItem(stageStatusScope, stage)
+                    )
+                  }
                 >
                   {t("companies.stageFilterLabel", { stage })}
                 </FilterChip>
@@ -434,20 +433,64 @@ export function CompanyFilters({
 
             <FilterSection label={t("companies.filterByFrResp")}>
               <FilterChip
-                active={frRespFilter === "all"}
-                onClick={() => onFrRespFilterChange("all")}
+                active={frRespFilter.length === 0}
+                onClick={() => onFrRespFilterChange([])}
               >
                 {t("common.all")}
+              </FilterChip>
+              <FilterChip
+                active={frRespFilter.includes("unassigned")}
+                onClick={() =>
+                  onFrRespFilterChange(
+                    toggleArrayItem(frRespFilter, "unassigned")
+                  )
+                }
+              >
+                {t("companies.unassigned")}
               </FilterChip>
               {staffMembers?.map((staff) => (
                 <FilterChip
                   key={staff.id}
-                  active={frRespFilter === staff.id}
-                  onClick={() => onFrRespFilterChange(staff.id)}
+                  active={frRespFilter.includes(staff.id)}
+                  onClick={() =>
+                    onFrRespFilterChange(
+                      toggleArrayItem(frRespFilter, staff.id)
+                    )
+                  }
                 >
-                  {staff.first_name || staff.last_name
-                    ? `${staff.first_name || ""} ${staff.last_name || ""}`.trim()
-                    : staff.username}
+                  {staffDisplayName(staff)}
+                </FilterChip>
+              ))}
+            </FilterSection>
+
+            <FilterSection label={t("companies.filterByOpiekun")}>
+              <FilterChip
+                active={opiekunFilter.length === 0}
+                onClick={() => onOpiekunFilterChange([])}
+              >
+                {t("common.all")}
+              </FilterChip>
+              <FilterChip
+                active={opiekunFilter.includes("unassigned")}
+                onClick={() =>
+                  onOpiekunFilterChange(
+                    toggleArrayItem(opiekunFilter, "unassigned")
+                  )
+                }
+              >
+                {t("companies.unassigned")}
+              </FilterChip>
+              {opiekunMembers?.map((staff) => (
+                <FilterChip
+                  key={staff.id}
+                  active={opiekunFilter.includes(staff.id)}
+                  onClick={() =>
+                    onOpiekunFilterChange(
+                      toggleArrayItem(opiekunFilter, staff.id)
+                    )
+                  }
+                >
+                  {staffDisplayName(staff)}
                 </FilterChip>
               ))}
             </FilterSection>
