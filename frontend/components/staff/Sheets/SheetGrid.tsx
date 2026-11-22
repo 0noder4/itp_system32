@@ -1721,7 +1721,7 @@ function openSheetFile(
     if (value.url.includes("order-summary-pdf") && companyName) {
       const slug = sanitizeCompanySlug(companyName);
       if (slug) {
-        fallbackName = `podsumowanie_zamowienia_${slug}.pdf`;
+        fallbackName = `podsumowanie_${slug}.pdf`;
       }
     }
     void downloadAuthenticated(value.url, fallbackName, errorText);

@@ -2459,22 +2459,52 @@ class InvitationReminderSettingsView(APIView):
             )
 
 
+_LEGAL_SUFFIX_RE = re.compile(
+    r'(?:,?\s*(?:'
+    r'spółka\s+z\s+ograniczoną\s+odpowiedzialnością|'
+    r'spolka\s+z\s+ograniczona\s+odpowiedzialnoscia|'
+    r'spółka\s+z\s*o\.?\s*o\.?|'
+    r'spolka\s+z\s*o\.?\s*o\.?|'
+    r'sp\.?\s*z\s*o\.?\s*o\.?|'
+    r'spółka\s+akcyjna|'
+    r'spolka\s+akcyjna|'
+    r's\.?\s*a\.?'
+    r'))\s*$',
+    re.IGNORECASE,
+)
+
+
+def _truncate_slug(slug: str, max_len: int = 20) -> str:
+    slug = slug.strip('._-')
+    if len(slug) <= max_len:
+        return slug
+    head = slug[:max_len]
+    last_sep = head.rfind('_')
+    if last_sep >= 8:
+        head = head[:last_sep]
+    return head.strip('._-')
+
+
 def _build_order_summary_filename(company: Company, language: str) -> tuple[str, str]:
-    """Return (ascii_filename, utf8_filename) including the company name."""
+    """Return compact (ascii_filename, utf8_filename) including the company name."""
     raw_name = (getattr(company, 'name', '') or '').strip()
-    utf8_slug = re.sub(r'[<>:"/\\|?*\x00-\x1f]', '', raw_name)
-    utf8_slug = re.sub(r'\s+', '_', utf8_slug).strip('._-')[:80]
+    stripped_name = _LEGAL_SUFFIX_RE.sub('', raw_name).strip() or raw_name
+
+    utf8_slug = re.sub(r'[<>:"/\\|?*\x00-\x1f]', '', stripped_name)
+    utf8_slug = re.sub(r'\s+', '_', utf8_slug)
+    utf8_slug = _truncate_slug(utf8_slug, max_len=20)
     if not utf8_slug:
         utf8_slug = f'company_{company.id}' if language == 'en' else f'firma_{company.id}'
 
     ascii_base = utf8_slug.replace('ł', 'l').replace('Ł', 'L')
     ascii_norm = unicodedata.normalize('NFKD', ascii_base).encode('ascii', 'ignore').decode('ascii')
     ascii_slug = re.sub(r'[^A-Za-z0-9._-]+', '_', ascii_norm)
-    ascii_slug = re.sub(r'_+', '_', ascii_slug).strip('._-')
+    ascii_slug = re.sub(r'_+', '_', ascii_slug)
+    ascii_slug = _truncate_slug(ascii_slug, max_len=20)
     if not ascii_slug:
-        ascii_slug = f'company_{company.id}'
+        ascii_slug = f'company_{company.id}' if language == 'en' else f'firma_{company.id}'
 
-    prefix = 'order_summary_' if language == 'en' else 'podsumowanie_zamowienia_'
+    prefix = 'summary_' if language == 'en' else 'podsumowanie_'
     return f'{prefix}{ascii_slug}.pdf', f'{prefix}{utf8_slug}.pdf'
 
 

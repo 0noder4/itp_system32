@@ -1520,9 +1520,10 @@ class OrderSummaryPDFTests(TestCase):
         resp_pl = self.client.get(f"/api/company/{basic.id}/order-summary-pdf/")
         self.assertEqual(resp_pl.status_code, status.HTTP_200_OK)
         self.assertTrue(resp_pl.content.startswith(b"%PDF-"))
+        self.assertNotIn(b"(anonymous)", resp_pl.content)
         cd_pl = resp_pl["Content-Disposition"]
-        self.assertIn('filename="podsumowanie_zamowienia_Zolc_Co.pdf"', cd_pl)
-        self.assertIn("filename*=UTF-8''podsumowanie_zamowienia_%C5%BB%C3%B3%C5%82%C4%87_%26_Co.pdf", cd_pl)
+        self.assertIn('filename="podsumowanie_Zolc_Co.pdf"', cd_pl)
+        self.assertIn("filename*=UTF-8''podsumowanie_%C5%BB%C3%B3%C5%82%C4%87_%26_Co.pdf", cd_pl)
 
         # FR staff can also download
         self.client.force_authenticate(self.fr_staff)
@@ -1541,8 +1542,21 @@ class OrderSummaryPDFTests(TestCase):
         resp_en = self.client.get(f"/api/company/{basic.id}/order-summary-pdf/")
         self.assertEqual(resp_en.status_code, status.HTTP_200_OK)
         cd_en = resp_en["Content-Disposition"]
-        self.assertIn('filename="order_summary_Zolc_Co.pdf"', cd_en)
-        self.assertIn("filename*=UTF-8''order_summary_%C5%BB%C3%B3%C5%82%C4%87_%26_Co.pdf", cd_en)
+        self.assertIn('filename="summary_Zolc_Co.pdf"', cd_en)
+        self.assertIn("filename*=UTF-8''summary_%C5%BB%C3%B3%C5%82%C4%87_%26_Co.pdf", cd_en)
+
+        # Long company name with legal suffix produces compact filename (<= 37 chars)
+        from companies.views import _build_order_summary_filename
+
+        basic.name = "ITP Smoke Export Company Spółka z o.o."
+        ascii_long, utf8_long = _build_order_summary_filename(basic, "pl")
+        self.assertEqual(ascii_long, "podsumowanie_ITP_Smoke_Export.pdf")
+        self.assertEqual(utf8_long, "podsumowanie_ITP_Smoke_Export.pdf")
+        self.assertLessEqual(len(ascii_long), 37)
+        ascii_long_en, utf8_long_en = _build_order_summary_filename(basic, "en")
+        self.assertEqual(ascii_long_en, "summary_ITP_Smoke_Export.pdf")
+        self.assertEqual(utf8_long_en, "summary_ITP_Smoke_Export.pdf")
+        self.assertLessEqual(len(ascii_long_en), 37)
 
     def test_order_summary_pdf_generator_full_data_pl_and_en(self):
         import datetime
@@ -1656,4 +1670,5 @@ class OrderSummaryPDFTests(TestCase):
             pdf_buf = OrderSummaryPDFGenerator(partner, language=lang).generate()
             pdf_bytes = pdf_buf.getvalue()
             self.assertTrue(pdf_bytes.startswith(b"%PDF-"), f"Invalid PDF output for {lang}")
+            self.assertNotIn(b"(anonymous)", pdf_bytes)
             self.assertGreater(len(pdf_bytes), 1500)

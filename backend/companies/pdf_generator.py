@@ -269,6 +269,13 @@ class OrderSummaryPDFGenerator:
     def __init__(self, company, language='pl'):
         self.company = company
         self.language = language if language in ['en', 'pl'] else 'pl'
+        company_name = (getattr(company, 'name', '') or '').strip() or f"#{getattr(company, 'id', '')}"
+        if self.language == 'en':
+            self.doc_title = f"Order Summary — {company_name}"
+            self.doc_author = "Engineering Job Fair (ITP)"
+        else:
+            self.doc_title = f"Podsumowanie zamówienia — {company_name}"
+            self.doc_author = "Inżynierskie Targi Pracy (ITP)"
         self.buffer = BytesIO()
         self.generation_date = timezone.now()
         self.doc = SimpleDocTemplate(
@@ -278,6 +285,10 @@ class OrderSummaryPDFGenerator:
             leftMargin=1.5 * cm,
             topMargin=1.3 * cm,
             bottomMargin=1.5 * cm,
+            title=self.doc_title,
+            author=self.doc_author,
+            subject=self.doc_title,
+            creator=self.doc_author,
         )
         self.story = []
         self.styles = getSampleStyleSheet()
@@ -1543,6 +1554,10 @@ class OrderSummaryPDFGenerator:
 
     def _add_footer(self, canv, total_pages: int):
         """Draw footer divider, localized generation date, and page counter."""
+        canv.setTitle(self.doc_title)
+        canv.setAuthor(self.doc_author)
+        canv.setSubject(self.doc_title)
+        canv.setCreator(self.doc_author)
         canv.saveState()
 
         local_dt = (

@@ -331,13 +331,25 @@ export function extractDownloadFilename(
   return fallback;
 }
 
+const LEGAL_SUFFIX_RE =
+  /(?:,?\s*(?:spółka\s+z\s+ograniczoną\s+odpowiedzialnością|spolka\s+z\s+ograniczona\s+odpowiedzialnoscia|spółka\s+z\s*o\.?\s*o\.?|spolka\s+z\s*o\.?\s*o\.?|sp\.?\s*z\s*o\.?\s*o\.?|spółka\s+akcyjna|spolka\s+akcyjna|s\.?\s*a\.?))\s*$/i;
+
 export function sanitizeCompanySlug(name: string): string {
-  return name
-    .trim()
+  const trimmed = name.trim();
+  const withoutLegal = trimmed.replace(LEGAL_SUFFIX_RE, "").trim() || trimmed;
+  let slug = withoutLegal
     .replace(/[<>:"/\\|?*]+/g, "")
     .replace(/\s+/g, "_")
-    .replace(/^[._-]+|[._-]+$/g, "")
-    .slice(0, 80);
+    .replace(/^[._-]+|[._-]+$/g, "");
+  if (slug.length > 20) {
+    let cut = slug.slice(0, 20);
+    const lastSep = cut.lastIndexOf("_");
+    if (lastSep >= 8) {
+      cut = cut.slice(0, lastSep);
+    }
+    slug = cut.replace(/^[._-]+|[._-]+$/g, "");
+  }
+  return slug;
 }
 
 // Download order summary PDF
@@ -363,8 +375,8 @@ export const downloadOrderSummaryPDF = async (
 
     const slug = companyName ? sanitizeCompanySlug(companyName) : "";
     const fallback = slug
-      ? `podsumowanie_zamowienia_${slug}.pdf`
-      : `order_summary_${companyId}.pdf`;
+      ? `podsumowanie_${slug}.pdf`
+      : `podsumowanie_${companyId}.pdf`;
     const filename = extractDownloadFilename(
       response.headers["content-disposition"],
       fallback
