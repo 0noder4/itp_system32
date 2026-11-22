@@ -9,8 +9,9 @@ from users.permissions import HasStaffRole, IsAdmin
 from . import comments as sheet_comments
 from .definitions import CATALOG
 from .definitions.common import user_display
+from .edit_parts import edit_part_columns
 from .mail_deadlines import deadlines_payload, update_deadlines
-from .models import SheetCellChange, SheetLayoutDefault
+from .models import SheetCellChange, SheetCellComment, SheetCellDraft, SheetLayoutDefault
 from .registry import ROW_STAFF
 from .service import (
     SheetNotFoundError,
@@ -23,11 +24,14 @@ from .service import (
     company_queryset,
     create_custom_column,
     create_custom_group,
+    create_staff_meal_guest,
     delete_custom_column,
     delete_custom_group,
     delete_custom_media,
+    delete_staff_meal_guest,
     discard_drafts,
     parse_changes,
+    present_history_value,
     restore_form_overrides,
     staff_cell_history,
     update_custom_column,
@@ -35,7 +39,7 @@ from .service import (
     upload_custom_media,
     visible_columns,
 )
-from .values import present
+from .values import present, values_equal
 from .xlsx import build_xlsx, build_xlsx_workbook
 
 
@@ -537,19 +541,127 @@ class SheetCellHistoryView(APIView):
             return Response(history)
         if not company_queryset(sheet, tab, request.user).filter(id=company_id).exists():
             return Response({'detail': 'Nie znaleziono firmy.'}, status=status.HTTP_404_NOT_FOUND)
+        parts = edit_part_columns().get(column_key, ())
+        part_by_key = {part.key: part for part in parts}
+        change_keys = [column_key, *part_by_key.keys()] if parts else [column_key]
         changes = (
-            SheetCellChange.objects.filter(company_id=company_id, column_key=column_key)
+            SheetCellChange.objects.filter(company_id=company_id, column_key__in=change_keys)
             .select_related('changed_by')[:40]
         )
-        return Response([
-            {
-                'old': present(column, change.old_value),
-                'new': present(column, change.new_value),
+        entries: list[dict] = []
+        for change in changes:
+            part_col = part_by_key.get(change.column_key)
+            col_def = part_col or column
+            old_str = present_history_value(col_def, change.old_value)
+            new_str = present_history_value(col_def, change.new_value)
+            if part_col is not None:
+                part_label = part_col.label.replace('\n', ' ').strip()
+                old_str = f'{part_label}: {old_str or "—"}'
+                new_str = f'{part_label}: {new_str or "—"}'
+            entries.append({
+                'old': old_str,
+                'new': new_str,
                 'by': user_display(change.changed_by),
                 'at': change.changed_at.isoformat(),
-            }
-            for change in changes
-        ])
+                'kind': 'commit',
+                'status': None,
+                'note': '',
+            })
+
+        proposals = list(
+            SheetCellComment.objects.filter(
+                company_id=company_id,
+                staff_user__isnull=True,
+                staff_guest__isnull=True,
+                column_key=column_key,
+                proposed_value__isnull=False,
+            )
+            .select_related('author')
+            .order_by('-updated_at', '-id')[:40]
+        )
+        for proposal in proposals:
+            entries.append({
+                'old': '',
+                'new': present_history_value(column, proposal.proposed_value, parts),
+                'by': user_display(proposal.author),
+                'at': proposal.updated_at.isoformat(),
+                'kind': 'proposal',
+                'status': proposal.status,
+                'note': proposal.body,
+            })
+
+        open_proposals = [p for p in proposals if p.status == SheetCellComment.STATUS_PROGRESS]
+        if parts:
+            drafts = list(
+                SheetCellDraft.objects.filter(company_id=company_id, column_key__in=list(part_by_key.keys()))
+                .select_related('updated_by')
+            )
+            if drafts:
+                draft_dict = {d.column_key: d.value for d in drafts}
+                matched = False
+                for prop in open_proposals:
+                    if not isinstance(prop.proposed_value, dict):
+                        continue
+                    if set(prop.proposed_value.keys()) == set(draft_dict.keys()):
+                        ok = True
+                        for pk, pval in draft_dict.items():
+                            pcol = part_by_key.get(pk)
+                            try:
+                                if not (
+                                    values_equal(pcol, prop.proposed_value.get(pk), pval)
+                                    if pcol
+                                    else prop.proposed_value.get(pk) == pval
+                                ):
+                                    ok = False
+                                    break
+                            except Exception:
+                                if prop.proposed_value.get(pk) != pval:
+                                    ok = False
+                                    break
+                        if ok:
+                            matched = True
+                            break
+                if not matched:
+                    latest_draft = max(drafts, key=lambda d: d.updated_at)
+                    entries.append({
+                        'old': '',
+                        'new': present_history_value(column, draft_dict, parts),
+                        'by': user_display(latest_draft.updated_by),
+                        'at': latest_draft.updated_at.isoformat(),
+                        'kind': 'draft',
+                        'status': None,
+                        'note': '',
+                    })
+        else:
+            draft = (
+                SheetCellDraft.objects.filter(company_id=company_id, column_key=column_key)
+                .select_related('updated_by')
+                .first()
+            )
+            if draft is not None:
+                matched = False
+                for prop in open_proposals:
+                    try:
+                        if values_equal(column, prop.proposed_value, draft.value):
+                            matched = True
+                            break
+                    except Exception:
+                        if prop.proposed_value == draft.value:
+                            matched = True
+                            break
+                if not matched:
+                    entries.append({
+                        'old': '',
+                        'new': present_history_value(column, draft.value),
+                        'by': user_display(draft.updated_by),
+                        'at': draft.updated_at.isoformat(),
+                        'kind': 'draft',
+                        'status': None,
+                        'note': '',
+                    })
+
+        entries.sort(key=lambda entry: entry['at'], reverse=True)
+        return Response(entries[:60])
 
 
 def _xlsx_file_response(content: bytes, filename: str) -> HttpResponse:
@@ -899,3 +1011,44 @@ class SheetCustomMediaView(APIView):
         except SheetValidationError as exc:
             return Response({'errors': exc.errors}, status=status.HTTP_400_BAD_REQUEST)
         return Response(result)
+
+
+class StaffMealGuestCreateView(APIView):
+    """POST .../guests/ — add a manual Beściak row without a user account."""
+
+    permission_classes = [IsAuthenticated, HasAnyStaffRole]
+
+    def post(self, request, sheet_key, tab_key):
+        sheet, tab = _resolve(request.user, sheet_key, tab_key)
+        if tab is None:
+            return Response({'detail': 'Nie znaleziono arkusza.'}, status=status.HTTP_404_NOT_FOUND)
+        if tab.row_source != ROW_STAFF:
+            return Response({'detail': 'Ta zakładka nie obsługuje ręcznych osób.'}, status=status.HTTP_400_BAD_REQUEST)
+        data = request.data if isinstance(request.data, dict) else {}
+        try:
+            created = create_staff_meal_guest(sheet, tab, request.user, data)
+        except SheetPermissionError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_403_FORBIDDEN)
+        except SheetValidationError as exc:
+            return Response({'errors': exc.errors}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(created, status=status.HTTP_201_CREATED)
+
+
+class StaffMealGuestDetailView(APIView):
+    """DELETE .../guests/<guest_id>/ — remove a manual Beściak row."""
+
+    permission_classes = [IsAuthenticated, HasAnyStaffRole]
+
+    def delete(self, request, sheet_key, tab_key, guest_id: int):
+        sheet, tab = _resolve(request.user, sheet_key, tab_key)
+        if tab is None:
+            return Response({'detail': 'Nie znaleziono arkusza.'}, status=status.HTTP_404_NOT_FOUND)
+        if tab.row_source != ROW_STAFF:
+            return Response({'detail': 'Ta zakładka nie obsługuje ręcznych osób.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            delete_staff_meal_guest(sheet, tab, request.user, guest_id)
+        except SheetPermissionError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_403_FORBIDDEN)
+        except SheetNotFoundError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_404_NOT_FOUND)
+        return Response(status=status.HTTP_204_NO_CONTENT)

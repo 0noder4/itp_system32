@@ -22,6 +22,7 @@ from .form_columns import (
     LUNCH_EXTRA_COST,
     MONEY_TOTAL,
     ORDER_PDF,
+    PACKAGE_COST,
     PUBLICATION,
 )
 
@@ -69,6 +70,7 @@ FR_SHEET = SheetDef(
             columns=(
                 *IDENTITY_COLUMNS,
                 *STATUS_COLUMNS,
+                PACKAGE_COST,
                 EQUIPMENT_PAID,
                 LUNCH_EXTRA_COST,
                 JOBWALL_COST,

@@ -12,6 +12,12 @@ from companies.models import (
     TV_MOUNT_CHOICES,
     carpet_color_label,
 )
+from companies.pricing import (
+    calculate_base_package_cost,
+    calculate_jobwall_cost,
+    get_free_jobwall_count,
+    get_free_lunches_per_day,
+)
 from users.models import STAFF_ROLE_FR, STAFF_ROLE_LG, STAFF_ROLE_OPIEKUN
 
 from ..form_writes import (
@@ -222,7 +228,9 @@ def _extra_lunch_cost(ctx: RowContext):
     final = _final(ctx)
     if final is None or final.lunches_declined:
         return Decimal('0')
-    extra = sum(max(0, qty - 2) for qty in _lunches_by_day(ctx).values())
+    settings_obj = ctx.shared.get('settings')
+    free_per_day = get_free_lunches_per_day(ctx.company, settings_obj)
+    extra = sum(max(0, qty - free_per_day) for qty in _lunches_by_day(ctx).values())
     price = ctx.shared.get('lunch_price') or 0
     return extra * price
 
@@ -232,16 +240,23 @@ def _job_count(ctx: RowContext) -> int:
 
 
 def _paid_jobs(ctx: RowContext) -> int:
-    free = ctx.shared.get('jobwall_free') or 0
+    settings_obj = ctx.shared.get('settings')
+    free = get_free_jobwall_count(ctx.company, settings_obj)
     return max(0, _job_count(ctx) - free)
 
 
 def _jobwall_cost(ctx: RowContext):
-    return _paid_jobs(ctx) * (ctx.shared.get('jobwall_price') or 0)
+    settings_obj = ctx.shared.get('settings')
+    return calculate_jobwall_cost(ctx.company, _job_count(ctx), settings_obj)
+
+
+def _package_cost(ctx: RowContext):
+    settings_obj = ctx.shared.get('settings')
+    return calculate_base_package_cost(ctx.company, settings_obj)['cost']
 
 
 def _surcharge_total(ctx: RowContext):
-    return _paid_equipment(ctx) + _extra_lunch_cost(ctx) + _jobwall_cost(ctx)
+    return _package_cost(ctx) + _paid_equipment(ctx) + _extra_lunch_cost(ctx) + _jobwall_cost(ctx)
 
 
 def _job_lines(ctx: RowContext) -> str:
@@ -672,14 +687,15 @@ LUNCH_DAY2 = ColumnDef(
 
 
 def _lunch_over_free(day: str):
-    """Sztuki ponad 2 darmowe na dzień (dla kateringu; kwota zostaje w lunch.extra_cost)."""
+    """Sztuki ponad limit darmowych obiadów na dzień wg pakietu (2 Wystawca, 6 Partner, 10 Partner Główny)."""
     qty_of = _lunch_qty(day)
 
     def read(ctx: RowContext):
         qty = qty_of(ctx)
         if qty is None:
             return None
-        return max(0, int(qty) - 2)
+        free_per_day = get_free_lunches_per_day(ctx.company, ctx.shared.get('settings'))
+        return max(0, int(qty) - free_per_day)
 
     return read
 
@@ -687,17 +703,17 @@ def _lunch_over_free(day: str):
 LUNCH_EXTRA_DAY1 = ColumnDef(
     key='lunch.extra_day1', label='Dodatkowe\ndzień 1', kind=KIND_NUMBER, source=SOURCE_COMPUTED,
     group=GROUP_LUNCH, width=88, getter=_lunch_over_free('day1'), aggregate='sum', highlight='positive',
-    help='Ile obiadów ponad 2 darmowe w dniu 1.',
+    help='Ile obiadów ponad limit pakietu (2/6/10) w dniu 1.',
 )
 LUNCH_EXTRA_DAY2 = ColumnDef(
     key='lunch.extra_day2', label='Dodatkowe\ndzień 2', kind=KIND_NUMBER, source=SOURCE_COMPUTED,
     group=GROUP_LUNCH, width=88, getter=_lunch_over_free('day2'), aggregate='sum', highlight='positive',
-    help='Ile obiadów ponad 2 darmowe w dniu 2.',
+    help='Ile obiadów ponad limit pakietu (2/6/10) w dniu 2.',
 )
 LUNCH_EXTRA_COST = ColumnDef(
     key='lunch.extra_cost', label='Dopłata\nza obiady', kind=KIND_NUMBER, source=SOURCE_COMPUTED,
     group=GROUP_MONEY, width=88, getter=_extra_lunch_cost, aggregate='sum', highlight='positive',
-    help='Powyżej 2 obiadów na dzień × cena z ustawień. Przy rezygnacji z obiadów: 0.',
+    help='Obiady ponad limit pakietu × cena z ustawień. Przy rezygnacji z obiadów: 0.',
 )
 
 MAIN_REP_NAME = _system(
@@ -798,14 +814,20 @@ PUBLICATION = ColumnDef(
     key='catalogue.publication', label='Publikacja na stronie', kind=KIND_SELECT, source=SOURCE_COMPUTED,
     group=GROUP_CATALOGUE, width=160, options=_PUBLICATION, getter=_publication,
 )
+PACKAGE_COST = ColumnDef(
+    key='money.package', label='Pakiet / stoisko\n(netto)', kind=KIND_NUMBER, source=SOURCE_COMPUTED,
+    group=GROUP_MONEY, width=140, getter=_package_cost, aggregate='sum', highlight='positive',
+    help='Cena netto pakietu partnerskiego lub przypisanego stoiska wystawienniczego.',
+)
 JOBWALL_COST = ColumnDef(
     key='money.jobwall', label='Dopłata za Jobwall', kind=KIND_NUMBER, source=SOURCE_COMPUTED,
     group=GROUP_MONEY, width=140, getter=_jobwall_cost, aggregate='sum', highlight='positive',
+    help='Pakiety dodatkowych ofert JobWall (+2 / +3 oferty) ponad darmowy próg pakietu.',
 )
 MONEY_TOTAL = ColumnDef(
-    key='money.total', label='Suma dopłat', kind=KIND_NUMBER, source=SOURCE_COMPUTED, group=GROUP_MONEY,
+    key='money.total', label='Suma netto', kind=KIND_NUMBER, source=SOURCE_COMPUTED, group=GROUP_MONEY,
     width=130, getter=_surcharge_total, aggregate='sum', highlight='positive',
-    help='Wyposażenie ponad próg + obiady ponad 2 dziennie + płatne ogłoszenia.',
+    help='Pakiet / stoisko + wyposażenie + obiady ponad limit + pakiety JobWall (netto).',
 )
 ORDER_PDF = ColumnDef(
     key='money.pdf', label='PDF zamówienia', kind=KIND_FILE, source=SOURCE_COMPUTED, group=GROUP_MONEY,

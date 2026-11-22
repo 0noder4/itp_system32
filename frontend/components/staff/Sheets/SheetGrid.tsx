@@ -1,12 +1,16 @@
 "use client";
 
 import React from "react";
-import { ArrowDown, ArrowUp, Info } from "lucide-react";
+import { ArrowDown, ArrowUp, Info, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { STAFF_ACCENT_COLOR } from "@/lib/colors";
 import { useTranslation } from "@/lib/i18n";
-import { apiClient } from "@/lib/api";
+import {
+  apiClient,
+  extractDownloadFilename,
+  sanitizeCompanySlug,
+} from "@/lib/api";
 import { getFileUrl } from "@/components/staff/StageViewer/utils";
 import type { CellEdit } from "@/hooks/useSheetEdits";
 import {
@@ -143,6 +147,8 @@ interface SheetGridProps {
   onOpenComments?: (row: SheetRow, column: SheetColumn) => void;
   /** Open multi-file attachment modal for custom file_link columns. */
   onOpenMediaCell?: (row: SheetRow, column: SheetColumn) => void;
+  /** Remove a manual Beściak row without a user account. */
+  onDeleteGuest?: (row: SheetRow) => void;
   /** Form-field edit mode (admin / LG / FR): can_draft columns become editable. */
   formEditMode?: boolean;
   /** Draft markers `${companyId}|${columnKey}`. */
@@ -170,6 +176,13 @@ const toRange = (sel: Selection): Range => ({
 });
 
 const clamp = (value: number, max: number) => Math.max(0, Math.min(value, max));
+
+const isCellEditable = (row: SheetRow | undefined, col: SheetColumn | undefined): boolean =>
+  Boolean(
+    row &&
+      col &&
+      (col.editable || (row.entity === "guest" && row.can_delete && col.key === "staff.name"))
+  );
 
 const cellKey = (r: number, c: number) => `${r}:${c}`;
 
@@ -209,6 +222,7 @@ export const SheetGrid = React.forwardRef<SheetGridHandle, SheetGridProps>(funct
     commentCounts = {},
     onOpenComments,
     onOpenMediaCell,
+    onDeleteGuest,
     formEditMode = false,
     draftKeys = {},
     overrideKeys = {},
@@ -593,7 +607,7 @@ export const SheetGrid = React.forwardRef<SheetGridHandle, SheetGridProps>(funct
     onFocusChange({ companyId: row.company_id, columnKey: col.key, row, column: col });
   }, [safeSelection, columns, rows, onFocusChange]);
 
-  const editableAt = (r: number, c: number) => Boolean(columns[c]?.editable && rows[r]);
+  const editableAt = (r: number, c: number) => isCellEditable(rows[r], columns[c]);
 
   const beginCellEdit = (r: number, c: number, initial?: string) => {
     const col = columns[c];
@@ -631,13 +645,17 @@ export const SheetGrid = React.forwardRef<SheetGridHandle, SheetGridProps>(funct
     const row = rows[r];
     setEditing(null);
     if (col && row) {
-      onEdit([
-        {
-          companyId: row.company_id,
-          columnKey: col.key,
-          value: coerceInput(col, raw),
-        },
-      ]);
+      if (row.entity === "guest" && col.key === "staff.name" && !raw.trim()) {
+        toast.error(t("sheets.guests.fullNameLabel"));
+      } else {
+        onEdit([
+          {
+            companyId: row.company_id,
+            columnKey: col.key,
+            value: coerceInput(col, raw),
+          },
+        ]);
+      }
     }
     if (move === "down" || move === "right") setPickedCells(null);
     if (move === "down") setSelection({ anchor: { r: clamp(r + 1, maxRow), c }, focus: { r: clamp(r + 1, maxRow), c } });
@@ -666,7 +684,7 @@ export const SheetGrid = React.forwardRef<SheetGridHandle, SheetGridProps>(funct
       onOpenMediaCell?.(row, col);
       return;
     }
-    if (!col.editable) {
+    if (!isCellEditable(row, col)) {
       toast.info(t("sheets.readOnlyCell"));
       return;
     }
@@ -684,7 +702,7 @@ export const SheetGrid = React.forwardRef<SheetGridHandle, SheetGridProps>(funct
         skippedMedia += 1;
         continue;
       }
-      if (!editableAt(ri, ci)) {
+      if (!editableAt(ri, ci) || col.key === "staff.name") {
         skipped += 1;
         continue;
       }
@@ -880,9 +898,10 @@ export const SheetGrid = React.forwardRef<SheetGridHandle, SheetGridProps>(funct
       startEdit(r, c);
     } else if (event.key.length === 1 && !ctrl && !event.altKey) {
       const col = columns[c];
-      if (col?.editable && col.kind !== "bool" && col.kind !== "file_link") {
+      const row = rows[r];
+      if (isCellEditable(row, col) && col!.kind !== "bool" && col!.kind !== "file_link") {
         event.preventDefault();
-        startEdit(r, c, col.kind === "select" || col.kind === "user_select" ? undefined : event.key);
+        startEdit(r, c, col!.kind === "select" || col!.kind === "user_select" ? undefined : event.key);
       }
     }
   };
@@ -1074,6 +1093,7 @@ export const SheetGrid = React.forwardRef<SheetGridHandle, SheetGridProps>(funct
     commitEdit,
     cancelEdit,
     onOpenMediaCell,
+    onDeleteGuest,
   });
   handlersRef.current = {
     onCellMouseDown,
@@ -1083,6 +1103,7 @@ export const SheetGrid = React.forwardRef<SheetGridHandle, SheetGridProps>(funct
     commitEdit,
     cancelEdit,
     onOpenMediaCell,
+    onDeleteGuest,
   };
   const stable = React.useMemo(
     () => ({
@@ -1094,6 +1115,7 @@ export const SheetGrid = React.forwardRef<SheetGridHandle, SheetGridProps>(funct
       commitEdit: (raw: string, move: "down" | "right" | "none") => handlersRef.current.commitEdit(raw, move),
       cancelEdit: () => handlersRef.current.cancelEdit(),
       onOpenMediaCell: (row: SheetRow, column: SheetColumn) => handlersRef.current.onOpenMediaCell?.(row, column),
+      onDeleteGuest: (row: SheetRow) => handlersRef.current.onDeleteGuest?.(row),
     }),
     []
   );
@@ -1327,6 +1349,7 @@ export const SheetGrid = React.forwardRef<SheetGridHandle, SheetGridProps>(funct
                 formValues={formValues}
                 onOpenComments={onOpenComments}
                 onOpenMediaCell={stable.onOpenMediaCell}
+                onDeleteGuest={onDeleteGuest ? stable.onDeleteGuest : undefined}
                 onCellMouseDown={stable.onCellMouseDown}
                 onCellMouseEnter={stable.onCellMouseEnter}
                 onCellDoubleClick={stable.startEdit}
@@ -1455,6 +1478,7 @@ interface GridRowProps {
   formValues: Record<string, SheetCellValue>;
   onOpenComments?: (row: SheetRow, column: SheetColumn) => void;
   onOpenMediaCell?: (row: SheetRow, column: SheetColumn) => void;
+  onDeleteGuest?: (row: SheetRow) => void;
   onCellMouseDown: (event: React.MouseEvent, r: number, c: number) => void;
   onCellMouseEnter: (event: React.MouseEvent, r: number, c: number) => void;
   onCellDoubleClick: (r: number, c: number) => void;
@@ -1483,6 +1507,7 @@ const GridRow = React.memo(function GridRow({
   formValues,
   onOpenComments,
   onOpenMediaCell,
+  onDeleteGuest,
   onCellMouseDown,
   onCellMouseEnter,
   onCellDoubleClick,
@@ -1532,14 +1557,15 @@ const GridRow = React.memo(function GridRow({
         // Protocol tones use mid dark fills → light ink (do not force color-scheme: light).
         const hasLightPastel = Boolean(fill || (highlighted && !hasTone));
         const ink = hasTone ? sheetToneInk() : hasLightPastel ? sheetPastelInk() : undefined;
+        const cellEditable = isCellEditable(row, col);
         let solidBg = "";
         if (fill) solidBg = fill;
         else if (isDraft) solidBg = DRAFT_CELL_BG;
         else if (selectedPlain) solidBg = CELL_SELECTED_BG;
         else if (toneBg) solidBg = toneBg;
         else if (highlighted) solidBg = CELL_HIGHLIGHT_BG;
-        else if (sticky) solidBg = col.editable ? STICKY_EDITABLE_BG : STICKY_READONLY_BG;
-        else solidBg = col.editable ? STICKY_EDITABLE_BG : STICKY_READONLY_BG;
+        else if (sticky) solidBg = cellEditable ? STICKY_EDITABLE_BG : STICKY_READONLY_BG;
+        else solidBg = cellEditable ? STICKY_EDITABLE_BG : STICKY_READONLY_BG;
         const shadows = [
           isDraft ? "inset 3px 0 0 #f59e0b" : "",
           sticky && c === lastFrozenIndex ? FREEZE_EDGE_SHADOW : "",
@@ -1567,7 +1593,11 @@ const GridRow = React.memo(function GridRow({
                   return;
                 }
                 if (isFileValue(value)) {
-                  openSheetFile(value, t("sheets.pdfError"));
+                  const rowCompanyName =
+                    typeof row.cells["company.name"] === "string"
+                      ? row.cells["company.name"]
+                      : undefined;
+                  openSheetFile(value, t("sheets.pdfError"), rowCompanyName);
                   return;
                 }
               }
@@ -1621,6 +1651,22 @@ const GridRow = React.memo(function GridRow({
                 title="Nadpisane w formularzu"
               />
             )}
+            {row.entity === "guest" && row.can_delete && col.key === "staff.name" && !isEditing && onDeleteGuest && (
+              <button
+                type="button"
+                aria-label={t("sheets.guests.deleteAction")}
+                title={t("sheets.guests.deleteAction")}
+                onMouseDown={(e) => e.stopPropagation()}
+                onDoubleClick={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDeleteGuest(row);
+                }}
+                className="absolute right-4 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground opacity-65 transition hover:bg-destructive/15 hover:text-destructive hover:opacity-100"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            )}
             <CommentCornerButton
               count={commentCount}
               onClick={() => onOpenComments?.(row, col)}
@@ -1635,24 +1681,50 @@ const GridRow = React.memo(function GridRow({
   );
 });
 
-async function downloadAuthenticated(path: string, filename: string, errorText: string) {
+async function downloadAuthenticated(
+  path: string,
+  fallbackName: string,
+  errorText: string
+) {
   try {
     const response = await apiClient.get(path, { responseType: "blob" });
-    const blob = new Blob([response.data]);
+    const contentType =
+      (response.headers["content-type"] as string | undefined) ||
+      "application/pdf";
+    const blob = new Blob([response.data], { type: contentType });
     const href = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = href;
-    link.download = filename.endsWith(".pdf") ? filename : `${filename}.pdf`;
+    const defaultName = fallbackName.endsWith(".pdf")
+      ? fallbackName
+      : `${fallbackName}.pdf`;
+    link.download = extractDownloadFilename(
+      response.headers["content-disposition"],
+      defaultName
+    );
+    document.body.appendChild(link);
     link.click();
-    URL.revokeObjectURL(href);
+    link.parentNode?.removeChild(link);
+    window.setTimeout(() => URL.revokeObjectURL(href), 1000);
   } catch {
     toast.error(errorText);
   }
 }
 
-function openSheetFile(value: SheetFileValue, errorText: string) {
+function openSheetFile(
+  value: SheetFileValue,
+  errorText: string,
+  companyName?: string
+) {
   if (value.url.startsWith("/api/")) {
-    void downloadAuthenticated(value.url, value.name, errorText);
+    let fallbackName = value.name;
+    if (value.url.includes("order-summary-pdf") && companyName) {
+      const slug = sanitizeCompanySlug(companyName);
+      if (slug) {
+        fallbackName = `podsumowanie_zamowienia_${slug}.pdf`;
+      }
+    }
+    void downloadAuthenticated(value.url, fallbackName, errorText);
     return;
   }
   const href = getFileUrl(value.url);

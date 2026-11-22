@@ -56,5 +56,11 @@ urlpatterns = [
     ),
     path('<slug:sheet_key>/<slug:tab_key>/styles/', views.SheetCellStylesView.as_view(), name='sheet-styles'),
     path('<slug:sheet_key>/<slug:tab_key>/history/', views.SheetCellHistoryView.as_view(), name='sheet-history'),
+    path('<slug:sheet_key>/<slug:tab_key>/guests/', views.StaffMealGuestCreateView.as_view(), name='sheet-staff-guests'),
+    path(
+        '<slug:sheet_key>/<slug:tab_key>/guests/<int:guest_id>/',
+        views.StaffMealGuestDetailView.as_view(),
+        name='sheet-staff-guest-detail',
+    ),
     path('<slug:sheet_key>/<slug:tab_key>/xlsx/', views.SheetXlsxView.as_view(), name='sheet-xlsx'),
 ]

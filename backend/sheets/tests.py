@@ -359,25 +359,35 @@ class OpiekunLgFrTests(SheetsApiBase):
         self.assertNotIn('company.stages', [c['key'] for c in fryz['columns']])
 
     def test_lunch_extra_pieces_on_obiady(self):
-        final = FinalData.objects.create(company=self.partner)
-        Lunch.objects.create(form=final, day='day1', lunch_quantity=4)
-        Lunch.objects.create(form=final, day='day2', lunch_quantity=2)
-        cells = next(
-            row for row in self.as_user(self.fr).get('/api/sheets/lg/obiady/').data['rows']
-            if row['company_id'] == self.partner.id
-        )['cells']
-        self.assertEqual(cells['lunch.extra_day1'], 2)
-        self.assertEqual(cells['lunch.extra_day2'], 0)
+        # Partner gets 6 free lunches/day; basic gets 2 free lunches/day.
+        partner_final = FinalData.objects.create(company=self.partner)
+        Lunch.objects.create(form=partner_final, day='day1', lunch_quantity=8)
+        Lunch.objects.create(form=partner_final, day='day2', lunch_quantity=6)
+        basic_final = FinalData.objects.create(company=self.basic)
+        Lunch.objects.create(form=basic_final, day='day1', lunch_quantity=4)
+        Lunch.objects.create(form=basic_final, day='day2', lunch_quantity=2)
+        rows = self.as_user(self.fr).get('/api/sheets/lg/obiady/').data['rows']
+        partner_cells = next(row for row in rows if row['company_id'] == self.partner.id)['cells']
+        basic_cells = next(row for row in rows if row['company_id'] == self.basic.id)['cells']
+        self.assertEqual(partner_cells['lunch.extra_day1'], 2)
+        self.assertEqual(partner_cells['lunch.extra_day2'], 0)
+        self.assertEqual(basic_cells['lunch.extra_day1'], 2)
+        self.assertEqual(basic_cells['lunch.extra_day2'], 0)
 
-    def test_lunch_surcharge_matches_two_free_per_day(self):
-        final = FinalData.objects.create(company=self.partner)
-        Lunch.objects.create(form=final, day='day1', lunch_quantity=4)
+    def test_lunch_surcharge_matches_package_free_per_day(self):
+        partner_final = FinalData.objects.create(company=self.partner)
+        Lunch.objects.create(form=partner_final, day='day1', lunch_quantity=8)
+        basic_final = FinalData.objects.create(company=self.basic)
+        Lunch.objects.create(form=basic_final, day='day1', lunch_quantity=4)
         settings_obj = Settings.get_settings()
         settings_obj.lunch_price = 10
         settings_obj.save(update_fields=['lunch_price'])
         cells = self.as_user(self.fr).get('/api/sheets/fr/rozliczenia/').data['rows']
         partner = next(row for row in cells if row['company_id'] == self.partner.id)
+        basic = next(row for row in cells if row['company_id'] == self.basic.id)
         self.assertEqual(partner['cells']['lunch.extra_cost'], 20)
+        self.assertEqual(basic['cells']['lunch.extra_cost'], 20)
+        self.assertEqual(partner['cells']['money.package'], 24880)
 
     def test_pdi_emails_visible_to_opiekun_and_fr(self):
         # Mail #2: Opiekun edits PDI in the sheet; FR/LG also see the column.
@@ -2670,3 +2680,299 @@ class SheetCustomColumnsAndLayoutTests(SheetsApiBase):
             200,
         )
         self.assertFalse(SheetCustomGroup.objects.filter(id=own_id).exists())
+
+
+class Etap7SheetsFeaturesTests(SheetsApiBase):
+    def setUp(self):
+        super().setUp()
+        self.lg = make_user('lg1', roles=['lg'])
+        self.admin = make_user('adm1', roles=[], type_='admin')
+        self.opiekun2 = make_user('op2', roles=['opiekun'])
+        self.partner.opiekun = self.opiekun
+        self.partner.save(update_fields=['opiekun'])
+
+    def test_manual_staff_meal_guests_lifecycle_and_scoping(self):
+        from .models import StaffMealGuest
+
+        # FR creates a manual guest without user account
+        created = self.as_user(self.fr).post(
+            '/api/sheets/opiekun/obiady_besciakow/guests/',
+            {'full_name': 'Anna Gość', 'day1': True, 'day2': False, 'note': 'wege'},
+            format='json',
+        )
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED, created.data)
+        guest_id = created.data['id']
+        neg_id = -guest_id
+        self.assertEqual(created.data['entity'], 'guest')
+        self.assertEqual(created.data['company_id'], neg_id)
+
+        # GET tab includes guest row and can_manage_guests, XLSX export succeeds
+        payload = self.as_user(self.fr).get('/api/sheets/opiekun/obiady_besciakow/').data
+        self.assertTrue(payload['tab']['can_manage_guests'])
+        guest_row = next(r for r in payload['rows'] if r['company_id'] == neg_id)
+        self.assertEqual(guest_row['entity'], 'guest')
+        self.assertTrue(guest_row['can_delete'])
+        self.assertEqual(guest_row['cells']['staff.name'], 'Anna Gość')
+        self.assertTrue(guest_row['cells']['staff.meal.day1'])
+        self.assertEqual(guest_row['cells']['staff.meal.note'], 'wege')
+
+        xlsx = self.as_user(self.fr).get('/api/sheets/opiekun/obiady_besciakow/xlsx/')
+        self.assertEqual(xlsx.status_code, 200)
+        self.assertTrue(xlsx.content.startswith(b'PK'))
+
+        # Inline edit guest staff.name, day2, and note
+        edited = self.patch(
+            self.fr,
+            [
+                {'company_id': neg_id, 'column_key': 'staff.name', 'value': 'Anna Nowak', 'base': 'Anna Gość'},
+                {'company_id': neg_id, 'column_key': 'staff.meal.day2', 'value': True, 'base': False},
+                {'company_id': neg_id, 'column_key': 'staff.meal.note', 'value': 'bez laktozy', 'base': 'wege'},
+            ],
+            url='/api/sheets/opiekun/obiady_besciakow/cells/',
+        )
+        self.assertEqual(edited.status_code, 200, edited.data)
+        guest = StaffMealGuest.objects.get(id=guest_id)
+        self.assertEqual(guest.full_name, 'Anna Nowak')
+        self.assertTrue(guest.day2)
+        self.assertEqual(guest.note, 'bez laktozy')
+        self.assertTrue(
+            StaffMealChange.objects.filter(staff_guest=guest, column_key='staff.name').exists()
+        )
+
+        # Empty staff.name on guest rejected (400), and staff.name on user row rejected (403)
+        empty_name = self.patch(
+            self.fr,
+            [{'company_id': neg_id, 'column_key': 'staff.name', 'value': '   ', 'base': 'Anna Nowak'}],
+            url='/api/sheets/opiekun/obiady_besciakow/cells/',
+        )
+        self.assertEqual(empty_name.status_code, status.HTTP_400_BAD_REQUEST)
+        user_name = self.patch(
+            self.fr,
+            [{'company_id': self.opiekun.id, 'column_key': 'staff.name', 'value': 'X', 'base': 'op1'}],
+            url='/api/sheets/opiekun/obiady_besciakow/cells/',
+        )
+        self.assertEqual(user_name.status_code, status.HTTP_403_FORBIDDEN)
+
+        # Comment and proposal on guest row + apply
+        commented = self.as_user(self.lg).post(
+            '/api/sheets/comments/',
+            {
+                'staff_user_id': neg_id,
+                'column_key': 'staff.meal.note',
+                'sheet_key': 'opiekun',
+                'tab_key': 'obiady_besciakow',
+                'body': 'zmiana diety',
+                'mentions': [],
+                'proposed_value': 'wegan',
+            },
+            format='json',
+        )
+        self.assertEqual(commented.status_code, status.HTTP_201_CREATED, commented.data)
+        self.assertEqual(commented.data['staff_user_id'], neg_id)
+
+        refreshed = self.as_user(self.fr).get('/api/sheets/opiekun/obiady_besciakow/').data
+        self.assertEqual(refreshed['comment_counts'].get(f'u:{neg_id}|staff.meal.note'), 1)
+
+        applied = self.as_user(self.fr).post(f'/api/sheets/comments/{commented.data["id"]}/apply/', {}, format='json')
+        self.assertEqual(applied.status_code, status.HTTP_200_OK, applied.data)
+        guest.refresh_from_db()
+        self.assertEqual(guest.note, 'wegan')
+
+        # Scoped opiekun only sees own created guests, cannot delete FR's guest
+        op_created = self.as_user(self.opiekun).post(
+            '/api/sheets/opiekun/obiady_besciakow/guests/',
+            {'full_name': 'Moja Osoba'},
+            format='json',
+        )
+        self.assertEqual(op_created.status_code, status.HTTP_201_CREATED)
+        op_rows = self.as_user(self.opiekun).get('/api/sheets/opiekun/obiady_besciakow/').data['rows']
+        op_ids = {r['company_id'] for r in op_rows}
+        self.assertIn(op_created.data['company_id'], op_ids)
+        self.assertNotIn(neg_id, op_ids)
+        self.assertEqual(
+            self.as_user(self.opiekun).delete(f'/api/sheets/opiekun/obiady_besciakow/guests/{guest_id}/').status_code,
+            status.HTTP_404_NOT_FOUND,
+        )
+
+        # FR deletes guest -> 204 and cascades comments/history
+        deleted = self.as_user(self.fr).delete(f'/api/sheets/opiekun/obiady_besciakow/guests/{guest_id}/')
+        self.assertEqual(deleted.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(StaffMealGuest.objects.filter(id=guest_id).exists())
+        self.assertFalse(SheetCellComment.objects.filter(staff_guest_id=guest_id).exists())
+
+    def test_proposal_deduplication_same_author_open_only(self):
+        from .models import SheetCellDraft
+
+        first = self.as_user(self.opiekun).post(
+            '/api/sheets/comments/',
+            {
+                'company_id': self.partner.id,
+                'column_key': 'care.comment',
+                'sheet_key': 'opiekun',
+                'tab_key': 'glowny',
+                'body': 'pierwsza notatka',
+                'mentions': [],
+                'proposed_value': 'v1',
+            },
+            format='json',
+        )
+        self.assertEqual(first.status_code, status.HTTP_201_CREATED, first.data)
+        cid1 = first.data['id']
+
+        # Same author updates open proposal in place (empty body preserves old note)
+        second = self.as_user(self.opiekun).post(
+            '/api/sheets/comments/',
+            {
+                'company_id': self.partner.id,
+                'column_key': 'care.comment',
+                'sheet_key': 'opiekun',
+                'tab_key': 'glowny',
+                'body': '',
+                'mentions': [],
+                'proposed_value': 'v2',
+            },
+            format='json',
+        )
+        self.assertEqual(second.status_code, status.HTTP_201_CREATED, second.data)
+        self.assertEqual(second.data['id'], cid1)
+        self.assertEqual(second.data['proposed_value'], 'v2')
+        self.assertEqual(second.data['body'], 'pierwsza notatka')
+        self.assertEqual(
+            SheetCellComment.objects.filter(company=self.partner, column_key='care.comment').count(),
+            1,
+        )
+        self.assertEqual(
+            SheetCellDraft.objects.get(company=self.partner, column_key='care.comment').value,
+            'v2',
+        )
+
+        # Different author creates a separate comment
+        other = self.as_user(self.fr).post(
+            '/api/sheets/comments/',
+            {
+                'company_id': self.partner.id,
+                'column_key': 'care.comment',
+                'sheet_key': 'opiekun',
+                'tab_key': 'glowny',
+                'body': 'druga propozycja',
+                'mentions': [],
+                'proposed_value': 'v3',
+            },
+            format='json',
+        )
+        self.assertEqual(other.status_code, status.HTTP_201_CREATED, other.data)
+        self.assertNotEqual(other.data['id'], cid1)
+        self.assertEqual(
+            SheetCellComment.objects.filter(company=self.partner, column_key='care.comment').count(),
+            2,
+        )
+
+        # After rejecting cid1, original author creates a new comment rather than reviving rejected
+        self.as_user(self.fr).patch(f'/api/sheets/comments/{cid1}/', {'status': 'rejected'}, format='json')
+        third = self.as_user(self.opiekun).post(
+            '/api/sheets/comments/',
+            {
+                'company_id': self.partner.id,
+                'column_key': 'care.comment',
+                'sheet_key': 'opiekun',
+                'tab_key': 'glowny',
+                'body': 'po odrzuceniu',
+                'mentions': [],
+                'proposed_value': 'v4',
+            },
+            format='json',
+        )
+        self.assertEqual(third.status_code, status.HTTP_201_CREATED)
+        self.assertNotEqual(third.data['id'], cid1)
+        self.assertEqual(
+            SheetCellComment.objects.filter(company=self.partner, column_key='care.comment').count(),
+            3,
+        )
+
+    def test_cell_history_includes_commits_proposals_and_drafts(self):
+        # 1. Company cell with commit + open proposal (synced draft must NOT duplicate proposal)
+        self.patch(
+            self.fr,
+            [{'company_id': self.partner.id, 'column_key': 'care.comment', 'value': 'Zapisana uwaga', 'base': None}],
+            url='/api/sheets/opiekun/glowny/cells/',
+        )
+        self.as_user(self.opiekun).post(
+            '/api/sheets/comments/',
+            {
+                'company_id': self.partner.id,
+                'column_key': 'care.comment',
+                'sheet_key': 'opiekun',
+                'tab_key': 'glowny',
+                'body': 'uzasadnienie propozycji',
+                'mentions': [],
+                'proposed_value': 'Proponowana uwaga',
+            },
+            format='json',
+        )
+        hist = self.as_user(self.fr).get(
+            '/api/sheets/opiekun/glowny/history/',
+            {'company_id': self.partner.id, 'column_key': 'care.comment'},
+        )
+        self.assertEqual(hist.status_code, 200, hist.data)
+        kinds = [e['kind'] for e in hist.data]
+        self.assertIn('commit', kinds)
+        self.assertIn('proposal', kinds)
+        self.assertNotIn('draft', kinds)
+        prop_entry = next(e for e in hist.data if e['kind'] == 'proposal')
+        self.assertEqual(prop_entry['status'], 'progress')
+        self.assertEqual(prop_entry['new'], 'Proponowana uwaga')
+        self.assertEqual(prop_entry['note'], 'uzasadnienie propozycji')
+
+        # 2. Standalone form draft without open proposal appears as kind='draft'
+        self.patch(
+            self.fr,
+            [
+                {
+                    'company_id': self.partner.id,
+                    'column_key': 'stand.composition',
+                    'value': 'robocze wyposażenie',
+                    'base': None,
+                    'mode': 'draft',
+                }
+            ],
+            url='/api/sheets/opiekun/glowny/cells/',
+        )
+        draft_hist = self.as_user(self.fr).get(
+            '/api/sheets/opiekun/glowny/history/',
+            {'company_id': self.partner.id, 'column_key': 'stand.composition'},
+        )
+        self.assertEqual(draft_hist.status_code, 200, draft_hist.data)
+        self.assertTrue(any(e['kind'] == 'draft' and e['new'] == 'robocze wyposażenie' for e in draft_hist.data))
+
+        # 3. Guest staff meal cell history includes commits and proposals
+        created = self.as_user(self.fr).post(
+            '/api/sheets/opiekun/obiady_besciakow/guests/',
+            {'full_name': 'Historia Gość'},
+            format='json',
+        ).data
+        neg_id = created['company_id']
+        self.patch(
+            self.fr,
+            [{'company_id': neg_id, 'column_key': 'staff.meal.day1', 'value': True, 'base': False}],
+            url='/api/sheets/opiekun/obiady_besciakow/cells/',
+        )
+        self.as_user(self.lg).post(
+            '/api/sheets/comments/',
+            {
+                'staff_user_id': neg_id,
+                'column_key': 'staff.meal.day1',
+                'sheet_key': 'opiekun',
+                'tab_key': 'obiady_besciakow',
+                'body': 'korekta obiadu',
+                'mentions': [],
+                'proposed_value': False,
+            },
+            format='json',
+        )
+        guest_hist = self.as_user(self.fr).get(
+            '/api/sheets/opiekun/obiady_besciakow/history/',
+            {'company_id': neg_id, 'column_key': 'staff.meal.day1'},
+        )
+        self.assertEqual(guest_hist.status_code, 200, guest_hist.data)
+        guest_kinds = {e['kind'] for e in guest_hist.data}
+        self.assertEqual(guest_kinds, {'commit', 'proposal'})

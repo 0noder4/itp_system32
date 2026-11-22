@@ -221,13 +221,63 @@ class StaffMeal(models.Model):
         return f'{self.user_id} d1={self.day1} d2={self.day2}'
 
 
+class StaffMealGuest(models.Model):
+    """Manual Beściak row without a system User account on the Obiady Beściaków tab."""
+
+    full_name = models.CharField(max_length=150)
+    day1 = models.BooleanField(default=False)
+    day2 = models.BooleanField(default=False)
+    note = models.TextField(blank=True, default='')
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_staff_meal_guests',
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='+',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['full_name', 'id']
+        verbose_name = 'obiad Beściaka (ręczny)'
+        verbose_name_plural = 'obiady Beściaków (ręczne)'
+
+    def __str__(self):
+        return f'{self.full_name} d1={self.day1} d2={self.day2}'
+
+    def delete(self, *args, **kwargs):
+        from django.db import transaction
+
+        with transaction.atomic():
+            SheetCellComment.objects.filter(staff_guest_id=self.pk).delete()
+            StaffMealChange.objects.filter(staff_guest_id=self.pk).delete()
+            return super().delete(*args, **kwargs)
+
+
 class StaffMealChange(models.Model):
-    """Audit log for StaffMeal edits. Kept off SheetCellChange so company uniqueness stays intact."""
+    """Audit log for StaffMeal and StaffMealGuest edits. Kept off SheetCellChange so company uniqueness stays intact."""
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
+        null=True,
+        blank=True,
         related_name='staff_meal_changes',
+    )
+    staff_guest = models.ForeignKey(
+        StaffMealGuest,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='meal_changes',
     )
     column_key = models.CharField(max_length=100)
     old_value = models.JSONField(null=True, blank=True)
@@ -243,19 +293,32 @@ class StaffMealChange(models.Model):
     batch_id = models.UUIDField(db_index=True)
 
     class Meta:
-        indexes = [models.Index(fields=['user', 'column_key', '-changed_at'], name='staffmealchange_user_col')]
+        indexes = [
+            models.Index(fields=['user', 'column_key', '-changed_at'], name='staffmealchange_user_col'),
+            models.Index(fields=['staff_guest', 'column_key', '-changed_at'], name='staffmealchange_guest_col'),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                check=(
+                    models.Q(user__isnull=False, staff_guest__isnull=True)
+                    | models.Q(user__isnull=True, staff_guest__isnull=False)
+                ),
+                name='staffmealchange_user_xor_guest',
+            ),
+        ]
         ordering = ['-changed_at']
         verbose_name = 'zmiana obiadu Beściaka'
         verbose_name_plural = 'historia obiadów Beściaków'
 
     def __str__(self):
-        return f'{self.user_id}:{self.column_key} {self.old_value!r} -> {self.new_value!r}'
+        target = f'u:{self.user_id}' if self.user_id else f'g:{self.staff_guest_id}'
+        return f'{target}:{self.column_key} {self.old_value!r} -> {self.new_value!r}'
 
 
 class SheetCellComment(models.Model):
     """
-    Comment on one sheet cell: either a company row or a staff (Beściak) row.
-    Exactly one of company / staff_user is set.
+    Comment on one sheet cell: either a company row, a staff (Beściak) user row, or a manual guest row.
+    Exactly one of company / staff_user / staff_guest is set.
     """
 
     STATUS_PROGRESS = 'progress'
@@ -277,6 +340,13 @@ class SheetCellComment(models.Model):
     )
     staff_user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='sheet_row_comments',
+    )
+    staff_guest = models.ForeignKey(
+        StaffMealGuest,
         on_delete=models.CASCADE,
         null=True,
         blank=True,
@@ -313,12 +383,14 @@ class SheetCellComment(models.Model):
         indexes = [
             models.Index(fields=['company', 'column_key', '-created_at'], name='sheetcomment_co_col'),
             models.Index(fields=['staff_user', 'column_key', '-created_at'], name='sheetcomment_u_col'),
+            models.Index(fields=['staff_guest', 'column_key', '-created_at'], name='sheetcomment_g_col'),
         ]
         constraints = [
             models.CheckConstraint(
                 check=(
-                    models.Q(company__isnull=False, staff_user__isnull=True)
-                    | models.Q(company__isnull=True, staff_user__isnull=False)
+                    models.Q(company__isnull=False, staff_user__isnull=True, staff_guest__isnull=True)
+                    | models.Q(company__isnull=True, staff_user__isnull=False, staff_guest__isnull=True)
+                    | models.Q(company__isnull=True, staff_user__isnull=True, staff_guest__isnull=False)
                 ),
                 name='sheetcomment_company_xor_staff',
             ),
@@ -328,7 +400,12 @@ class SheetCellComment(models.Model):
         verbose_name_plural = 'komentarze komórek arkuszy'
 
     def __str__(self):
-        target = f'c:{self.company_id}' if self.company_id else f'u:{self.staff_user_id}'
+        if self.company_id:
+            target = f'c:{self.company_id}'
+        elif self.staff_user_id:
+            target = f'u:{self.staff_user_id}'
+        else:
+            target = f'g:{self.staff_guest_id}'
         return f'{target}:{self.column_key} by={self.author_id}'
 
 

@@ -3,7 +3,7 @@
 import React from "react";
 import { createPortal } from "react-dom";
 import useSWR from "swr";
-import { Columns3, Filter, Paintbrush, Redo2, Search, Undo2, WrapText } from "lucide-react";
+import { Columns3, Filter, Paintbrush, Redo2, Search, Trash2, Undo2, UserPlus, WrapText } from "lucide-react";
 import { toast } from "sonner";
 import { apiClient } from "@/lib/api";
 import { getUserType, hasStaffRole } from "@/lib/auth";
@@ -28,7 +28,15 @@ import {
   targetFromRow,
 } from "@/lib/sheets/comments";
 import { applyColumnGroupOverrides, applyColumnOrder } from "@/lib/sheets/columnOrder";
-import { cellId, type SheetCellsResponse, type SheetCellValue, type SheetColumn, type SheetRow, type SheetTabPayload } from "@/lib/sheets/types";
+import {
+  cellId,
+  type SheetCellsResponse,
+  type SheetCellValue,
+  type SheetColumn,
+  type SheetHistoryEntry,
+  type SheetRow,
+  type SheetTabPayload,
+} from "@/lib/sheets/types";
 import { SheetGrid, type SheetGridHandle, type SheetSort } from "./SheetGrid";
 import { SheetMatrix } from "./SheetMatrix";
 import { SheetToneLegend } from "./SheetToneLegend";
@@ -258,7 +266,15 @@ export function SheetTabView({
   const [mineOnly, setMineOnly] = React.useState(false);
   const [historyOpen, setHistoryOpen] = React.useState(false);
   const [historyTitle, setHistoryTitle] = React.useState("");
-  const [historyRows, setHistoryRows] = React.useState<{ old: string; new: string; by: string; at: string }[]>([]);
+  const [historyRows, setHistoryRows] = React.useState<SheetHistoryEntry[]>([]);
+  const [addGuestOpen, setAddGuestOpen] = React.useState(false);
+  const [guestFullName, setGuestFullName] = React.useState("");
+  const [guestDay1, setGuestDay1] = React.useState(false);
+  const [guestDay2, setGuestDay2] = React.useState(false);
+  const [guestNote, setGuestNote] = React.useState("");
+  const [guestBusy, setGuestBusy] = React.useState(false);
+  const [deleteGuestRow, setDeleteGuestRow] = React.useState<SheetRow | null>(null);
+  const [deleteGuestBusy, setDeleteGuestBusy] = React.useState(false);
   const [filters, setFilters] = React.useState<Record<string, string>>({});
   const [showFilters, setShowFilters] = React.useState(false);
   const [sort, setSort] = React.useState<SheetSort | null>(null);
@@ -833,7 +849,7 @@ export function SheetTabView({
       return;
     }
     try {
-      const { data: rows } = await apiClient.get<{ old: string; new: string; by: string; at: string }[]>(
+      const { data: rows } = await apiClient.get<SheetHistoryEntry[]>(
         `${url}history/`,
         { params: { company_id: focus.companyId, column_key: focus.columnKey } }
       );
@@ -842,6 +858,55 @@ export function SheetTabView({
       setHistoryOpen(true);
     } catch {
       toast.error(t("sheets.historyError"));
+    }
+  };
+
+  const handleCreateGuest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = guestFullName.trim();
+    if (!trimmed) {
+      toast.error(t("sheets.guests.fullNameLabel"));
+      return;
+    }
+    setGuestBusy(true);
+    try {
+      await apiClient.post(`${url}guests/`, {
+        full_name: trimmed,
+        day1: guestDay1,
+        day2: guestDay2,
+        note: guestNote.trim(),
+      });
+      setGuestFullName("");
+      setGuestDay1(false);
+      setGuestDay2(false);
+      setGuestNote("");
+      setAddGuestOpen(false);
+      await mutate();
+      toast.success(t("sheets.guests.added"));
+    } catch (error: unknown) {
+      const dataErr = (error as { response?: { data?: { detail?: string; errors?: { detail?: string }[] } } })
+        ?.response?.data;
+      const detail = dataErr?.errors?.[0]?.detail || dataErr?.detail;
+      toast.error(detail ? String(detail) : t("sheets.guests.addError"));
+    } finally {
+      setGuestBusy(false);
+    }
+  };
+
+  const handleConfirmDeleteGuest = async () => {
+    if (!deleteGuestRow || deleteGuestRow.entity !== "guest") return;
+    setDeleteGuestBusy(true);
+    try {
+      await apiClient.delete(`${url}guests/${-deleteGuestRow.company_id}/`);
+      setDeleteGuestRow(null);
+      setPreviewFocus((prev) => (prev?.row.company_id === deleteGuestRow.company_id ? null : prev));
+      await mutate();
+      toast.success(t("sheets.guests.deleted"));
+    } catch (error: unknown) {
+      const dataErr = (error as { response?: { data?: { detail?: string } } })?.response?.data;
+      toast.error(dataErr?.detail ? String(dataErr.detail) : t("sheets.guests.deleteError"));
+    } finally {
+      setDeleteGuestBusy(false);
     }
   };
 
@@ -861,11 +926,12 @@ export function SheetTabView({
       ? cellId(commentTarget.companyId, commentTarget.columnKey)
       : null;
   const activeCommentRow = commentTarget
-    ? data.rows.find((r) =>
-        commentTarget.kind === "company"
-          ? r.company_id === commentTarget.companyId && r.entity !== "user"
-          : r.company_id === commentTarget.staffUserId && r.entity === "user"
-      )
+    ? data.rows.find((r) => {
+        const isStaffRow = r.entity === "user" || r.entity === "guest";
+        return commentTarget.kind === "company"
+          ? r.company_id === commentTarget.companyId && !isStaffRow
+          : r.company_id === commentTarget.staffUserId && isStaffRow;
+      })
     : undefined;
   const activeCommentColumn =
     (commentTarget ? data.columns.find((c) => c.key === commentTarget.columnKey) : null) ??
@@ -972,6 +1038,32 @@ export function SheetTabView({
           <Columns3 className="mr-1 h-4 w-4" />
           {t("sheets.freeze")}
         </Button>
+        )}
+        {!isMatrix && data.tab.row_source === "staff" && data.tab.can_manage_guests && (
+          <>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className={SHEET_TOOLBAR_OUTLINE}
+              onClick={() => setAddGuestOpen(true)}
+            >
+              <UserPlus className="mr-1 h-4 w-4" />
+              {t("sheets.guests.addButton")}
+            </Button>
+            {previewFocus?.row.entity === "guest" && previewFocus.row.can_delete && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className={cn(SHEET_TOOLBAR_OUTLINE, "text-destructive hover:text-destructive")}
+                onClick={() => setDeleteGuestRow(previewFocus.row)}
+              >
+                <Trash2 className="mr-1 h-4 w-4" />
+                {t("sheets.guests.deleteButton")}
+              </Button>
+            )}
+          </>
         )}
         {!isMatrix && data.tab.row_source !== "staff" && (
         <Popover>
@@ -1120,6 +1212,7 @@ export function SheetTabView({
           commentCounts={data.comment_counts ?? {}}
           onOpenComments={openComments}
           onOpenMediaCell={(row, column) => setMediaCell({ companyId: row.company_id, column })}
+          onDeleteGuest={(row) => setDeleteGuestRow(row)}
           onFocusChange={setPreviewFocus}
         />
         )}
@@ -1179,18 +1272,155 @@ export function SheetTabView({
             <p className="text-sm text-muted-foreground">{t("sheets.historyEmpty")}</p>
           ) : (
             <ul className="max-h-[50vh] space-y-2 overflow-auto text-sm">
-              {historyRows.map((row, index) => (
-                <li key={`${row.at}-${index}`} className="rounded border px-2 py-1">
-                  <div className="text-xs text-muted-foreground">
-                    {new Date(row.at).toLocaleString("pl-PL")} · {row.by || t("sheets.someoneElse")}
-                  </div>
-                  <div>
-                    {row.old || "—"} → {row.new || "—"}
-                  </div>
-                </li>
-              ))}
+              {historyRows.map((row, index) => {
+                const badge =
+                  row.kind === "draft"
+                    ? {
+                        label: t("sheets.historyKinds.draft"),
+                        cls: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
+                      }
+                    : row.kind === "proposal"
+                      ? row.status === "accepted"
+                        ? {
+                            label: t("sheets.historyKinds.proposalAccepted"),
+                            cls: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300",
+                          }
+                        : row.status === "rejected"
+                          ? {
+                              label: t("sheets.historyKinds.proposalRejected"),
+                              cls: "bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300",
+                            }
+                          : {
+                              label: t("sheets.historyKinds.proposalProgress"),
+                              cls: "bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300",
+                            }
+                      : {
+                          label: t("sheets.historyKinds.commit"),
+                          cls: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
+                        };
+                const isProposedOrDraft = row.kind === "proposal" || row.kind === "draft";
+                return (
+                  <li key={`${row.kind ?? "commit"}-${row.at}-${index}`} className="rounded border px-2.5 py-1.5">
+                    <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                      <span className={cn("rounded px-1.5 py-0.5 text-[10px] font-semibold", badge.cls)}>
+                        {badge.label}
+                      </span>
+                      <span>
+                        {new Date(row.at).toLocaleString("pl-PL")} · {row.by || t("sheets.someoneElse")}
+                      </span>
+                    </div>
+                    <div className="mt-1">
+                      {isProposedOrDraft ? (row.new || "—") : `${row.old || "—"} → ${row.new || "—"}`}
+                    </div>
+                    {row.note ? (
+                      <div className="mt-0.5 text-xs text-muted-foreground">{row.note}</div>
+                    ) : null}
+                  </li>
+                );
+              })}
             </ul>
           )}
+        </DialogContent>
+      </Dialog>
+      <Dialog open={addGuestOpen} onOpenChange={setAddGuestOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("sheets.guests.dialogTitle")}</DialogTitle>
+            <DialogDescription>{t("sheets.guests.dialogDescription")}</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={(e) => void handleCreateGuest(e)} className="space-y-3">
+            <div className="space-y-1">
+              <label htmlFor="guest-full-name" className="text-sm font-medium">
+                {t("sheets.guests.fullNameLabel")}
+              </label>
+              <Input
+                id="guest-full-name"
+                value={guestFullName}
+                onChange={(e) => setGuestFullName(e.target.value)}
+                placeholder={t("sheets.guests.fullNamePlaceholder")}
+                maxLength={150}
+                required
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={guestDay1}
+                  onChange={(e) => setGuestDay1(e.target.checked)}
+                />
+                {t("sheets.guests.day1Label")}
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={guestDay2}
+                  onChange={(e) => setGuestDay2(e.target.checked)}
+                />
+                {t("sheets.guests.day2Label")}
+              </label>
+            </div>
+            <div className="space-y-1">
+              <label htmlFor="guest-note" className="text-sm font-medium">
+                {t("sheets.guests.noteLabel")}
+              </label>
+              <Input
+                id="guest-note"
+                value={guestNote}
+                onChange={(e) => setGuestNote(e.target.value)}
+                placeholder={t("sheets.guests.notePlaceholder")}
+                maxLength={2000}
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setAddGuestOpen(false)}
+                disabled={guestBusy}
+              >
+                {t("sheets.guests.cancel")}
+              </Button>
+              <Button type="submit" disabled={guestBusy || !guestFullName.trim()}>
+                {t("sheets.guests.submit")}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={Boolean(deleteGuestRow)}
+        onOpenChange={(open) => {
+          if (!open && !deleteGuestBusy) setDeleteGuestRow(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("sheets.guests.deleteTitle")}</DialogTitle>
+            <DialogDescription>
+              {t("sheets.guests.deleteDescription", {
+                name: String(deleteGuestRow?.cells["staff.name"] ?? ""),
+              })}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setDeleteGuestRow(null)}
+              disabled={deleteGuestBusy}
+            >
+              {t("sheets.guests.cancel")}
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => void handleConfirmDeleteGuest()}
+              disabled={deleteGuestBusy}
+            >
+              {t("sheets.guests.deleteConfirm")}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
       <SheetFormListDialog

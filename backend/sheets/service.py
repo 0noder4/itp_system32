@@ -29,6 +29,7 @@ from .definitions.extras import (
     SLOT_CAP,
     SLOT_KEY,
     STAFF_MEAL_FIELDS,
+    STAFF_NAME,
     matrix_fill_color,
     matrix_label,
     own_build_status,
@@ -48,6 +49,7 @@ from .models import (
     SheetLayoutDefault,
     StaffMeal,
     StaffMealChange,
+    StaffMealGuest,
 )
 from .registry import (
     KIND_BOOL,
@@ -72,7 +74,15 @@ from .registry import (
     SheetDef,
     TabDef,
 )
-from .values import CellValueError, normalize, normalize_lenient, public_file_name, serialize, values_equal
+from .values import (
+    CellValueError,
+    normalize,
+    normalize_lenient,
+    present,
+    public_file_name,
+    serialize,
+    values_equal,
+)
 
 # Modes for PATCH .../cells/
 MODE_EDIT = 'edit'
@@ -307,6 +317,7 @@ def _shared_context(columns: list[ColumnDef]) -> dict:
     settings_obj = Settings.get_settings()
     shared = {
         'now': timezone.now(),
+        'settings': settings_obj,
         'deadlines': {stage: getattr(settings_obj, f'stage_{stage}_deadline') for stage in range(1, 6)},
         'lunch_price': settings_obj.lunch_price,
         'jobwall_price': settings_obj.jobwall_price,
@@ -709,8 +720,23 @@ def _opiekun_accounts(sheet: SheetDef, user) -> list[User]:
     return people
 
 
-def staff_field_value(meal: StaffMeal | None, col) -> Any:
-    """Value shown for a StaffMeal column. Empty note is None, same as other text cells."""
+def _visible_staff_guests(sheet: SheetDef, user) -> list[StaffMealGuest]:
+    qs = StaffMealGuest.objects.all().order_by('full_name', 'id')
+    if sheet.is_scoped_for(user):
+        return list(qs.filter(created_by_id=user.id))
+    return list(qs)
+
+
+def can_manage_staff_guests(sheet: SheetDef, tab: TabDef, user) -> bool:
+    return (
+        tab.row_source == ROW_STAFF
+        and sheet.accessible_by(user)
+        and any(col.editable_by(user) for col in tab.columns if col.source == SOURCE_STAFF)
+    )
+
+
+def staff_field_value(meal: StaffMeal | StaffMealGuest | None, col) -> Any:
+    """Value shown for a StaffMeal or StaffMealGuest column. Empty note is None, same as other text cells."""
     field = STAFF_MEAL_FIELDS[col.key]
     if col.kind == KIND_BOOL:
         return bool(getattr(meal, field)) if meal else False
@@ -724,9 +750,29 @@ def _staff_stored(col, new_value) -> Any:
     return new_value or ''
 
 
+def present_history_value(column: ColumnDef, value: Any, parts: tuple[ColumnDef, ...] = ()) -> str:
+    """Human-readable cell value for the history dialog (handles structured and composite values)."""
+    if parts and isinstance(value, dict):
+        pieces: list[str] = []
+        for part in parts:
+            if part.key not in value:
+                continue
+            label = part.label.replace('\n', ' ').strip()
+            formatted = present(part, value[part.key]) or '—'
+            pieces.append(f'{label}: {formatted}')
+        if pieces:
+            return ' · '.join(pieces)
+    text = present(column, value)
+    if not text and isinstance(value, list) and len(value) > 0:
+        return f'{len(value)} poz.'
+    return text
+
+
 def _build_staff_payload(sheet: SheetDef, tab: TabDef, user) -> dict:
     columns = visible_columns(tab, user, sheet_key=sheet.key)
     people = _opiekun_accounts(sheet, user)
+    guests = _visible_staff_guests(sheet, user)
+    can_manage_guests = can_manage_staff_guests(sheet, tab, user)
     meals = {
         meal.user_id: meal
         for meal in StaffMeal.objects.filter(user_id__in=[account.id for account in people])
@@ -745,31 +791,78 @@ def _build_staff_payload(sheet: SheetDef, tab: TabDef, user) -> dict:
             'mine': account.id == user.id,
             'cells': cells,
         })
+    for guest in guests:
+        cells = {'staff.name': guest.full_name}
+        for col in columns:
+            if col.key in STAFF_MEAL_FIELDS:
+                cells[col.key] = staff_field_value(guest, col)
+        rows.append({
+            'company_id': -guest.id,
+            'entity': 'guest',
+            'resigned': False,
+            'mine': guest.created_by_id == user.id,
+            'can_delete': can_manage_guests,
+            'cells': cells,
+        })
     from .comments import comment_counts_for_staff
 
     user_ids = [account.id for account in people]
+    guest_ids = [guest.id for guest in guests]
     column_keys = [col.key for col in columns]
+    tab_meta = _tab_meta(tab, user)
+    tab_meta['can_manage_guests'] = can_manage_guests
     return {
         'sheet': {'key': sheet.key, 'title': sheet.title},
-        'tab': _tab_meta(tab, user),
+        'tab': tab_meta,
         'columns': _columns_meta(columns, user),
         'rows': rows,
         'cell_styles': {},
-        'comment_counts': comment_counts_for_staff(user_ids, column_keys),
+        'comment_counts': comment_counts_for_staff(user_ids, column_keys, guest_ids=guest_ids),
         'generated_at': timezone.now().isoformat(),
     }
 
 
 def _apply_staff_changes(sheet: SheetDef, tab: TabDef, user, changes: list[CellChange]) -> dict:
     columns = {c.key: c for c in visible_columns(tab, user, sheet_key=sheet.key)}
+    can_manage_guests = can_manage_staff_guests(sheet, tab, user)
     errors = []
     normalized: list[tuple[CellChange, ColumnDef, Any]] = []
     for change in changes:
         col = columns.get(change.column_key)
-        if col is None or col.source != SOURCE_STAFF or change.column_key not in STAFF_MEAL_FIELDS:
+        if col is None:
             raise SheetPermissionError(f'Brak uprawnień do edycji kolumny {change.column_key}.')
         if change.mode != MODE_EDIT:
             raise SheetPermissionError('Obiady Beściaków zapisuje się zwykłą edycją.')
+        if change.column_key == STAFF_NAME.key:
+            if change.company_id >= 0 or not can_manage_guests:
+                raise SheetPermissionError(f'Brak uprawnień do edycji kolumny {change.column_key}.')
+            try:
+                val = normalize(col, change.value)
+            except CellValueError as exc:
+                errors.append({
+                    'company_id': change.company_id,
+                    'column_key': change.column_key,
+                    'detail': str(exc),
+                })
+                continue
+            clean = val.strip() if isinstance(val, str) else ''
+            if not clean:
+                errors.append({
+                    'company_id': change.company_id,
+                    'column_key': change.column_key,
+                    'detail': 'Podaj imię i nazwisko osoby.',
+                })
+            elif len(clean) > 150:
+                errors.append({
+                    'company_id': change.company_id,
+                    'column_key': change.column_key,
+                    'detail': 'Imię i nazwisko może mieć maksymalnie 150 znaków.',
+                })
+            else:
+                normalized.append((change, col, clean))
+            continue
+        if col.source != SOURCE_STAFF or change.column_key not in STAFF_MEAL_FIELDS:
+            raise SheetPermissionError(f'Brak uprawnień do edycji kolumny {change.column_key}.')
         if not col.editable_by(user):
             raise SheetPermissionError(f'Brak uprawnień do edycji kolumny {col.key}.')
         try:
@@ -783,20 +876,107 @@ def _apply_staff_changes(sheet: SheetDef, tab: TabDef, user, changes: list[CellC
     if errors:
         raise SheetValidationError(errors)
 
-    allowed = {account.id for account in _opiekun_accounts(sheet, user)}
+    allowed = (
+        {account.id for account in _opiekun_accounts(sheet, user)}
+        | {-guest.id for guest in _visible_staff_guests(sheet, user)}
+    )
     if {change.company_id for change in changes} - allowed:
         raise SheetPermissionError('Brak dostępu do co najmniej jednej osoby.')
 
+    user_ids = {change.company_id for change in changes if change.company_id > 0}
+    guest_ids = {-change.company_id for change in changes if change.company_id < 0}
     applied, conflicts = [], []
     batch_id = uuid.uuid4()
     with transaction.atomic():
-        meals = {
-            meal.user_id: meal
-            for meal in StaffMeal.objects.select_for_update().filter(
-                user_id__in={change.company_id for change in changes},
-            )
-        }
+        meals = (
+            {
+                meal.user_id: meal
+                for meal in StaffMeal.objects.select_for_update().filter(user_id__in=user_ids)
+            }
+            if user_ids
+            else {}
+        )
+        guests = (
+            {
+                guest.id: guest
+                for guest in StaffMealGuest.objects.select_for_update().filter(id__in=guest_ids)
+            }
+            if guest_ids
+            else {}
+        )
         for change, col, new_value in normalized:
+            if change.company_id < 0:
+                guest = guests.get(-change.company_id)
+                if guest is None:
+                    raise SheetPermissionError('Brak dostępu do co najmniej jednej osoby.')
+                if col.key == STAFF_NAME.key:
+                    current = guest.full_name
+                    if not values_equal(col, current, change.base):
+                        who = user_display(guest.updated_by) if guest.updated_by_id else ''
+                        when = guest.updated_at.isoformat() if guest.updated_at else None
+                        conflicts.append({
+                            'company_id': change.company_id,
+                            'column_key': col.key,
+                            'current': serialize(current),
+                            'updated_by': who,
+                            'updated_at': when,
+                        })
+                        continue
+                    if not values_equal(col, current, new_value):
+                        guest.full_name = new_value
+                        guest.updated_by = user
+                        guest.save()
+                        StaffMealChange.objects.create(
+                            staff_guest=guest,
+                            column_key=col.key,
+                            old_value=current,
+                            new_value=new_value,
+                            changed_by=user,
+                            batch_id=batch_id,
+                        )
+                    applied.append({
+                        'company_id': change.company_id,
+                        'column_key': col.key,
+                        'value': serialize(new_value),
+                        'mode': MODE_EDIT,
+                    })
+                    continue
+
+                field = STAFF_MEAL_FIELDS[col.key]
+                current = staff_field_value(guest, col)
+                if not values_equal(col, current, change.base):
+                    who = user_display(guest.updated_by) if guest.updated_by_id else ''
+                    when = guest.updated_at.isoformat() if guest.updated_at else None
+                    conflicts.append({
+                        'company_id': change.company_id,
+                        'column_key': col.key,
+                        'current': serialize(current),
+                        'updated_by': who,
+                        'updated_at': when,
+                    })
+                    continue
+                stored = _staff_stored(col, new_value)
+                displayed = bool(stored) if col.kind == KIND_BOOL else (stored or None)
+                if not values_equal(col, current, displayed):
+                    setattr(guest, field, stored)
+                    guest.updated_by = user
+                    guest.save()
+                    StaffMealChange.objects.create(
+                        staff_guest=guest,
+                        column_key=col.key,
+                        old_value=current,
+                        new_value=displayed,
+                        changed_by=user,
+                        batch_id=batch_id,
+                    )
+                applied.append({
+                    'company_id': change.company_id,
+                    'column_key': col.key,
+                    'value': serialize(displayed),
+                    'mode': MODE_EDIT,
+                })
+                continue
+
             field = STAFF_MEAL_FIELDS[col.key]
             meal = meals.get(change.company_id)
             current = staff_field_value(meal, col)
@@ -837,25 +1017,130 @@ def _apply_staff_changes(sheet: SheetDef, tab: TabDef, user, changes: list[CellC
     return {'applied': applied, 'conflicts': conflicts, 'batch_id': str(batch_id)}
 
 
-def staff_cell_history(sheet: SheetDef, tab: TabDef, user, user_id: int, column_key: str) -> list[dict]:
-    column = next((col for col in visible_columns(tab, user, sheet_key=sheet.key) if col.key == column_key), None)
-    if column is None or column.source != SOURCE_STAFF:
-        return None
-    if user_id not in {account.id for account in _opiekun_accounts(sheet, user)}:
-        return None
-    changes = (
-        StaffMealChange.objects.filter(user_id=user_id, column_key=column_key)
-        .select_related('changed_by')[:40]
+def create_staff_meal_guest(sheet: SheetDef, tab: TabDef, user, data: dict) -> dict:
+    if not can_manage_staff_guests(sheet, tab, user):
+        raise SheetPermissionError('Brak uprawnień do dodawania osób w tej zakładce.')
+    raw_name = data.get('full_name')
+    if not isinstance(raw_name, str) or not raw_name.strip():
+        raise SheetValidationError([{'detail': 'Podaj imię i nazwisko osoby.'}])
+    full_name = raw_name.strip()
+    if len(full_name) > 150:
+        raise SheetValidationError([{'detail': 'Imię i nazwisko może mieć maksymalnie 150 znaków.'}])
+    raw_note = data.get('note', '')
+    if raw_note is None:
+        raw_note = ''
+    if not isinstance(raw_note, str):
+        raise SheetValidationError([{'detail': 'Nieprawidłowy format notatki.'}])
+    note = raw_note.strip()
+    if len(note) > 2000:
+        raise SheetValidationError([{'detail': 'Notatka może mieć maksymalnie 2000 znaków.'}])
+    day1 = bool(data.get('day1', False))
+    day2 = bool(data.get('day2', False))
+    guest = StaffMealGuest.objects.create(
+        full_name=full_name,
+        day1=day1,
+        day2=day2,
+        note=note,
+        created_by=user,
+        updated_by=user,
     )
-    return [
+    return {
+        'id': guest.id,
+        'company_id': -guest.id,
+        'entity': 'guest',
+        'resigned': False,
+        'mine': True,
+        'can_delete': True,
+        'cells': {
+            'staff.name': guest.full_name,
+            'staff.meal.day1': guest.day1,
+            'staff.meal.day2': guest.day2,
+            'staff.meal.note': guest.note or None,
+        },
+    }
+
+
+def delete_staff_meal_guest(sheet: SheetDef, tab: TabDef, user, guest_id: int) -> None:
+    if not can_manage_staff_guests(sheet, tab, user):
+        raise SheetPermissionError('Brak uprawnień do usuwania osób w tej zakładce.')
+    guest = next((g for g in _visible_staff_guests(sheet, user) if g.id == guest_id), None)
+    if guest is None:
+        raise SheetNotFoundError('Nie znaleziono osoby.')
+    # Delete child comments before guest on MySQL (non-deferrable constraints make Collector NULL nullable CASCADE FKs).
+    with transaction.atomic():
+        SheetCellComment.objects.filter(staff_guest=guest).delete()
+        StaffMealChange.objects.filter(staff_guest=guest).delete()
+        guest.delete()
+
+
+def staff_cell_history(sheet: SheetDef, tab: TabDef, user, user_id: int, column_key: str) -> list[dict] | None:
+    column = next((col for col in visible_columns(tab, user, sheet_key=sheet.key) if col.key == column_key), None)
+    if column is None:
+        return None
+    if column.source != SOURCE_STAFF and not (user_id < 0 and column_key == STAFF_NAME.key):
+        return None
+    if user_id < 0:
+        guest_id = -user_id
+        if guest_id not in {guest.id for guest in _visible_staff_guests(sheet, user)}:
+            return None
+        changes = (
+            StaffMealChange.objects.filter(staff_guest_id=guest_id, column_key=column_key)
+            .select_related('changed_by')[:40]
+        )
+        proposals = (
+            SheetCellComment.objects.filter(
+                staff_guest_id=guest_id,
+                company__isnull=True,
+                staff_user__isnull=True,
+                column_key=column_key,
+                proposed_value__isnull=False,
+            )
+            .select_related('author')
+            .order_by('-updated_at', '-id')[:40]
+        )
+    else:
+        if user_id not in {account.id for account in _opiekun_accounts(sheet, user)}:
+            return None
+        changes = (
+            StaffMealChange.objects.filter(user_id=user_id, column_key=column_key)
+            .select_related('changed_by')[:40]
+        )
+        proposals = (
+            SheetCellComment.objects.filter(
+                staff_user_id=user_id,
+                company__isnull=True,
+                staff_guest__isnull=True,
+                column_key=column_key,
+                proposed_value__isnull=False,
+            )
+            .select_related('author')
+            .order_by('-updated_at', '-id')[:40]
+        )
+
+    entries = [
         {
-            'old': present(column, change.old_value),
-            'new': present(column, change.new_value),
+            'old': present_history_value(column, change.old_value),
+            'new': present_history_value(column, change.new_value),
             'by': user_display(change.changed_by),
             'at': change.changed_at.isoformat(),
+            'kind': 'commit',
+            'status': None,
+            'note': '',
         }
         for change in changes
     ]
+    for proposal in proposals:
+        entries.append({
+            'old': '',
+            'new': present_history_value(column, proposal.proposed_value),
+            'by': user_display(proposal.author),
+            'at': proposal.updated_at.isoformat(),
+            'kind': 'proposal',
+            'status': proposal.status,
+            'note': proposal.body,
+        })
+    entries.sort(key=lambda entry: entry['at'], reverse=True)
+    return entries[:60]
 
 
 def _build_matrix_payload(sheet: SheetDef, tab: TabDef, user) -> dict:

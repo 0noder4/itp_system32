@@ -15,7 +15,15 @@ from .definitions.common import user_display
 from .definitions.extras import STAFF_MEAL_FIELDS
 from .edit_parts import edit_part_columns
 from .form_writes import normalize_form_value
-from .models import SheetCellComment, SheetCellDraft, SheetCellValue, SheetCustomColumn, SheetNotification, StaffMeal
+from .models import (
+    SheetCellComment,
+    SheetCellDraft,
+    SheetCellValue,
+    SheetCustomColumn,
+    SheetNotification,
+    StaffMeal,
+    StaffMealGuest,
+)
 from .registry import EDITABLE_SOURCES, KIND_BOOL, ROW_COMPANY, ROW_STAFF, SOURCE_EXTRA, SOURCE_STAFF
 from .service import (
     CellChange,
@@ -26,6 +34,7 @@ from .service import (
     _custom_column_def,
     _displayed_value,
     _opiekun_accounts,
+    _visible_staff_guests,
     apply_changes,
     company_queryset,
     delete_cell_drafts,
@@ -58,15 +67,32 @@ def user_can_access_company(user, company_id: int) -> bool:
     return False
 
 
-def user_can_access_staff_row(user, staff_user_id: int) -> bool:
+def _comment_staff_row_id(comment: SheetCellComment) -> int | None:
+    if comment.staff_user_id is not None:
+        return comment.staff_user_id
+    if comment.staff_guest_id is not None:
+        return -comment.staff_guest_id
+    return None
+
+
+def user_can_access_staff_row(
+    user,
+    staff_user_id: int | None = None,
+    *,
+    staff_guest_id: int | None = None,
+) -> bool:
     """Same visibility as Obiady Beściaków on the Opiekun sheet."""
     sheet = CATALOG.sheets.get('opiekun')
     if sheet is None or not sheet.accessible_by(user):
         return False
+    if staff_guest_id is not None:
+        return staff_guest_id in {guest.id for guest in _visible_staff_guests(sheet, user)}
+    if staff_user_id is not None and staff_user_id < 0:
+        return (-staff_user_id) in {guest.id for guest in _visible_staff_guests(sheet, user)}
     return staff_user_id in {account.id for account in _opiekun_accounts(sheet, user)}
 
 
-def _parse_target(company_id, staff_user_id) -> tuple[int | None, int | None]:
+def _parse_target(company_id, staff_user_id) -> tuple[int | None, int | None, int | None]:
     has_company = company_id is not None and company_id != ''
     has_staff = staff_user_id is not None and staff_user_id != ''
     if has_company == has_staff:
@@ -76,28 +102,37 @@ def _parse_target(company_id, staff_user_id) -> tuple[int | None, int | None]:
             cid = int(company_id)
         except (TypeError, ValueError) as exc:
             raise SheetValidationError([{'detail': 'company_id musi być liczbą.'}]) from exc
-        return cid, None
+        return cid, None, None
     try:
         uid = int(staff_user_id)
     except (TypeError, ValueError) as exc:
         raise SheetValidationError([{'detail': 'staff_user_id musi być liczbą.'}]) from exc
-    return None, uid
+    if uid == 0:
+        raise SheetValidationError([{'detail': 'Nieprawidłowy staff_user_id.'}])
+    if uid < 0:
+        return None, None, -uid
+    return None, uid, None
 
 
-def assert_can_access_target(user, company_id: int | None, staff_user_id: int | None) -> None:
+def assert_can_access_target(
+    user,
+    company_id: int | None,
+    staff_user_id: int | None,
+    staff_guest_id: int | None = None,
+) -> None:
     if company_id is not None:
         if not user_can_access_company(user, company_id):
             raise SheetPermissionError('Brak dostępu do tej firmy.')
         return
-    if staff_user_id is not None:
-        if not user_can_access_staff_row(user, staff_user_id):
+    if staff_user_id is not None or staff_guest_id is not None:
+        if not user_can_access_staff_row(user, staff_user_id, staff_guest_id=staff_guest_id):
             raise SheetPermissionError('Brak dostępu do tego wiersza.')
         return
     raise SheetPermissionError('Brak celu komentarza.')
 
 
 def assert_can_see_comment(user, comment: SheetCellComment) -> None:
-    assert_can_access_target(user, comment.company_id, comment.staff_user_id)
+    assert_can_access_target(user, comment.company_id, comment.staff_user_id, comment.staff_guest_id)
 
 
 def _resolve_sheet_tab(user, sheet_key: str, tab_key: str):
@@ -163,7 +198,7 @@ def user_can_manage_proposal(
     if not can_write:
         return False
     if not target_access_verified:
-        assert_can_access_target(user, comment.company_id, comment.staff_user_id)
+        assert_can_access_target(user, comment.company_id, comment.staff_user_id, comment.staff_guest_id)
     return True
 
 
@@ -198,7 +233,7 @@ def serialize_comment(
     payload = {
         'id': comment.id,
         'company_id': comment.company_id,
-        'staff_user_id': comment.staff_user_id,
+        'staff_user_id': _comment_staff_row_id(comment),
         'column_key': comment.column_key,
         'sheet_key': comment.sheet_key,
         'tab_key': comment.tab_key,
@@ -237,25 +272,27 @@ def comment_deeplink(comment: SheetCellComment) -> str:
     if comment.company_id:
         params.append(f'company={comment.company_id}')
     else:
-        params.append(f'user={comment.staff_user_id}')
+        params.append(f'user={_comment_staff_row_id(comment)}')
     return f'/panel/staff/sheets/{comment.sheet_key}?{"&".join(params)}'
 
 
 def list_comments(user, *, company_id=None, staff_user_id=None, column_key: str) -> list[dict]:
-    company_id, staff_user_id = _parse_target(company_id, staff_user_id)
+    company_id, staff_user_id, staff_guest_id = _parse_target(company_id, staff_user_id)
     if not column_key or len(column_key) > 100:
         raise SheetValidationError([{'detail': 'Podaj column_key.'}])
-    assert_can_access_target(user, company_id, staff_user_id)
+    assert_can_access_target(user, company_id, staff_user_id, staff_guest_id)
     qs = (
         SheetCellComment.objects.filter(column_key=column_key)
-        .select_related('author', 'company', 'staff_user')
+        .select_related('author', 'company', 'staff_user', 'staff_guest')
         .prefetch_related('mentions')
         .order_by('created_at', 'id')
     )
     if company_id is not None:
-        qs = qs.filter(company_id=company_id, staff_user__isnull=True)
+        qs = qs.filter(company_id=company_id, staff_user__isnull=True, staff_guest__isnull=True)
+    elif staff_user_id is not None:
+        qs = qs.filter(staff_user_id=staff_user_id, company__isnull=True, staff_guest__isnull=True)
     else:
-        qs = qs.filter(staff_user_id=staff_user_id, company__isnull=True)
+        qs = qs.filter(staff_guest_id=staff_guest_id, company__isnull=True, staff_user__isnull=True)
     return [serialize_comment(c, viewer=user, target_access_verified=True) for c in qs]
 
 
@@ -427,7 +464,7 @@ def _restore_company_draft_for_accepted(comment: SheetCellComment, user) -> None
 
 
 def create_comment(user, data: dict) -> dict:
-    company_id, staff_user_id = _parse_target(data.get('company_id'), data.get('staff_user_id'))
+    company_id, staff_user_id, staff_guest_id = _parse_target(data.get('company_id'), data.get('staff_user_id'))
     column_key = data.get('column_key') or ''
     if not isinstance(column_key, str) or not column_key or len(column_key) > 100:
         raise SheetValidationError([{'detail': 'Podaj column_key.'}])
@@ -449,7 +486,7 @@ def create_comment(user, data: dict) -> dict:
         raise SheetValidationError([{'detail': 'Treść komentarza nie może być pusta.'}])
     if len(body) > 2000:
         raise SheetValidationError([{'detail': 'Komentarz jest za długi (max 2000).'}])
-    assert_can_access_target(user, company_id, staff_user_id)
+    assert_can_access_target(user, company_id, staff_user_id, staff_guest_id)
     sheet, tab = _resolve_sheet_tab(user, sheet_key, tab_key)
 
     proposed_value = None
@@ -462,7 +499,7 @@ def create_comment(user, data: dict) -> dict:
             }])
         if tab.row_source == ROW_STAFF and company_id is not None:
             raise SheetValidationError([{'detail': 'Propozycja na wierszu Beściaka wymaga staff_user_id.'}])
-        if tab.row_source != ROW_STAFF and staff_user_id is not None:
+        if tab.row_source != ROW_STAFF and (staff_user_id is not None or staff_guest_id is not None):
             raise SheetValidationError([{'detail': 'Propozycja na firmie wymaga company_id.'}])
         parts = _part_columns_by_key(col.key)
         if parts:
@@ -495,20 +532,53 @@ def create_comment(user, data: dict) -> dict:
 
     mention_users = _resolve_mention_users(data.get('mentions'), user)
     with transaction.atomic():
-        comment = SheetCellComment.objects.create(
-            company_id=company_id,
-            staff_user_id=staff_user_id,
-            column_key=column_key,
-            sheet_key=sheet_key,
-            tab_key=tab_key,
-            author=user,
-            body=body,
-            proposed_value=proposed_value,
-            status=SheetCellComment.STATUS_PROGRESS,
-        )
-        if mention_users:
-            comment.mentions.set(mention_users)
-            _notify_new_mentions(comment, mention_users, set())
+        existing = None
+        if has_proposal:
+            existing = (
+                SheetCellComment.objects.select_for_update()
+                .filter(
+                    company_id=company_id,
+                    staff_user_id=staff_user_id,
+                    staff_guest_id=staff_guest_id,
+                    column_key=column_key,
+                    author=user,
+                    status=SheetCellComment.STATUS_PROGRESS,
+                    proposed_value__isnull=False,
+                )
+                .order_by('-id')
+                .first()
+            )
+        if existing is not None:
+            previous_ids = set(existing.mentions.values_list('id', flat=True))
+            existing.proposed_value = proposed_value
+            if body:
+                existing.body = body
+            existing.sheet_key = sheet_key
+            existing.tab_key = tab_key
+            existing.save(update_fields=['proposed_value', 'body', 'sheet_key', 'tab_key', 'updated_at'])
+            if mention_users:
+                merged_by_id = {u.id: u for u in existing.mentions.all()}
+                for person in mention_users:
+                    merged_by_id[person.id] = person
+                existing.mentions.set(list(merged_by_id.values()))
+                _notify_new_mentions(existing, mention_users, previous_ids)
+            comment = existing
+        else:
+            comment = SheetCellComment.objects.create(
+                company_id=company_id,
+                staff_user_id=staff_user_id,
+                staff_guest_id=staff_guest_id,
+                column_key=column_key,
+                sheet_key=sheet_key,
+                tab_key=tab_key,
+                author=user,
+                body=body,
+                proposed_value=proposed_value,
+                status=SheetCellComment.STATUS_PROGRESS,
+            )
+            if mention_users:
+                comment.mentions.set(mention_users)
+                _notify_new_mentions(comment, mention_users, set())
         if proposed_value is not None and company_id is not None:
             if parts and isinstance(proposed_value, dict):
                 for part_key, part_val in proposed_value.items():
@@ -530,7 +600,7 @@ def create_comment(user, data: dict) -> dict:
                     },
                 )
     comment = (
-        SheetCellComment.objects.select_related('author', 'company', 'staff_user')
+        SheetCellComment.objects.select_related('author', 'company', 'staff_user', 'staff_guest')
         .prefetch_related('mentions')
         .get(pk=comment.pk)
     )
@@ -540,7 +610,7 @@ def create_comment(user, data: dict) -> dict:
 def update_comment(user, comment_id: int, data: dict) -> dict:
     try:
         comment = (
-            SheetCellComment.objects.select_related('author', 'company', 'staff_user')
+            SheetCellComment.objects.select_related('author', 'company', 'staff_user', 'staff_guest')
             .prefetch_related('mentions')
             .get(pk=comment_id)
         )
@@ -595,7 +665,7 @@ def update_comment(user, comment_id: int, data: dict) -> dict:
                     expected_value=comment.proposed_value,
                 )
     comment = (
-        SheetCellComment.objects.select_related('author', 'company', 'staff_user')
+        SheetCellComment.objects.select_related('author', 'company', 'staff_user', 'staff_guest')
         .prefetch_related('mentions')
         .get(pk=comment.pk)
     )
@@ -633,7 +703,7 @@ def apply_proposed_change(user, comment_id: int) -> dict:
     """Write proposed_value into the sheet cell; requires edit or commit permission on the column."""
     try:
         comment = (
-            SheetCellComment.objects.select_related('author', 'company', 'staff_user')
+            SheetCellComment.objects.select_related('author', 'company', 'staff_user', 'staff_guest')
             .prefetch_related('mentions')
             .get(pk=comment_id)
         )
@@ -650,7 +720,7 @@ def apply_proposed_change(user, comment_id: int) -> dict:
     sheet, tab = _resolve_sheet_tab(user, comment.sheet_key, comment.tab_key)
     col = _column_on_tab(sheet, tab, user, comment.column_key)
 
-    row_id = comment.company_id if comment.company_id is not None else comment.staff_user_id
+    row_id = comment.company_id if comment.company_id is not None else _comment_staff_row_id(comment)
     if row_id is None:
         raise SheetValidationError([{'detail': 'Brak celu propozycji.'}])
 
@@ -688,7 +758,11 @@ def apply_proposed_change(user, comment_id: int) -> dict:
     else:
         # Current displayed value as optimistic-concurrency base
         if tab.row_source == ROW_STAFF or col.source == SOURCE_STAFF:
-            meal = StaffMeal.objects.filter(user_id=row_id).first()
+            meal = (
+                StaffMealGuest.objects.filter(id=-row_id).first()
+                if row_id < 0
+                else StaffMeal.objects.filter(user_id=row_id).first()
+            )
             if col.key in STAFF_MEAL_FIELDS:
                 base = staff_field_value(meal, col)
             else:
@@ -728,7 +802,7 @@ def apply_proposed_change(user, comment_id: int) -> dict:
         comment.status = SheetCellComment.STATUS_ACCEPTED
         comment.save(update_fields=['status', 'updated_at'])
     comment = (
-        SheetCellComment.objects.select_related('author', 'company', 'staff_user')
+        SheetCellComment.objects.select_related('author', 'company', 'staff_user', 'staff_guest')
         .prefetch_related('mentions')
         .get(pk=comment.pk)
     )
@@ -768,6 +842,8 @@ def serialize_notification(notif: SheetNotification) -> dict:
         target_label = comment.company.name
     elif comment.staff_user_id:
         target_label = user_display(comment.staff_user)
+    elif comment.staff_guest_id and comment.staff_guest:
+        target_label = comment.staff_guest.full_name
     else:
         target_label = ''
     return {
@@ -783,14 +859,14 @@ def serialize_notification(notif: SheetNotification) -> dict:
         'sheet_key': comment.sheet_key,
         'tab_key': comment.tab_key,
         'company_id': comment.company_id,
-        'staff_user_id': comment.staff_user_id,
+        'staff_user_id': _comment_staff_row_id(comment),
     }
 
 
 def list_notifications(user, *, limit: int = 40) -> dict:
     qs = (
         SheetNotification.objects.filter(recipient=user)
-        .select_related('comment', 'comment__author', 'comment__company', 'comment__staff_user')
+        .select_related('comment', 'comment__author', 'comment__company', 'comment__staff_user', 'comment__staff_guest')
         .order_by('-created_at')[:limit]
     )
     items = list(qs)
@@ -822,7 +898,7 @@ def comment_counts_for_companies(company_ids: list[int], column_keys: list[str] 
     if not company_ids:
         return {}
     qs = (
-        SheetCellComment.objects.filter(company_id__in=company_ids, staff_user__isnull=True)
+        SheetCellComment.objects.filter(company_id__in=company_ids, staff_user__isnull=True, staff_guest__isnull=True)
         .values('company_id', 'column_key')
         .annotate(n=Count('id'))
     )
@@ -834,17 +910,39 @@ def comment_counts_for_companies(company_ids: list[int], column_keys: list[str] 
     }
 
 
-def comment_counts_for_staff(user_ids: list[int], column_keys: list[str] | None = None) -> dict[str, int]:
-    if not user_ids:
-        return {}
-    qs = (
-        SheetCellComment.objects.filter(staff_user_id__in=user_ids, company__isnull=True)
-        .values('staff_user_id', 'column_key')
-        .annotate(n=Count('id'))
-    )
-    if column_keys is not None:
-        qs = qs.filter(column_key__in=column_keys)
-    return {
-        comment_count_key(staff_user_id=row['staff_user_id'], column_key=row['column_key']): row['n']
-        for row in qs
-    }
+def comment_counts_for_staff(
+    user_ids: list[int],
+    column_keys: list[str] | None = None,
+    *,
+    guest_ids: list[int] | None = None,
+) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    if user_ids:
+        qs = (
+            SheetCellComment.objects.filter(
+                staff_user_id__in=user_ids,
+                company__isnull=True,
+                staff_guest__isnull=True,
+            )
+            .values('staff_user_id', 'column_key')
+            .annotate(n=Count('id'))
+        )
+        if column_keys is not None:
+            qs = qs.filter(column_key__in=column_keys)
+        for row in qs:
+            counts[comment_count_key(staff_user_id=row['staff_user_id'], column_key=row['column_key'])] = row['n']
+    if guest_ids:
+        qs = (
+            SheetCellComment.objects.filter(
+                staff_guest_id__in=guest_ids,
+                company__isnull=True,
+                staff_user__isnull=True,
+            )
+            .values('staff_guest_id', 'column_key')
+            .annotate(n=Count('id'))
+        )
+        if column_keys is not None:
+            qs = qs.filter(column_key__in=column_keys)
+        for row in qs:
+            counts[comment_count_key(staff_user_id=-row['staff_guest_id'], column_key=row['column_key'])] = row['n']
+    return counts

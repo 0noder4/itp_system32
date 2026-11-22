@@ -99,10 +99,10 @@ export function commentCountKey(target: CommentTarget): string {
 }
 
 export function targetFromRow(
-  row: { company_id: number; entity?: "company" | "user" | "matrix" },
+  row: { company_id: number; entity?: "company" | "user" | "guest" | "matrix" },
   columnKey: string
 ): CommentTarget {
-  if (row.entity === "user") {
+  if (row.entity === "user" || row.entity === "guest") {
     return { kind: "staff", staffUserId: row.company_id, columnKey };
   }
   return { kind: "company", companyId: row.company_id, columnKey };

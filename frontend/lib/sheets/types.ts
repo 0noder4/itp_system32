@@ -97,8 +97,10 @@ export interface SheetRow {
   cells: Record<string, SheetCellValue>;
   /** Automatic background. Manual cell_styles win. */
   tones?: Record<string, SheetTone>;
-  /** company (default), user (obiady Beściaków), matrix (harmonogram). */
-  entity?: "company" | "user" | "matrix";
+  /** company (default), user (obiady Beściaków), guest (ręczny Beściak), matrix (harmonogram). */
+  entity?: "company" | "user" | "guest" | "matrix";
+  /** True when the current user may remove a manual guest row. */
+  can_delete?: boolean;
 }
 
 export type MatrixCandidateReason =
@@ -145,6 +147,7 @@ export interface SheetTabPayload {
     view?: "grid" | "matrix";
     row_source?: "company" | "staff";
     can_manage_columns?: boolean;
+    can_manage_guests?: boolean;
   };
   columns: SheetColumn[];
   custom_groups?: SheetCustomGroup[];
@@ -166,6 +169,16 @@ export interface SheetTabPayload {
   /** Montage schedule metadata (assign/clear via edit_tab cells). */
   matrix?: SheetMatrixMeta;
   generated_at: string;
+}
+
+export interface SheetHistoryEntry {
+  old: string;
+  new: string;
+  by: string;
+  at: string;
+  kind?: "commit" | "proposal" | "draft";
+  status?: "progress" | "accepted" | "rejected" | null;
+  note?: string;
 }
 
 export interface SheetCatalogEntry {

@@ -11,6 +11,7 @@ from .models import (
     SheetNotification,
     StaffMeal,
     StaffMealChange,
+    StaffMealGuest,
 )
 
 
@@ -43,11 +44,19 @@ class StaffMealAdmin(admin.ModelAdmin):
     raw_id_fields = ('user', 'updated_by')
 
 
+@admin.register(StaffMealGuest)
+class StaffMealGuestAdmin(admin.ModelAdmin):
+    list_display = ('id', 'full_name', 'day1', 'day2', 'created_by', 'updated_at')
+    list_filter = ('day1', 'day2')
+    search_fields = ('full_name', 'note')
+    raw_id_fields = ('created_by', 'updated_by')
+
+
 @admin.register(StaffMealChange)
 class StaffMealChangeAdmin(admin.ModelAdmin):
-    list_display = ('user', 'column_key', 'old_value', 'new_value', 'changed_by', 'changed_at')
+    list_display = ('user', 'staff_guest', 'column_key', 'old_value', 'new_value', 'changed_by', 'changed_at')
     list_filter = ('column_key',)
-    raw_id_fields = ('user', 'changed_by')
+    raw_id_fields = ('user', 'staff_guest', 'changed_by')
 
 
 @admin.register(SheetCellStyle)
@@ -61,12 +70,12 @@ class SheetCellStyleAdmin(admin.ModelAdmin):
 @admin.register(SheetCellComment)
 class SheetCellCommentAdmin(admin.ModelAdmin):
     list_display = (
-        'id', 'company', 'staff_user', 'column_key', 'sheet_key', 'tab_key',
+        'id', 'company', 'staff_user', 'staff_guest', 'column_key', 'sheet_key', 'tab_key',
         'author', 'status', 'created_at',
     )
     list_filter = ('status', 'sheet_key', 'column_key')
     search_fields = ('body', 'company__name', 'column_key')
-    raw_id_fields = ('company', 'staff_user', 'author')
+    raw_id_fields = ('company', 'staff_user', 'staff_guest', 'author')
     filter_horizontal = ('mentions',)
 
 
