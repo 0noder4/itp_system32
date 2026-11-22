@@ -85,14 +85,16 @@ export default function ResetPasswordPage() {
     <Card className="w-full sm:max-w-md">
       <CardHeader>
         <div className="flex flex-col items-center gap-4 mb-2">
-          <Image
-            src="/images/ITP_LOGO_horizontal_black.png"
-            alt="ITP Logo"
-            width={200}
-            height={60}
-            className="h-auto w-auto max-h-12 object-contain"
-            priority
-          />
+          <div className="rounded-md px-3 py-2 dark:bg-white">
+            <Image
+              src="/images/ITP_LOGO_horizontal_black.png"
+              alt="ITP Logo"
+              width={200}
+              height={60}
+              className="h-auto w-auto max-h-12 object-contain"
+              priority
+            />
+          </div>
         </div>
         <div className="flex items-center justify-between">
           <CardTitle>{t("auth.resetPassword.title")}</CardTitle>
