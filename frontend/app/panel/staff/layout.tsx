@@ -10,7 +10,8 @@ function pathAllowed(pathname: string): boolean {
   const frArea =
     pathname === "/panel/staff" ||
     pathname.startsWith("/panel/staff/companies") ||
-    pathname.startsWith("/panel/staff/invitations");
+    pathname.startsWith("/panel/staff/invitations") ||
+    pathname.startsWith("/panel/staff/faq");
   if (frArea) return hasStaffRole("fr");
   if (pathname.startsWith("/panel/staff/map")) {
     return hasStaffRole("fr") || hasStaffRole("lg") || hasStaffRole("opiekun");

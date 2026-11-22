@@ -33,5 +33,8 @@ export function useStaffNav() {
   if (allow("fr") || allow("lg") || allow("opiekun")) {
     items.push({ title: t("staff.map.title"), url: "/panel/staff/map" });
   }
+  if (allow("fr")) {
+    items.push({ title: t("staff.faq.navTitle"), url: "/panel/staff/faq" });
+  }
   return items;
 }
