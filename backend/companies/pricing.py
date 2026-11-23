@@ -154,6 +154,7 @@ def calculate_base_package_cost(
             'days_count': 2,
             'days': unique_days or ['day1', 'day2'],
             'pending_stand_assignment': False,
+            'planned_from_invitation': False,
             'individual_pricing': False,
             'cost': cost,
         }
@@ -170,11 +171,29 @@ def calculate_base_package_cost(
             'days_count': 2,
             'days': unique_days or ['day1', 'day2'],
             'pending_stand_assignment': False,
+            'planned_from_invitation': False,
             'individual_pricing': False,
             'cost': cost,
         }
 
     if not stands:
+        planned_size = (getattr(company, 'planned_stand_size', '') or '').strip()
+        if planned_size in STAND_SIZE_M2:
+            planned_days = 1 if getattr(company, 'planned_days_count', None) == 1 else 2
+            planned_cost = _stand_unit_price(planned_size, planned_days, s)
+            return {
+                'status': company.status,
+                'package_label_pl': PACKAGE_LABELS_PL.get(company.status, 'Wystawca'),
+                'package_label_en': PACKAGE_LABELS_EN.get(company.status, 'Exhibitor'),
+                'stand_size': planned_size,
+                'stand_size_label': STAND_SIZE_M2[planned_size],
+                'days_count': planned_days,
+                'days': [],
+                'pending_stand_assignment': False,
+                'planned_from_invitation': True,
+                'individual_pricing': planned_size == '12m2' and planned_cost == ZERO,
+                'cost': planned_cost,
+            }
         return {
             'status': company.status,
             'package_label_pl': PACKAGE_LABELS_PL.get(company.status, 'Wystawca'),
@@ -184,6 +203,7 @@ def calculate_base_package_cost(
             'days_count': 0,
             'days': [],
             'pending_stand_assignment': True,
+            'planned_from_invitation': False,
             'individual_pricing': False,
             'cost': ZERO,
         }
@@ -202,6 +222,7 @@ def calculate_base_package_cost(
             'days_count': days_count,
             'days': unique_days,
             'pending_stand_assignment': False,
+            'planned_from_invitation': False,
             'individual_pricing': size == '12m2' and cost == ZERO,
             'cost': cost,
         }
@@ -217,6 +238,7 @@ def calculate_base_package_cost(
         'days_count': len(unique_days),
         'days': unique_days,
         'pending_stand_assignment': False,
+        'planned_from_invitation': False,
         'individual_pricing': False,
         'cost': _to_decimal(total),
     }
@@ -310,6 +332,13 @@ def calculate_lunch_breakdown(
     }
 
 
+def calculate_extra_cost_breakdown(company: Company) -> dict[str, Any]:
+    return {
+        'cost': _to_decimal(getattr(company, 'extra_cost', ZERO)),
+        'description': (getattr(company, 'extra_cost_description', '') or '').strip(),
+    }
+
+
 def calculate_company_costs(
     company: Company,
     settings_obj: Settings | None = None,
@@ -320,9 +349,14 @@ def calculate_company_costs(
     jobwall_count = len(list(company.jobwalls.all()))
     jobwall = calculate_jobwall_breakdown(company, jobwall_count, s)
     lunches = calculate_lunch_breakdown(company, s)
+    extra = calculate_extra_cost_breakdown(company)
 
     total_cost = _to_decimal(
-        base_package['cost'] + equipment['cost'] + jobwall['cost'] + lunches['cost']
+        base_package['cost']
+        + equipment['cost']
+        + jobwall['cost']
+        + lunches['cost']
+        + extra['cost']
     )
     return {
         'company_id': company.id,
@@ -331,6 +365,7 @@ def calculate_company_costs(
         'equipment': equipment,
         'jobwall': jobwall,
         'lunches': lunches,
+        'extra': extra,
         'total_cost': total_cost,
     }
 
@@ -344,6 +379,7 @@ def serialize_company_cost_summary(
     eq = summary['equipment']
     jw = summary['jobwall']
     ln = summary['lunches']
+    ex = summary['extra']
 
     return {
         'company_id': summary['company_id'],
@@ -359,6 +395,7 @@ def serialize_company_cost_summary(
             'days_count': bp['days_count'],
             'days': bp['days'],
             'pending_stand_assignment': bp['pending_stand_assignment'],
+            'planned_from_invitation': bool(bp.get('planned_from_invitation', False)),
             'individual_pricing': bp['individual_pricing'],
             'cost': str(bp['cost']),
         },
@@ -407,6 +444,10 @@ def serialize_company_cost_summary(
                 for d in ln['days']
             ],
             'cost': str(ln['cost']),
+        },
+        'extra': {
+            'cost': str(ex['cost']),
+            'description': ex['description'],
         },
         'total_cost': str(summary['total_cost']),
     }

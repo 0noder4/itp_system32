@@ -225,7 +225,7 @@ class ColumnDef:
 @dataclass(frozen=True)
 class TabDef:
     key: str
-    title: str
+    title: str | Callable[[], str]
     columns: tuple[ColumnDef, ...]
     row_filter: Callable[[QuerySet], QuerySet] | None = None
     select_related: tuple[str, ...] = ()
@@ -240,6 +240,9 @@ class TabDef:
             raise ValueError(f'{self.key}: unknown view {self.view!r}')
         if self.row_source not in ROW_SOURCES:
             raise ValueError(f'{self.key}: unknown row_source {self.row_source!r}')
+
+    def resolve_title(self) -> str:
+        return self.title() if callable(self.title) else self.title
 
     def column(self, key: str) -> ColumnDef | None:
         for col in self.columns:

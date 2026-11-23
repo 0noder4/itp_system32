@@ -22,17 +22,12 @@ import { Loader2, Save, Plus, Trash2 } from "lucide-react";
 import { apiClient, LunchPriceResponse, fetcher } from "@/lib/api";
 import useSWR from "swr";
 import {
-  ARRIVAL_HOURS,
-  ARRIVAL_MINUTES,
   calculateLunchSummary,
   fetchDefaultMainRepContact,
   FREE_LUNCHES_PER_DAY,
   hasSavedMainRep,
-  joinArrivalTime,
   parseLunchPrice,
-  splitArrivalTime,
   toFixedLunchRows,
-  toTimeInputValue,
 } from "@/lib/stage5-utils";
 import { CostSummaryBox } from "./CostSummaryBox";
 import {
@@ -60,89 +55,6 @@ interface Stage5FormProps {
 
 const selectClassName =
   "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed";
-
-/** Hour + minute selects; form value stays empty until both parts are chosen. */
-function ArrivalTimeSelectFields({
-  id,
-  value,
-  onChange,
-  onBlur,
-  disabled,
-  hourLabel,
-  minuteLabel,
-  hourPlaceholder,
-  minutePlaceholder,
-}: {
-  id: string;
-  value: string;
-  onChange: (next: string) => void;
-  onBlur: () => void;
-  disabled?: boolean;
-  hourLabel: string;
-  minuteLabel: string;
-  hourPlaceholder: string;
-  minutePlaceholder: string;
-}) {
-  const parsed = splitArrivalTime(value);
-  const [hour, setHour] = React.useState(parsed.hour);
-  const [minute, setMinute] = React.useState(parsed.minute);
-
-  React.useEffect(() => {
-    const next = splitArrivalTime(value);
-    setHour(next.hour);
-    setMinute(next.minute);
-  }, [value]);
-
-  const commit = (nextHour: string, nextMinute: string) => {
-    setHour(nextHour);
-    setMinute(nextMinute);
-    if (!nextHour || !nextMinute) {
-      onChange("");
-      return;
-    }
-    onChange(joinArrivalTime(nextHour, nextMinute));
-  };
-
-  return (
-    <div className="flex items-center gap-2">
-      <select
-        id={`${id}_hour`}
-        aria-label={hourLabel}
-        disabled={disabled}
-        className={selectClassName}
-        value={hour}
-        onChange={(e) => commit(e.target.value, minute)}
-        onBlur={onBlur}
-      >
-        <option value="">{hourPlaceholder}</option>
-        {ARRIVAL_HOURS.map((h) => (
-          <option key={h} value={h}>
-            {h}
-          </option>
-        ))}
-      </select>
-      <span className="text-muted-foreground font-medium" aria-hidden>
-        :
-      </span>
-      <select
-        id={`${id}_minute`}
-        aria-label={minuteLabel}
-        disabled={disabled}
-        className={selectClassName}
-        value={minute}
-        onChange={(e) => commit(hour, e.target.value)}
-        onBlur={onBlur}
-      >
-        <option value="">{minutePlaceholder}</option>
-        {ARRIVAL_MINUTES.map((m) => (
-          <option key={m} value={m}>
-            {m}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
-}
 
 export function Stage5Form({
   companyId,
@@ -186,12 +98,6 @@ export function Stage5Form({
         main_rep_surname: initialData?.final_data?.main_rep_surname || "",
         main_rep_phone: initialData?.final_data?.main_rep_phone || "",
         main_rep_attendance: initialData?.final_data?.main_rep_attendance || "",
-        arrival_time_day1: toTimeInputValue(
-          initialData?.final_data?.arrival_time_day1
-        ),
-        arrival_time_day2: toTimeInputValue(
-          initialData?.final_data?.arrival_time_day2
-        ),
       },
       lunches: initialData?.final_data?.lunches_declined
         ? []
@@ -506,29 +412,6 @@ export function Stage5Form({
     />
   );
 
-  const renderArrivalTimeSelect = (
-    name: "final_data.arrival_time_day1" | "final_data.arrival_time_day2",
-    id: string
-  ) => (
-    <Controller
-      name={name}
-      control={form.control}
-      render={({ field }) => (
-        <ArrivalTimeSelectFields
-          id={id}
-          value={field.value || ""}
-          onChange={field.onChange}
-          onBlur={field.onBlur}
-          disabled={disabled}
-          hourLabel={t("exhibitor.form.arrivalHour")}
-          minuteLabel={t("exhibitor.form.arrivalMinute")}
-          hourPlaceholder={t("exhibitor.form.arrivalHourPlaceholder")}
-          minutePlaceholder={t("exhibitor.form.arrivalMinutePlaceholder")}
-        />
-      )}
-    />
-  );
-
   return (
     <>
       <form
@@ -775,49 +658,6 @@ export function Stage5Form({
               )}
             </>
           )}
-        </div>
-
-        <div className="space-y-3">
-          <h3 className="font-medium">
-            {t("exhibitor.form.arrivalTimesTitle")}
-          </h3>
-          <p className="text-sm text-muted-foreground">
-            {t("exhibitor.form.arrivalTimesDescription")}
-          </p>
-          <div className="grid gap-4 md:grid-cols-2 rounded-md border p-4">
-            <FieldGroup>
-              <FieldLabel htmlFor="arrival_time_day1_hour">
-                {t("exhibitor.form.arrivalTimeDay1", { date: day1Label })}
-                <span className="text-red-500">*</span>
-              </FieldLabel>
-              {renderArrivalTimeSelect(
-                "final_data.arrival_time_day1",
-                "arrival_time_day1"
-              )}
-              {form.formState.errors.final_data?.arrival_time_day1 && (
-                <FieldError>
-                  {form.formState.errors.final_data.arrival_time_day1.message ||
-                    t("exhibitor.form.required")}
-                </FieldError>
-              )}
-            </FieldGroup>
-            <FieldGroup>
-              <FieldLabel htmlFor="arrival_time_day2_hour">
-                {t("exhibitor.form.arrivalTimeDay2", { date: day2Label })}
-                <span className="text-red-500">*</span>
-              </FieldLabel>
-              {renderArrivalTimeSelect(
-                "final_data.arrival_time_day2",
-                "arrival_time_day2"
-              )}
-              {form.formState.errors.final_data?.arrival_time_day2 && (
-                <FieldError>
-                  {form.formState.errors.final_data.arrival_time_day2.message ||
-                    t("exhibitor.form.required")}
-                </FieldError>
-              )}
-            </FieldGroup>
-          </div>
         </div>
 
         <div className="space-y-3">

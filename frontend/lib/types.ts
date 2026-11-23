@@ -5,6 +5,10 @@ export interface Company {
   status: "main" | "partner" | "basic";
   email: string;
   language?: "en" | "pl";
+  planned_stand_size?: string | null;
+  planned_days_count?: number | null;
+  extra_cost?: string;
+  extra_cost_description?: string;
   representative: number | null;
   representative_name: string | null;
   representative_surname: string | null;
@@ -73,6 +77,8 @@ export interface CompanyInvitation {
   email: string;
   company_name: string;
   company_status: "main" | "partner" | "basic";
+  planned_stand_size?: string | null;
+  planned_days_count?: number | null;
   created_at: string;
   updated_at: string;
   expires_at: string;

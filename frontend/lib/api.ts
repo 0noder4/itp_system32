@@ -352,6 +352,78 @@ export function sanitizeCompanySlug(name: string): string {
   return slug;
 }
 
+export type CompanyExportSection =
+  | "basic"
+  | "stage_1"
+  | "stage_2"
+  | "stage_3"
+  | "stage_4"
+  | "stage_5"
+  | "billing";
+
+export type CompanyExportCombine = "merge" | "separate";
+
+export type CompanyMediaCategory =
+  | "logo_sign"
+  | "catalogue_logo"
+  | "stand_visualization"
+  | "fire_cert"
+  | "order_pdf";
+
+export interface CompanyExportOptions {
+  sections?: CompanyExportSection[];
+  combine?: CompanyExportCombine;
+}
+
+export interface MediaDownloadOptions {
+  companyIds?: number[];
+  categories?: CompanyMediaCategory[];
+}
+
+export interface MediaDownloadResult {
+  downloaded: boolean;
+  filesCount: number;
+  pdfIncluded: number;
+  pdfSkipped: number;
+}
+
+function triggerBlobDownload(blob: Blob, filename: string): void {
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.setAttribute("download", filename);
+  document.body.appendChild(link);
+  link.click();
+  link.parentNode?.removeChild(link);
+  window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+}
+
+async function throwBlobDownloadError(error: any, fallback: string): Promise<never> {
+  let message =
+    error.response?.data?.detail || error.response?.data?.message || fallback;
+
+  if (error.response?.data instanceof Blob) {
+    const text = await error.response.data.text();
+    if (text) {
+      try {
+        const jsonError = JSON.parse(text);
+        message = jsonError.detail || jsonError.error || message;
+      } catch {
+        message = text;
+      }
+    }
+  }
+
+  throw new Error(message);
+}
+
+function parseHeaderCount(headers: Record<string, any> | undefined, key: string): number {
+  const raw = headers?.[key];
+  if (raw === undefined || raw === null) return 0;
+  const num = Number(raw);
+  return Number.isFinite(num) && num >= 0 ? num : 0;
+}
+
 // Download order summary PDF
 export const downloadOrderSummaryPDF = async (
   companyId: number,
@@ -365,14 +437,7 @@ export const downloadOrderSummaryPDF = async (
       }
     );
 
-    // Create blob from response
     const blob = new Blob([response.data], { type: "application/pdf" });
-
-    // Create download link
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-
     const slug = companyName ? sanitizeCompanySlug(companyName) : "";
     const fallback = slug
       ? `podsumowanie_${slug}.pdf`
@@ -382,144 +447,134 @@ export const downloadOrderSummaryPDF = async (
       fallback
     );
 
-    link.setAttribute("download", filename);
-    document.body.appendChild(link);
-    link.click();
-
-    // Cleanup
-    link.parentNode?.removeChild(link);
-    window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+    triggerBlobDownload(blob, filename);
   } catch (error: any) {
-    const errorMessage =
-      error.response?.data?.detail ||
-      error.response?.data?.message ||
-      "An error occurred while downloading the PDF";
-
-    // If response is a blob (error PDF), try to read it as text
-    if (error.response?.data instanceof Blob) {
-      const text = await error.response.data.text();
-      try {
-        const jsonError = JSON.parse(text);
-        throw new Error(jsonError.detail || errorMessage);
-      } catch {
-        throw new Error(errorMessage);
-      }
-    }
-
-    throw new Error(errorMessage);
+    await throwBlobDownloadError(error, "An error occurred while downloading the PDF");
   }
 };
 
-// Download companies CSV export for selected company IDs (order preserved)
+// Download companies CSV (or ZIP of per-section CSVs) for selected company IDs
 export const downloadCompaniesCSV = async (
-  companyIds: number[]
+  companyIds: number[],
+  options?: CompanyExportOptions
 ): Promise<void> => {
   try {
     const response = await apiClient.post(
       "/api/export/csv/",
-      { company_ids: companyIds },
+      {
+        company_ids: companyIds,
+        ...(options?.sections ? { sections: options.sections } : {}),
+        ...(options?.combine ? { combine: options.combine } : {}),
+      },
       {
         responseType: "blob",
       }
     );
 
-    // Create blob from response with UTF-8 encoding
+    const contentType = String(response.headers["content-type"] || "").toLowerCase();
+    const isZip = contentType.includes("zip");
     const blob = new Blob([response.data], {
-      type: "text/csv;charset=utf-8;",
+      type: isZip ? "application/zip" : "text/csv;charset=utf-8;",
     });
-
-    // Create download link
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-
     const filename = extractDownloadFilename(
       response.headers["content-disposition"],
-      "companies_export.csv"
+      isZip ? "companies_export_csv.zip" : "companies_export.csv"
     );
 
-    link.setAttribute("download", filename);
-    document.body.appendChild(link);
-    link.click();
-
-    // Cleanup
-    link.parentNode?.removeChild(link);
-    window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+    triggerBlobDownload(blob, filename);
   } catch (error: any) {
-    const errorMessage =
-      error.response?.data?.detail ||
-      error.response?.data?.message ||
-      "An error occurred while downloading the CSV file";
-
-    // If response is a blob (error response), try to read it as text
-    if (error.response?.data instanceof Blob) {
-      const text = await error.response.data.text();
-      try {
-        const jsonError = JSON.parse(text);
-        throw new Error(jsonError.detail || jsonError.error || errorMessage);
-      } catch {
-        // If not JSON, it might be plain text error
-        if (text) {
-          throw new Error(text);
-        }
-        throw new Error(errorMessage);
-      }
-    }
-
-    throw new Error(errorMessage);
+    await throwBlobDownloadError(
+      error,
+      "An error occurred while downloading the CSV file"
+    );
   }
 };
 
-// Download media files export
-export const downloadMediaFiles = async (): Promise<void> => {
+// Download companies styled XLSX workbook for selected company IDs
+export const downloadCompaniesXLSX = async (
+  companyIds: number[],
+  options?: CompanyExportOptions
+): Promise<void> => {
   try {
-    const response = await apiClient.get("/api/export/media/", {
-      responseType: "blob",
-    });
+    const response = await apiClient.post(
+      "/api/export/xlsx/",
+      {
+        company_ids: companyIds,
+        ...(options?.sections ? { sections: options.sections } : {}),
+        ...(options?.combine ? { combine: options.combine } : {}),
+      },
+      {
+        responseType: "blob",
+      }
+    );
 
-    // Create blob from response
+    const blob = new Blob([response.data], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    const filename = extractDownloadFilename(
+      response.headers["content-disposition"],
+      "companies_export.xlsx"
+    );
+
+    triggerBlobDownload(blob, filename);
+  } catch (error: any) {
+    await throwBlobDownloadError(
+      error,
+      "An error occurred while downloading the XLSX file"
+    );
+  }
+};
+
+// Download media files (and optionally order summary PDFs) as ZIP
+export const downloadMediaFiles = async (
+  options?: MediaDownloadOptions
+): Promise<MediaDownloadResult> => {
+  try {
+    const response = options
+      ? await apiClient.post(
+          "/api/export/media/",
+          {
+            ...(options.companyIds ? { company_ids: options.companyIds } : {}),
+            ...(options.categories ? { categories: options.categories } : {}),
+          },
+          { responseType: "blob" }
+        )
+      : await apiClient.get("/api/export/media/", {
+          responseType: "blob",
+        });
+
+    const filesCount = parseHeaderCount(response.headers, "x-export-files-count");
+    const pdfIncluded = parseHeaderCount(response.headers, "x-export-pdf-included");
+    const pdfSkipped = parseHeaderCount(response.headers, "x-export-pdf-skipped");
+
+    if (response.status === 204) {
+      return {
+        downloaded: false,
+        filesCount: 0,
+        pdfIncluded: 0,
+        pdfSkipped,
+      };
+    }
+
     const blob = new Blob([response.data], {
       type: "application/zip",
     });
-
-    // Create download link
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-
     const filename = extractDownloadFilename(
       response.headers["content-disposition"],
       "media_files.zip"
     );
 
-    link.setAttribute("download", filename);
-    document.body.appendChild(link);
-    link.click();
-
-    // Cleanup
-    link.parentNode?.removeChild(link);
-    window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+    triggerBlobDownload(blob, filename);
+    return {
+      downloaded: true,
+      filesCount,
+      pdfIncluded,
+      pdfSkipped,
+    };
   } catch (error: any) {
-    const errorMessage =
-      error.response?.data?.detail ||
-      error.response?.data?.message ||
-      "An error occurred while downloading the media files";
-
-    // If response is a blob (error response), try to read it as text
-    if (error.response?.data instanceof Blob) {
-      const text = await error.response.data.text();
-      try {
-        const jsonError = JSON.parse(text);
-        throw new Error(jsonError.detail || jsonError.error || errorMessage);
-      } catch {
-        // If not JSON, it might be plain text error
-        if (text) {
-          throw new Error(text);
-        }
-        throw new Error(errorMessage);
-      }
-    }
-
-    throw new Error(errorMessage);
+    return await throwBlobDownloadError(
+      error,
+      "An error occurred while downloading the media files"
+    );
   }
 };

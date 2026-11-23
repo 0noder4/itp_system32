@@ -264,7 +264,6 @@ export function StageForm({
           const visualizationFile = data.stand_details.stand_visualization;
 
           // Check if files are File instances
-          const isProvidedStand = standType === "provided_stand";
           const isSelfConstruction = standType === "self_construction";
 
           // Only append new files (File instances), not existing file URLs (strings)
@@ -274,13 +273,6 @@ export function StageForm({
               logoFile,
               logoFile.name
             );
-          } else if (
-            !isDraft &&
-            isProvidedStand &&
-            !(typeof logoFile === "string")
-          ) {
-            // Logo is required for provided_stand but not provided (neither File nor existing URL)
-            throw new Error("Logo file is required for provided stand");
           }
           // If logoFile is a string (existing file URL), don't send it - backend will keep existing file
 

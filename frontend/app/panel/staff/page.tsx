@@ -2,9 +2,12 @@
 
 import React from "react";
 import useSWR from "swr";
-import { fetcher, downloadCompaniesCSV, downloadMediaFiles } from "@/lib/api";
+import { BellRing, Globe } from "lucide-react";
+import { fetcher } from "@/lib/api";
+import { STAFF_ACCENT_COLOR } from "@/lib/colors";
 import { Company, CompanyInvitation, StaffUser } from "@/lib/types";
 import { useTranslation } from "@/lib/i18n";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -13,11 +16,14 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Button } from "@/components/ui/button";
-import { Download } from "lucide-react";
-import { toast } from "sonner";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Header } from "@/components/layout/Header";
 import { InvitationFormDialog } from "@/components/staff/Invitations/InvitationFormDialog";
+import { CompanyExportDialog } from "@/components/staff/Companies/CompanyExportDialog";
 import { CompanyFilters } from "@/components/staff/Companies/CompanyFilters";
 import {
   CompaniesTable,
@@ -33,8 +39,36 @@ import {
   markUpdateOverviewShown,
   shouldOpenUpdateOverview,
 } from "@/components/staff/UpdateOverview/UpdateOverviewDialog";
-import { STAFF_ACCENT_COLOR } from "@/lib/colors";
 import type { TableRow as TableRowType } from "@/components/staff/Companies/StatusBadges";
+
+function AccentActionButton({
+  disabled,
+  onClick,
+  children,
+}: {
+  disabled: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <Button
+      type="button"
+      className="text-xs sm:text-sm whitespace-nowrap"
+      size="sm"
+      disabled={disabled}
+      style={{ backgroundColor: disabled ? undefined : STAFF_ACCENT_COLOR }}
+      onMouseEnter={(e) => {
+        if (!disabled) e.currentTarget.style.backgroundColor = "#C84FA8";
+      }}
+      onMouseLeave={(e) => {
+        if (!disabled) e.currentTarget.style.backgroundColor = STAFF_ACCENT_COLOR;
+      }}
+      onClick={onClick}
+    >
+      {children}
+    </Button>
+  );
+}
 
 export default function Index() {
   const { t } = useTranslation();
@@ -140,54 +174,34 @@ export default function Index() {
     [selectedRows]
   );
 
+  const selectedInvitationsCount = React.useMemo(
+    () => selectedRows.filter((row) => row.type === "invitation").length,
+    [selectedRows]
+  );
+
+  const filteredCompanyIds = React.useMemo(
+    () =>
+      filteredRows
+        .filter((row): row is Extract<TableRowType, { type: "company" }> =>
+          row.type === "company"
+        )
+        .map((row) => row.data.id),
+    [filteredRows]
+  );
+
+  const allCompanyIds = React.useMemo(() => {
+    if (!companies) return [];
+    return [...companies]
+      .sort(
+        (a, b) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      )
+      .map((company) => company.id);
+  }, [companies]);
+
   const handleInvitationSuccess = () => {
     mutate();
     mutateInvitations();
-  };
-
-  const [isDownloadingCSV, setIsDownloadingCSV] = React.useState(false);
-  const [isDownloadingMedia, setIsDownloadingMedia] = React.useState(false);
-
-  const handleDownloadCSV = async () => {
-    if (selectedCompanyIds.length === 0) {
-      toast.error(t("companies.export.selectCompanies"), {
-        description: t("companies.export.selectCompaniesDescription"),
-      });
-      return;
-    }
-    setIsDownloadingCSV(true);
-    try {
-      await downloadCompaniesCSV(selectedCompanyIds);
-      toast.success(t("companies.export.success"), {
-        description: t("companies.export.successDescription"),
-      });
-    } catch (error: any) {
-      const errorMessage =
-        error.message || t("companies.export.errorDescription");
-      toast.error(t("companies.export.error"), {
-        description: errorMessage,
-      });
-    } finally {
-      setIsDownloadingCSV(false);
-    }
-  };
-
-  const handleDownloadMedia = async () => {
-    setIsDownloadingMedia(true);
-    try {
-      await downloadMediaFiles();
-      toast.success(t("companies.export.mediaSuccess"), {
-        description: t("companies.export.mediaSuccessDescription"),
-      });
-    } catch (error: any) {
-      const errorMessage =
-        error.message || t("companies.export.mediaErrorDescription");
-      toast.error(t("companies.export.mediaError"), {
-        description: errorMessage,
-      });
-    } finally {
-      setIsDownloadingMedia(false);
-    }
   };
 
   const isLoading =
@@ -203,64 +217,41 @@ export default function Index() {
       <div className="flex flex-col flex-1 md:overflow-hidden p-3 md:p-6">
         <Card className="flex flex-col flex-1 md:overflow-hidden gap-2">
           <CardHeader className="shrink-0">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3">
               <div className="flex flex-col gap-2">
                 <CardTitle>{t("companies.title")}</CardTitle>
                 <CardDescription>{t("companies.description")}</CardDescription>
               </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  onClick={handleDownloadCSV}
-                  disabled={isDownloadingCSV || selectedCompanyIds.length === 0}
-                  className="text-xs sm:text-sm whitespace-nowrap"
-                  size="sm"
-                  variant="outline"
-                  style={{ borderColor: STAFF_ACCENT_COLOR }}
-                  onMouseEnter={(e) => {
-                    if (!isDownloadingCSV && selectedCompanyIds.length > 0) {
-                      e.currentTarget.style.backgroundColor =
-                        STAFF_ACCENT_COLOR;
-                      e.currentTarget.style.color = "white";
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isDownloadingCSV) {
-                      e.currentTarget.style.backgroundColor = "transparent";
-                      e.currentTarget.style.color = "";
-                    }
-                  }}
+              <div className="flex flex-wrap items-center gap-2">
+                <AccentActionButton
+                  disabled={selectedKeys.size === 0}
+                  onClick={() => setReminderDialogOpen(true)}
                 >
-                  <Download className="mr-1 sm:mr-2 h-4 w-4 shrink-0" />
-                  {isDownloadingCSV
-                    ? t("companies.export.downloading")
-                    : t("companies.export.button")}
-                </Button>
-                <Button
-                  onClick={handleDownloadMedia}
-                  disabled={isDownloadingMedia}
-                  className="text-xs sm:text-sm whitespace-nowrap"
-                  size="sm"
-                  variant="outline"
-                  style={{ borderColor: STAFF_ACCENT_COLOR }}
-                  onMouseEnter={(e) => {
-                    if (!isDownloadingMedia) {
-                      e.currentTarget.style.backgroundColor =
-                        STAFF_ACCENT_COLOR;
-                      e.currentTarget.style.color = "white";
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isDownloadingMedia) {
-                      e.currentTarget.style.backgroundColor = "transparent";
-                      e.currentTarget.style.color = "";
-                    }
-                  }}
-                >
-                  <Download className="mr-1 sm:mr-2 h-4 w-4 shrink-0" />
-                  {isDownloadingMedia
-                    ? t("companies.export.mediaDownloading")
-                    : t("companies.export.mediaButton")}
-                </Button>
+                  <BellRing className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  {t("reminders.sendButton")}
+                </AccentActionButton>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex">
+                      <AccentActionButton
+                        disabled={selectedCompanyIds.length === 0}
+                        onClick={() => setWebsiteExportOpen(true)}
+                      >
+                        <Globe className="h-4 w-4 shrink-0" aria-hidden="true" />
+                        {t("websiteExport.sendButton")}
+                      </AccentActionButton>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="max-w-xs">
+                    {t("websiteExport.tooltip")}
+                  </TooltipContent>
+                </Tooltip>
+                <CompanyExportDialog
+                  selectedCompanyIds={selectedCompanyIds}
+                  selectedInvitationsCount={selectedInvitationsCount}
+                  filteredCompanyIds={filteredCompanyIds}
+                  allCompanyIds={allCompanyIds}
+                />
                 <InvitationFormDialog onSuccess={handleInvitationSuccess} />
               </div>
             </div>
@@ -288,10 +279,6 @@ export default function Index() {
                 opiekunMembers={opiekunMembers}
                 filteredCount={filteredRows.length}
                 totalCount={totalCount}
-                onSendReminders={() => setReminderDialogOpen(true)}
-                sendRemindersDisabled={selectedKeys.size === 0}
-                onExportToWebsite={() => setWebsiteExportOpen(true)}
-                exportToWebsiteDisabled={selectedCompanyIds.length === 0}
               />
             )}
 

@@ -46,6 +46,7 @@ class WebsitePublicationAdmin(admin.ModelAdmin):
     list_display = (
         'company',
         'strapi_document_id',
+        'content_published',
         'last_exported_at',
         'strapi_logo_id',
     )

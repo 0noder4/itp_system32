@@ -1,8 +1,11 @@
 """Editable cells shared by the Opiekun, LG and FR sheets (one value per company)."""
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 
+from django.db.utils import OperationalError, ProgrammingError
+
+from companies.models import Settings
 from users.models import STAFF_ROLE_FR, STAFF_ROLE_LG, STAFF_ROLE_OPIEKUN
 
 from ..registry import (
@@ -43,12 +46,27 @@ GROUP_FINAL = 'FINAŁ NZS'
 GROUP_WELCOME = 'WELCOME PACKI'
 GROUP_STAFF = 'OBIADY BEŚCIAKÓW'
 
-# Montage days for own-build arrival (Krok 3). Weekday comes from the calendar.
-MONTAGE_DATES = (date(2027, 3, 9), date(2027, 3, 10), date(2027, 3, 11))
+# Montage days for own-build arrival (day before day 1, day 1, day 2).
+DEFAULT_DAY1_DATE = date(2027, 3, 9)
+DEFAULT_DAY2_DATE = date(2027, 3, 10)
+MONTAGE_DATES = (date(2027, 3, 8), date(2027, 3, 9), date(2027, 3, 10))
 ARRIVAL_SLOTS = ('14-16', '16-18', '18-20', '20-22')
+PICKUP_SLOTS = ('14-15', '15-16', '16-17', '17-18')
 SLOT_CAP = 5
 _WEEKDAY_PL = ('poniedziałek', 'wtorek', 'środa', 'czwartek', 'piątek', 'sobota', 'niedziela')
 _TONE_LABEL = {'na': 'nie dotyczy', 'warn': 'braki', 'ok': 'komplet'}
+
+
+def montage_dates() -> tuple[date, date, date]:
+    """3 montage days derived from Settings.day1_date / day2_date: day1 - 1, day1, day2."""
+    try:
+        settings_obj = Settings.get_settings()
+        day1 = settings_obj.day1_date or DEFAULT_DAY1_DATE
+        day2 = settings_obj.day2_date or (day1 + timedelta(days=1))
+    except (OperationalError, ProgrammingError):
+        day1 = DEFAULT_DAY1_DATE
+        day2 = DEFAULT_DAY2_DATE
+    return (day1 - timedelta(days=1), day1, day2)
 
 # Auto, kierowca, slot, odbiór i komentarz — opiekun, LG i FR (ustalenie z rozmowy).
 EDIT_CARE = frozenset({STAFF_ROLE_OPIEKUN, STAFF_ROLE_LG, STAFF_ROLE_FR})
@@ -74,7 +92,7 @@ def _extra(key, label, kind=KIND_TEXT, width=160, edit_roles=EDIT_CARE, group=GR
 
 
 def montage_tab_title(day: date) -> str:
-    """e.g. Wtorek 9.03 — weekday from the calendar, not a fixed 'poniedziałek'."""
+    """e.g. Poniedziałek 8.03 — weekday from the calendar."""
     return f'{_WEEKDAY_PL[day.weekday()].capitalize()} {day.day}.{day.month:02d}'
 
 
@@ -82,8 +100,23 @@ def _montage_option_label(day: date) -> str:
     return f'{_WEEKDAY_PL[day.weekday()]} {day.day}.{day.month:02d}.{day.year}'
 
 
+def arrival_day_options() -> tuple[tuple[str, str], ...]:
+    return tuple((day.isoformat(), _montage_option_label(day)) for day in montage_dates())
+
+
+def pickup_dates() -> tuple[date, date]:
+    """2 fair days derived from Settings.day1_date / day2_date."""
+    _, day1, day2 = montage_dates()
+    return (day1, day2)
+
+
+def pickup_day_options() -> tuple[tuple[str, str], ...]:
+    return tuple((day.isoformat(), _montage_option_label(day)) for day in pickup_dates())
+
+
 ARRIVAL_DAY_OPTIONS = tuple((day.isoformat(), _montage_option_label(day)) for day in MONTAGE_DATES)
 ARRIVAL_SLOT_OPTIONS = tuple((slot, slot) for slot in ARRIVAL_SLOTS)
+PICKUP_SLOT_OPTIONS = tuple((slot, slot) for slot in PICKUP_SLOTS)
 
 
 def _text(value) -> str:
@@ -179,10 +212,10 @@ CARE_DRIVER = _extra(
 )
 CARE_ARRIVAL_DAY = _extra(
     'care.arrival_day', 'Dzień montażu', kind=KIND_SELECT, width=160, group=GROUP_BUILD,
-    options=ARRIVAL_DAY_OPTIONS,
+    options=arrival_day_options,
     help=(
-        'Dzień, w którym przywożą własną zabudowę. '
-        'Godzina wejścia na same targi jest w kolumnach Wejście dzień 1 i Wejście dzień 2.'
+        'Dzień, w którym przywożą własną zabudowę (możliwy montaż już wieczorem dzień przed dniem 1., '
+        'np. w poniedziałek). Godzina przyjazdu w dniu targów jest w kolumnie Przyjazd od 6:30.'
     ),
 )
 CARE_SLOT = _extra(
@@ -207,12 +240,14 @@ CARE_COMPOSITION = _extra(
     ),
 )
 CARE_PICKUP = _extra(
-    'care.pickup', 'Kiedy odbiór', kind=KIND_LONGTEXT, width=180, group=GROUP_BUILD,
-    help='Którego dnia odbierają zabudowę.',
+    'care.pickup', 'Kiedy odbiór', kind=KIND_SELECT, width=160, group=GROUP_BUILD,
+    options=pickup_day_options,
+    help='Dzień odbioru własnej zabudowy (dzień 1. albo dzień 2. targów; bez czwartku po targach).',
 )
 CARE_PICKUP_TIME = _extra(
-    'care.pickup_time', 'Godzina odbioru', width=140, group=GROUP_BUILD,
-    help='O której odbierają zabudowę. Mogą po 16:30, w dniu 1 i w dniu 2.',
+    'care.pickup_time', 'Godzina odbioru', kind=KIND_SELECT, width=120, group=GROUP_BUILD,
+    options=PICKUP_SLOT_OPTIONS,
+    help='Przedział godzinowy odbioru własnej zabudowy (14–15, 15–16, 16–17 albo 17–18).',
 )
 CARE_BUILD_TONE = ColumnDef(
     key='care.build_tone', label='Status zabudowy', kind=KIND_TEXT, source=SOURCE_COMPUTED,

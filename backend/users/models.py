@@ -95,7 +95,7 @@ class PasswordResetRequest(models.Model):
 
 
 class StaffInvitation(models.Model):
-    """Invite a new staff account (currently: opiekun) by email — mirrors company invite flow."""
+    """Invite a new staff account (opiekun, FR, LG, or TR) by email — mirrors company invite flow."""
 
     LANGUAGE_CHOICES = [
         ('en', 'English'),
@@ -103,6 +103,9 @@ class StaffInvitation(models.Model):
     ]
     ROLE_CHOICES = [
         (STAFF_ROLE_OPIEKUN, 'Opiekun firm'),
+        (STAFF_ROLE_FR, 'FR (Panel FR)'),
+        (STAFF_ROLE_LG, 'LG (logistyka)'),
+        (STAFF_ROLE_TR, 'TR (warsztaty)'),
     ]
 
     email = models.EmailField(verbose_name="e-mail")

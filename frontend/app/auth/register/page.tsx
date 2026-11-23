@@ -301,14 +301,31 @@ function RegisterForm() {
         <div className="flex items-center justify-between">
           <CardTitle>
             {invitationInfo.kind === "staff"
-              ? t("auth.register.staffTitle")
+              ? t(
+                  invitationInfo.role === "fr"
+                    ? "auth.register.frTitle"
+                    : invitationInfo.role === "lg"
+                      ? "auth.register.lgTitle"
+                      : invitationInfo.role === "tr"
+                        ? "auth.register.trTitle"
+                        : "auth.register.staffTitle"
+                )
               : t("auth.register.title")}
           </CardTitle>
           <LanguageSelector />
         </div>
         <CardDescription>
           {invitationInfo.kind === "staff"
-            ? t("auth.register.staffDescription", { email: invitationInfo.email })
+            ? t(
+                invitationInfo.role === "fr"
+                  ? "auth.register.frDescription"
+                  : invitationInfo.role === "lg"
+                    ? "auth.register.lgDescription"
+                    : invitationInfo.role === "tr"
+                      ? "auth.register.trDescription"
+                      : "auth.register.staffDescription",
+                { email: invitationInfo.email }
+              )
             : t("auth.register.description", {
                 companyName: invitationInfo.company_name,
                 email: invitationInfo.email,

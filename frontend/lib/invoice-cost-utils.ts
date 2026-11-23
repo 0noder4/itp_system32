@@ -38,6 +38,7 @@ export interface CompanyCostSummary {
     days_count: number;
     days: string[];
     pending_stand_assignment: boolean;
+    planned_from_invitation?: boolean;
     individual_pricing: boolean;
     cost: string;
   };
@@ -70,6 +71,10 @@ export interface CompanyCostSummary {
       cost: string;
     }>;
     cost: string;
+  };
+  extra?: {
+    cost: string;
+    description: string;
   };
   total_cost: string;
 }
@@ -234,7 +239,8 @@ export function applyStageOverridesToSummary(
     baseCost +
     equipmentCost +
     parseMoney(nextJobwall.cost) +
-    parseMoney(nextLunches.cost);
+    parseMoney(nextLunches.cost) +
+    parseMoney(summary.extra?.cost);
 
   return {
     ...summary,

@@ -50,6 +50,9 @@ export function CostSummaryBox({
   const equipmentCost = parseMoney(summary.equipment.cost);
   const jobwallCost = parseMoney(summary.jobwall.cost);
   const lunchCost = parseMoney(summary.lunches.cost);
+  const extraCost = parseMoney(summary.extra?.cost);
+  const extraDescription = (summary.extra?.description || "").trim();
+  const hasExtraRow = extraCost !== 0 || extraDescription.length > 0;
   const totalCost = parseMoney(summary.total_cost);
 
   const stageRowClass = (stage: 1 | 2 | 4 | 5) =>
@@ -193,6 +196,22 @@ export function CostSummaryBox({
             {lunchCost.toFixed(2)} PLN
           </div>
         </div>
+
+        {hasExtraRow && (
+          <div className="flex items-start justify-between gap-3 rounded-md border border-transparent border-l-4 border-l-transparent px-2.5 py-2 text-sm">
+            <div className="min-w-0">
+              <div>{t("exhibitor.form.costSummaryExtraLabel")}</div>
+              {extraDescription && (
+                <div className="text-xs font-normal text-muted-foreground">
+                  {extraDescription}
+                </div>
+              )}
+            </div>
+            <div className="shrink-0 whitespace-nowrap font-medium">
+              {extraCost.toFixed(2)} PLN
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="border-t pt-2 flex items-center justify-between gap-3">

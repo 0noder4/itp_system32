@@ -41,7 +41,7 @@ export function createStage2Schema(options?: { requiresCarpet?: boolean }) {
         carpet_color: z.string().max(10).optional(),
       })
       .superRefine((data, ctx) => {
-        // If provided_stand is selected, name_sign_text and logo_sign_file are required
+        // If provided_stand is selected, name_sign_text is required (logo_sign_file is optional)
         if (data.stand_type === "provided_stand") {
           if (
             !data.name_sign_text ||
@@ -52,18 +52,6 @@ export function createStage2Schema(options?: { requiresCarpet?: boolean }) {
               code: z.ZodIssueCode.custom,
               message: "Name sign text is required for provided stand",
               path: ["name_sign_text"],
-            });
-          }
-          // Logo file is required - either a new File or existing file URL
-          const hasLogoFile =
-            data.logo_sign_file &&
-            (data.logo_sign_file instanceof File ||
-              typeof data.logo_sign_file === "string");
-          if (!hasLogoFile) {
-            ctx.addIssue({
-              code: z.ZodIssueCode.custom,
-              message: "Logo file is required for provided stand",
-              path: ["logo_sign_file"],
             });
           }
         }
@@ -414,8 +402,6 @@ export const stage5Schema = z
       main_rep_surname: z.string(),
       main_rep_phone: z.string(),
       main_rep_attendance: z.enum(["both", "day1", "day2", "none", ""]),
-      arrival_time_day1: z.string(),
-      arrival_time_day2: z.string(),
     }),
     lunches: z.array(
       z.object({
@@ -545,25 +531,6 @@ export const stage5Schema = z
         message: "Attendance selection is required",
         path: ["final_data", "main_rep_attendance"],
       });
-    }
-
-    const timePattern = /^([01]\d|2[0-3]):[0-5]\d$/;
-    for (const field of ["arrival_time_day1", "arrival_time_day2"] as const) {
-      const raw = (data.final_data[field] || "").trim();
-      const normalized = raw.length >= 5 ? raw.slice(0, 5) : raw;
-      if (!normalized) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "Arrival time is required",
-          path: ["final_data", field],
-        });
-      } else if (!timePattern.test(normalized)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "Enter a valid time (HH:MM)",
-          path: ["final_data", field],
-        });
-      }
     }
 
     if (data.final_data.no_other_delegates) {

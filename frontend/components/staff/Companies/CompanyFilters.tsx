@@ -15,11 +15,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { STAFF_ACCENT_COLOR } from "@/lib/colors";
 import { cn } from "@/lib/utils";
 import {
@@ -71,10 +66,6 @@ interface CompanyFiltersProps {
   opiekunMembers?: StaffUser[];
   filteredCount: number;
   totalCount: number;
-  onSendReminders?: () => void;
-  sendRemindersDisabled?: boolean;
-  onExportToWebsite?: () => void;
-  exportToWebsiteDisabled?: boolean;
 }
 
 function FilterChip({
@@ -126,35 +117,6 @@ function FilterSection({
   );
 }
 
-function AccentActionButton({
-  disabled,
-  onClick,
-  children,
-}: {
-  disabled: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <Button
-      type="button"
-      className="text-xs sm:text-sm whitespace-nowrap"
-      size="sm"
-      disabled={disabled}
-      style={{ backgroundColor: disabled ? undefined : STAFF_ACCENT_COLOR }}
-      onMouseEnter={(e) => {
-        if (!disabled) e.currentTarget.style.backgroundColor = "#C84FA8";
-      }}
-      onMouseLeave={(e) => {
-        if (!disabled) e.currentTarget.style.backgroundColor = STAFF_ACCENT_COLOR;
-      }}
-      onClick={onClick}
-    >
-      {children}
-    </Button>
-  );
-}
-
 function toggleArrayItem<T>(items: T[], item: T): T[] {
   return items.includes(item)
     ? items.filter((entry) => entry !== item)
@@ -188,10 +150,6 @@ export function CompanyFilters({
   opiekunMembers,
   filteredCount,
   totalCount,
-  onSendReminders,
-  sendRemindersDisabled = false,
-  onExportToWebsite,
-  exportToWebsiteDisabled = false,
 }: CompanyFiltersProps) {
   const { t } = useTranslation();
   const [dialogOpen, setDialogOpen] = React.useState(false);
@@ -227,7 +185,7 @@ export function CompanyFilters({
 
   return (
     <div className="mb-3 shrink-0 space-y-2">
-      <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -248,7 +206,18 @@ export function CompanyFilters({
             </Button>
           )}
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2 sm:ml-auto">
+          {hasActiveFilters && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={handleClearFilters}
+              className="text-xs sm:text-sm hover:text-[#DB5ABA]"
+            >
+              {t("common.clearFilters")}
+            </Button>
+          )}
           <Button
             type="button"
             variant="outline"
@@ -270,42 +239,6 @@ export function CompanyFilters({
               </span>
             ) : null}
           </Button>
-          {hasActiveFilters && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={handleClearFilters}
-              className="text-xs sm:text-sm hover:text-[#DB5ABA]"
-            >
-              {t("common.clearFilters")}
-            </Button>
-          )}
-          {onSendReminders && (
-            <AccentActionButton
-              disabled={sendRemindersDisabled}
-              onClick={onSendReminders}
-            >
-              {t("reminders.sendButton")}
-            </AccentActionButton>
-          )}
-          {onExportToWebsite && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="inline-flex">
-                  <AccentActionButton
-                    disabled={exportToWebsiteDisabled}
-                    onClick={onExportToWebsite}
-                  >
-                    {t("websiteExport.sendButton")}
-                  </AccentActionButton>
-                </span>
-              </TooltipTrigger>
-              <TooltipContent side="left" className="max-w-xs">
-                {t("websiteExport.tooltip")}
-              </TooltipContent>
-            </Tooltip>
-          )}
         </div>
       </div>
 

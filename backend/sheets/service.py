@@ -25,13 +25,13 @@ from .definitions.common import user_display
 from .mail_deadlines import decorate_mail_group, decorate_mail_help, mail_send_labels
 from .definitions.extras import (
     ARRIVAL_SLOTS,
-    MONTAGE_DATES,
     SLOT_CAP,
     SLOT_KEY,
     STAFF_MEAL_FIELDS,
     STAFF_NAME,
     matrix_fill_color,
     matrix_label,
+    montage_dates,
     own_build_status,
 )
 from .definitions.form_columns import _own_build
@@ -332,7 +332,7 @@ def _shared_context(columns: list[ColumnDef]) -> dict:
 def _tab_meta(tab: TabDef, user=None) -> dict:
     meta = {
         'key': tab.key,
-        'title': tab.title,
+        'title': tab.resolve_title(),
         'frozen_columns': tab.frozen_columns,
         'view': tab.view,
         'row_source': tab.row_source,
@@ -1152,7 +1152,7 @@ def _build_matrix_payload(sheet: SheetDef, tab: TabDef, user) -> dict:
     from .definitions.extras import CARE_ARRIVAL_DAY, CARE_SLOT
 
     index = int(tab.key.rsplit('_', 1)[-1]) - 1
-    day_iso = MONTAGE_DATES[index].isoformat()
+    day_iso = montage_dates()[index].isoformat()
     columns = visible_columns(tab, user, sheet_key=sheet.key)
     companies = list(company_queryset(sheet, tab, user))
     extra_keys = (SLOT_KEY, 'care.arrival_day', 'care.car_make', 'care.car_registration')
@@ -2664,3 +2664,322 @@ def delete_custom_media(
         'value': serialize(kept) if kept else None,
         'batch_id': str(batch_id),
     }
+
+
+_SHEET_MEDIA_FOLDERS = {
+    'sign.logo': 'logos/',
+    'sign.fire_cert': 'fire_certs/',
+    'sign.visualization': 'stand_visualizations/',
+    'catalogue.logo': 'catalogue_logos/',
+    'money.pdf': 'order_pdfs/',
+}
+
+_FORM_FILE_FIELDS = {
+    'sign.logo': ('stand_details', 'logo_sign_file'),
+    'sign.fire_cert': ('stand_details', 'fire_cert'),
+    'sign.visualization': ('stand_details', 'stand_visualization'),
+    'catalogue.logo': ('description', 'logo_file'),
+}
+
+
+def _sanitize_media_segment(value: str, fallback: str = 'plik') -> str:
+    cleaned = re.sub(r'[<>:"/\\|?*]', '_', value or '').strip(' .')
+    return cleaned or fallback
+
+
+def _custom_media_folder_map(allowed_columns: dict[str, ColumnDef]) -> dict[str, str]:
+    used = {folder.rstrip('/') for folder in _SHEET_MEDIA_FOLDERS.values()}
+    folders: dict[str, str] = {}
+    for col_key, col in allowed_columns.items():
+        if not col.is_custom:
+            continue
+        base = _sanitize_media_segment((col.label or '').replace('\n', ' '), col_key)
+        candidate = base
+        if candidate in used:
+            safe_key = _sanitize_media_segment(col_key, 'col')
+            candidate = f'{base}_{safe_key}'
+        suffix = 2
+        while candidate in used:
+            candidate = f'{base}_{suffix}'
+            suffix += 1
+        used.add(candidate)
+        folders[col_key] = f'{candidate}/'
+    return folders
+
+
+def _company_media_prefix(company: Company) -> tuple[str, str]:
+    stands = list(company.stand_all.all())
+    day1_stand = next((s for s in stands if s.day == 'day1'), None)
+    day2_stand = next((s for s in stands if s.day == 'day2'), None)
+
+    d1 = day1_stand.stand_number if (day1_stand and day1_stand.stand_number and day1_stand.stand_number != 'brak') else ''
+    d2 = day2_stand.stand_number if (day2_stand and day2_stand.stand_number and day2_stand.stand_number != 'brak') else ''
+    stand_prefix = f'[{d1}][{d2}]'
+
+    try:
+        basic = getattr(company, 'basic_data', None)
+        full_name = (basic.full_name if basic else '') or company.name
+    except Exception:
+        full_name = company.name
+    sanitized_name = re.sub(r'[<>:"/\\|?*]', '_', full_name).strip() or f'company_{company.id}'
+    return stand_prefix, sanitized_name
+
+
+def _unique_arcname(arcnames_added: set[str], formatted_name: str, company_id: int) -> str:
+    if formatted_name not in arcnames_added:
+        arcnames_added.add(formatted_name)
+        return formatted_name
+    name_part, ext = os.path.splitext(formatted_name)
+    candidate = f'{name_part}_{company_id}{ext}'
+    suffix = 2
+    while candidate in arcnames_added:
+        candidate = f'{name_part}_{company_id}_{suffix}{ext}'
+        suffix += 1
+    arcnames_added.add(candidate)
+    return candidate
+
+
+def _format_sheet_media_arcname(
+    company: Company,
+    folder_prefix: str,
+    original_filename: str,
+    *,
+    include_original_name: bool,
+) -> str:
+    stand_prefix, sanitized_name = _company_media_prefix(company)
+    base_name = os.path.basename(original_filename or '') or 'plik'
+    orig_stem, ext = os.path.splitext(base_name)
+    if include_original_name:
+        safe_stem = _sanitize_media_segment(orig_stem, 'plik')
+        return f'{folder_prefix}{stand_prefix} {sanitized_name} - {safe_stem}{ext}'
+    return f'{folder_prefix}{stand_prefix} {sanitized_name}{ext}'
+
+
+def build_sheet_media_zip(
+    sheet: SheetDef,
+    user,
+    raw_cells: list[dict],
+) -> tuple[bytes, int, int, int]:
+    """
+    Build an organized ZIP archive for selected (company_id, column_key) media cells.
+    Returns (zip_bytes, files_count, pdf_included, pdf_skipped).
+    """
+    from io import BytesIO
+    import zipfile
+
+    from django.core.exceptions import ObjectDoesNotExist
+    from django.core.files.storage import default_storage
+
+    allowed_tabs = [
+        t
+        for t in sheet.tabs_for(user)
+        if t.row_source == ROW_COMPANY and t.view == VIEW_GRID
+    ]
+    allowed_columns: dict[str, ColumnDef] = {}
+    allowed_company_ids: set[int] = set()
+    for tab in allowed_tabs:
+        for col in visible_columns(tab, user, sheet_key=sheet.key):
+            if col.kind == KIND_FILE and not col.hidden_for_all:
+                allowed_columns.setdefault(col.key, col)
+        allowed_company_ids.update(
+            company_queryset(sheet, tab, user).values_list('id', flat=True)
+        )
+
+    requested_cells: list[tuple[int, str]] = []
+    seen_pairs: set[tuple[int, str]] = set()
+    for item in raw_cells:
+        if not isinstance(item, dict):
+            continue
+        raw_cid = item.get('company_id')
+        if isinstance(raw_cid, bool):
+            continue
+        try:
+            cid = int(raw_cid)
+        except (TypeError, ValueError):
+            continue
+        ckey = item.get('column_key')
+        if not isinstance(ckey, str):
+            continue
+        ckey = ckey.strip()
+        if cid not in allowed_company_ids or ckey not in allowed_columns:
+            continue
+        pair = (cid, ckey)
+        if pair in seen_pairs:
+            continue
+        seen_pairs.add(pair)
+        requested_cells.append(pair)
+
+    if not requested_cells:
+        return b'', 0, 0, 0
+
+    custom_folders = _custom_media_folder_map(allowed_columns)
+    target_company_ids = list(dict.fromkeys(cid for cid, _ in requested_cells))
+    target_col_keys = list(dict.fromkeys(ckey for _, ckey in requested_cells))
+
+    companies_by_id = {
+        c.id: c
+        for c in Company.objects.filter(id__in=target_company_ids)
+        .select_related('basic_data', 'stand_details', 'description', 'form')
+        .prefetch_related('stand_all', 'feedback')
+    }
+    drafts_by_key = {
+        (d.company_id, d.column_key): d
+        for d in SheetCellDraft.objects.filter(
+            company_id__in=target_company_ids,
+            column_key__in=target_col_keys,
+        )
+    }
+    custom_col_keys = [ck for ck in target_col_keys if allowed_columns[ck].is_custom]
+    custom_cells_by_key = {
+        (cell.company_id, cell.column_key): cell
+        for cell in SheetCellValue.objects.filter(
+            company_id__in=target_company_ids,
+            column_key__in=custom_col_keys,
+        )
+    } if custom_col_keys else {}
+
+    user_language = getattr(user, 'language', 'pl') or 'pl'
+    if user_language not in ('en', 'pl'):
+        user_language = 'pl'
+
+    buffer = BytesIO()
+    arcnames_added: set[str] = set()
+    files_count = 0
+    pdf_included = 0
+    skipped_pdfs: list[str] = []
+
+    with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+        for cid, ckey in requested_cells:
+            company = companies_by_id.get(cid)
+            if company is None:
+                continue
+            col = allowed_columns[ckey]
+
+            if col.is_custom:
+                folder_prefix = custom_folders[ckey]
+                cell = custom_cells_by_key.get((cid, ckey))
+                items = cell.value if (cell and isinstance(cell.value, list)) else []
+                for entry in items:
+                    path = _managed_storage_path(entry, ('sheet_custom_media/',))
+                    if not path or not default_storage.exists(path):
+                        continue
+                    orig_name = (
+                        (entry.get('name') if isinstance(entry, dict) else '')
+                        or public_file_name(path)
+                        or 'plik'
+                    )
+                    try:
+                        with default_storage.open(path, 'rb') as fh:
+                            data = fh.read()
+                    except Exception:
+                        continue
+                    formatted = _format_sheet_media_arcname(
+                        company,
+                        folder_prefix,
+                        orig_name,
+                        include_original_name=True,
+                    )
+                    arcname = _unique_arcname(arcnames_added, formatted, company.id)
+                    zip_file.writestr(arcname, data)
+                    files_count += 1
+                continue
+
+            if ckey == 'money.pdf':
+                from companies.pdf_generator import OrderSummaryPDFGenerator
+                from companies.views import _check_order_summary_eligibility
+
+                eligible, reason = _check_order_summary_eligibility(company)
+                if not eligible:
+                    skipped_pdfs.append(f'{company.name} (ID {company.id}): {reason}')
+                    continue
+                try:
+                    pdf_bytes = OrderSummaryPDFGenerator(
+                        company, language=user_language
+                    ).generate().getvalue()
+                except Exception:
+                    skipped_pdfs.append(f'{company.name} (ID {company.id}): błąd generowania PDF')
+                    continue
+                formatted = _format_sheet_media_arcname(
+                    company,
+                    _SHEET_MEDIA_FOLDERS['money.pdf'],
+                    'podsumowanie.pdf',
+                    include_original_name=False,
+                )
+                arcname = _unique_arcname(arcnames_added, formatted, company.id)
+                zip_file.writestr(arcname, pdf_bytes)
+                files_count += 1
+                pdf_included += 1
+                continue
+
+            form_target = _FORM_FILE_FIELDS.get(ckey)
+            if form_target is not None:
+                folder_prefix = _SHEET_MEDIA_FOLDERS[ckey]
+                draft = drafts_by_key.get((cid, ckey))
+                draft_path = (
+                    _managed_storage_path(draft.value, ('sheet_file_drafts/',))
+                    if draft is not None
+                    else None
+                )
+                if draft_path and default_storage.exists(draft_path):
+                    orig_name = (
+                        (draft.value.get('name') if isinstance(draft.value, dict) else '')
+                        or public_file_name(draft_path)
+                        or 'plik'
+                    )
+                    try:
+                        with default_storage.open(draft_path, 'rb') as fh:
+                            data = fh.read()
+                    except Exception:
+                        data = None
+                    if data is not None:
+                        formatted = _format_sheet_media_arcname(
+                            company,
+                            folder_prefix,
+                            orig_name,
+                            include_original_name=False,
+                        )
+                        arcname = _unique_arcname(arcnames_added, formatted, company.id)
+                        zip_file.writestr(arcname, data)
+                        files_count += 1
+                        continue
+
+                rel_name, attr_name = form_target
+                try:
+                    rel_obj = getattr(company, rel_name, None)
+                except ObjectDoesNotExist:
+                    rel_obj = None
+                field_file = getattr(rel_obj, attr_name, None) if rel_obj is not None else None
+                file_name = getattr(field_file, 'name', None) if field_file else None
+                if file_name and default_storage.exists(file_name):
+                    try:
+                        with field_file.open('rb') as fh:
+                            data = fh.read()
+                    except Exception:
+                        continue
+                    formatted = _format_sheet_media_arcname(
+                        company,
+                        folder_prefix,
+                        file_name,
+                        include_original_name=False,
+                    )
+                    arcname = _unique_arcname(arcnames_added, formatted, company.id)
+                    zip_file.writestr(arcname, data)
+                    files_count += 1
+
+        if skipped_pdfs and files_count > 0:
+            notes_lines = [
+                'Firmy pominięte przy generowaniu PDF podsumowania zamówienia:',
+                '',
+                *skipped_pdfs,
+                '',
+            ]
+            zip_file.writestr(
+                'order_pdfs/_pominiete_pdf.txt',
+                '\n'.join(notes_lines).encode('utf-8'),
+            )
+
+    if files_count == 0:
+        return b'', 0, 0, len(skipped_pdfs)
+
+    buffer.seek(0)
+    return buffer.getvalue(), files_count, pdf_included, len(skipped_pdfs)

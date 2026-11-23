@@ -1,7 +1,7 @@
 """Read-only columns taken from the company form (stages 1, 2, 4 and 5)."""
 from __future__ import annotations
 
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 
 from django.core.exceptions import ObjectDoesNotExist
 
@@ -74,6 +74,7 @@ _MOUNT = dict(TV_MOUNT_CHOICES)
 _PUBLICATION = (
     ('none', 'brak'),
     ('pending', 'nie wysłano'),
+    ('draft', 'szkic w Strapi'),
     ('exported', 'wysłano na stronę'),
     ('error', 'błąd wysyłki'),
 )
@@ -255,8 +256,39 @@ def _package_cost(ctx: RowContext):
     return calculate_base_package_cost(ctx.company, settings_obj)['cost']
 
 
+_MONEY_EDIT_ROLES = frozenset({STAFF_ROLE_FR, STAFF_ROLE_LG})
+
+
+def _extra_cost(ctx: RowContext):
+    return ctx.company.extra_cost if ctx.company.extra_cost is not None else Decimal('0.00')
+
+
+def _set_extra_cost(company, value) -> None:
+    if value in (None, ''):
+        amount = Decimal('0.00')
+    else:
+        amount = Decimal(str(value)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    company.extra_cost = amount
+    company.save(update_fields=['extra_cost'])
+
+
+def _extra_cost_description(ctx: RowContext) -> str:
+    return ctx.company.extra_cost_description or ''
+
+
+def _set_extra_cost_description(company, value) -> None:
+    company.extra_cost_description = (str(value).strip() if value else '')[:500]
+    company.save(update_fields=['extra_cost_description'])
+
+
 def _surcharge_total(ctx: RowContext):
-    return _package_cost(ctx) + _paid_equipment(ctx) + _extra_lunch_cost(ctx) + _jobwall_cost(ctx)
+    return (
+        _package_cost(ctx)
+        + _paid_equipment(ctx)
+        + _extra_lunch_cost(ctx)
+        + _jobwall_cost(ctx)
+        + _extra_cost(ctx)
+    )
 
 
 def _job_lines(ctx: RowContext) -> str:
@@ -397,7 +429,7 @@ def _publication(ctx: RowContext) -> str:
     if pub.last_error:
         return 'error'
     if pub.last_exported_at:
-        return 'exported'
+        return 'exported' if pub.content_published else 'draft'
     return 'pending'
 
 
@@ -824,10 +856,25 @@ JOBWALL_COST = ColumnDef(
     group=GROUP_MONEY, width=140, getter=_jobwall_cost, aggregate='sum', highlight='positive',
     help='Pakiety dodatkowych ofert JobWall (+2 / +3 oferty) ponad darmowy próg pakietu.',
 )
+EXTRA_COST = ColumnDef(
+    key='money.extra_cost', label='Dodatkowe koszty\n(netto)', kind=KIND_NUMBER, source=SOURCE_CUSTOM,
+    group=GROUP_MONEY, width=140, getter=_extra_cost, setter=_set_extra_cost,
+    edit_roles=_MONEY_EDIT_ROLES, aggregate='sum', highlight='positive',
+    help=(
+        'Ręczna dopłata lub korekta netto (np. kara regulaminowa, wycena indywidualna 12 m², dodatkowa usługa). '
+        'Wlicza się do Sumy netto, formularza firmy i PDF zamówienia.'
+    ),
+)
+EXTRA_COST_DESCRIPTION = ColumnDef(
+    key='money.extra_description', label='Opis dodatkowych\nkosztów', kind=KIND_LONGTEXT, source=SOURCE_CUSTOM,
+    group=GROUP_MONEY, width=220, max_length=500, getter=_extra_cost_description, setter=_set_extra_cost_description,
+    edit_roles=_MONEY_EDIT_ROLES,
+    help='Opis dodatkowego kosztu widoczny w formularzu firmy i PDF zamówienia (np. „Kara regulaminowa”).',
+)
 MONEY_TOTAL = ColumnDef(
     key='money.total', label='Suma netto', kind=KIND_NUMBER, source=SOURCE_COMPUTED, group=GROUP_MONEY,
     width=130, getter=_surcharge_total, aggregate='sum', highlight='positive',
-    help='Pakiet / stoisko + wyposażenie + obiady ponad limit + pakiety JobWall (netto).',
+    help='Pakiet / stoisko + wyposażenie + obiady ponad limit + pakiety JobWall + dodatkowe koszty (netto).',
 )
 ORDER_PDF = ColumnDef(
     key='money.pdf', label='PDF zamówienia', kind=KIND_FILE, source=SOURCE_COMPUTED, group=GROUP_MONEY,

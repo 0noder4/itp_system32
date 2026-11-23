@@ -515,14 +515,22 @@ class OpiekunLgFrTests(SheetsApiBase):
         }
         keys = list(cols)
         self.assertLess(keys.index('care.arrival_day'), keys.index('care.slot'))
-        self.assertLess(keys.index('care.slot'), keys.index('arrival.day1'))
+        self.assertLess(keys.index('care.driver'), keys.index('mail3.arrival_time'))
+        self.assertLess(keys.index('mail3.arrival_time'), keys.index('care.pickup'))
         self.assertLess(keys.index('care.pickup'), keys.index('care.pickup_time'))
+        self.assertNotIn('arrival.day1', keys)
+        self.assertNotIn('arrival.day2', keys)
         self.assertEqual(cols['care.arrival_day']['label'], 'Dzień montażu')
         self.assertEqual(cols['stand.composition']['label'], 'Wymiary zabudowy')
         self.assertEqual(cols['care.composition']['label'], 'Z czego składa się zabudowa')
-        self.assertEqual(cols['arrival.day1']['label'], 'Wejście\ndzień 1')
-        self.assertIn('montażu', cols['arrival.day1']['help'])
+        self.assertEqual(cols['mail3.arrival_time']['label'], 'Przyjazd od 6:30')
         self.assertIn('Bez godziny', cols['care.slot']['help'])
+        self.assertEqual(cols['care.pickup']['kind'], 'select')
+        self.assertEqual(cols['care.pickup_time']['kind'], 'select')
+        self.assertEqual(
+            [opt['value'] for opt in cols['care.pickup_time']['options']],
+            ['14-15', '15-16', '16-17', '17-18'],
+        )
         glowny = {
             col['key']: col
             for col in self.as_user(self.fr).get('/api/sheets/lg/glowny/').data['columns']
@@ -1336,8 +1344,8 @@ class OpiekunKrok3Tests(SheetsApiBase):
         self.assertIn('Godzina odbioru', matrix['matrix.slot.14-16']['help'])
 
     def test_matrix_places_company_by_day_and_slot(self):
-        day1 = '2027-03-09'
-        day2 = '2027-03-10'
+        day1 = '2027-03-08'
+        day2 = '2027-03-09'
 
         def own(name, day, slot):
             company = Company.objects.create(name=name, email=f'{name}@e.com', status='partner')
@@ -1359,7 +1367,8 @@ class OpiekunKrok3Tests(SheetsApiBase):
 
         monday = self.as_user(self.fr).get('/api/sheets/opiekun/montaz_1/').data
         self.assertEqual(monday['tab']['view'], 'matrix')
-        self.assertIn('Wtorek', monday['tab']['title'])
+        self.assertIn('Poniedziałek', monday['tab']['title'])
+        self.assertEqual(monday['matrix']['day'], day1)
         self.assertEqual(monday['matrix']['edit_tab'], 'glowny')
         self.assertEqual(monday['matrix']['comment_column']['key'], 'care.slot')
         self.assertEqual(monday['matrix']['comment_column']['kind'], 'select')
@@ -1386,15 +1395,63 @@ class OpiekunKrok3Tests(SheetsApiBase):
         self.assertNotIn('BezZabudowy', no_text)
 
         tuesday = self.as_user(self.fr).get('/api/sheets/opiekun/montaz_2/').data
-        self.assertIn('Środa', tuesday['tab']['title'])
+        self.assertIn('Wtorek', tuesday['tab']['title'])
+        self.assertEqual(tuesday['matrix']['day'], day2)
         joined = ' '.join(
             row['cells']['matrix.slot.16-18'] or '' for row in tuesday['rows']
         )
         self.assertIn('DrugiDzien', joined)
+
+        wednesday = self.as_user(self.fr).get('/api/sheets/opiekun/montaz_3/').data
+        self.assertIn('Środa', wednesday['tab']['title'])
+        self.assertEqual(wednesday['matrix']['day'], '2027-03-10')
+
+        catalog_tabs = {
+            s['key']: [t['title'] for t in s['tabs']]
+            for s in self.as_user(self.fr).get('/api/sheets/').data
+        }['opiekun']
+        self.assertFalse(any('Czwartek' in title for title in catalog_tabs))
+
+        glowny_cols = {
+            col['key']: col
+            for col in self.as_user(self.fr).get('/api/sheets/opiekun/glowny/').data['columns']
+        }
+        arrival_values = [opt['value'] for opt in glowny_cols['care.arrival_day']['options']]
+        self.assertEqual(arrival_values, ['2027-03-08', '2027-03-09', '2027-03-10'])
+
         readonly = self.patch(self.fr, [
             {'company_id': -1, 'column_key': 'matrix.pos', 'value': 'x', 'base': '1'},
         ], url='/api/sheets/opiekun/montaz_1/cells/')
         self.assertEqual(readonly.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_montage_dates_follow_settings_fair_days(self):
+        settings_obj = Settings.get_settings()
+        settings_obj.day1_date = date(2027, 4, 6)  # wtorek 6.04 -> poniedziałek 5.04
+        settings_obj.day2_date = date(2027, 4, 7)  # środa 7.04
+        settings_obj.save()
+
+        glowny_cols = {
+            col['key']: col
+            for col in self.as_user(self.fr).get('/api/sheets/opiekun/glowny/').data['columns']
+        }
+        arrival_options = glowny_cols['care.arrival_day']['options']
+        self.assertEqual(
+            [opt['value'] for opt in arrival_options],
+            ['2027-04-05', '2027-04-06', '2027-04-07'],
+        )
+        self.assertTrue(arrival_options[0]['label'].startswith('poniedziałek 5.04'))
+
+        m1 = self.as_user(self.fr).get('/api/sheets/opiekun/montaz_1/').data
+        self.assertEqual(m1['tab']['title'], 'Poniedziałek 5.04')
+        self.assertEqual(m1['matrix']['day'], '2027-04-05')
+
+        catalog_tabs = {
+            s['key']: [t['title'] for t in s['tabs']]
+            for s in self.as_user(self.fr).get('/api/sheets/').data
+        }['opiekun']
+        self.assertIn('Poniedziałek 5.04', catalog_tabs)
+        self.assertIn('Wtorek 6.04', catalog_tabs)
+        self.assertIn('Środa 7.04', catalog_tabs)
 
     def test_footer_day_split_only_when_it_is_a_fair_day_subset(self):
         meals = {col['key']: col for col in self.as_user(self.fr).get(self.MEALS).data['columns']}
@@ -2976,3 +3033,214 @@ class Etap7SheetsFeaturesTests(SheetsApiBase):
         self.assertEqual(guest_hist.status_code, 200, guest_hist.data)
         guest_kinds = {e['kind'] for e in guest_hist.data}
         self.assertEqual(guest_kinds, {'commit', 'proposal'})
+
+    def test_catalogue_publication_column_distinguishes_draft_and_published(self):
+        from django.utils import timezone
+        from companies.models import WebsitePublication
+
+        pub = WebsitePublication.objects.create(
+            company=self.partner,
+            strapi_document_id='doc-draft',
+            last_exported_at=timezone.now(),
+            content_published=False,
+        )
+        rows = {
+            row['company_id']: row['cells']['catalogue.publication']
+            for row in self.as_user(self.fr).get('/api/sheets/fr/katalog/').data['rows']
+        }
+        self.assertEqual(rows[self.partner.id], 'draft')
+
+        pub.content_published = True
+        pub.save(update_fields=['content_published'])
+        rows_after = {
+            row['company_id']: row['cells']['catalogue.publication']
+            for row in self.as_user(self.fr).get('/api/sheets/fr/katalog/').data['rows']
+        }
+        self.assertEqual(rows_after[self.partner.id], 'exported')
+
+    def test_pickup_selects_and_extra_cost_in_fr_rozliczenia(self):
+        from datetime import date
+        from companies.models import Settings
+
+        settings_obj = Settings.get_settings()
+        settings_obj.day1_date = date(2027, 4, 6)
+        settings_obj.day2_date = date(2027, 4, 7)
+        settings_obj.save()
+
+        przyjazdy_cols = {
+            col['key']: col
+            for col in self.as_user(self.fr).get('/api/sheets/lg/przyjazdy/').data['columns']
+        }
+        self.assertEqual(
+            [opt['value'] for opt in przyjazdy_cols['care.pickup']['options']],
+            ['2027-04-06', '2027-04-07'],
+        )
+        ok_pickup = self.patch(
+            self.fr,
+            [
+                {'company_id': self.partner.id, 'column_key': 'care.pickup', 'value': '2027-04-07', 'base': None},
+                {'company_id': self.partner.id, 'column_key': 'care.pickup_time', 'value': '16-17', 'base': None},
+            ],
+            url='/api/sheets/lg/przyjazdy/cells/',
+        )
+        self.assertEqual(ok_pickup.status_code, 200, ok_pickup.data)
+        bad_pickup = self.patch(
+            self.fr,
+            [{'company_id': self.partner.id, 'column_key': 'care.pickup_time', 'value': '18-20', 'base': None}],
+            url='/api/sheets/lg/przyjazdy/cells/',
+        )
+        self.assertEqual(bad_pickup.status_code, status.HTTP_400_BAD_REQUEST)
+
+        before = {
+            row['company_id']: row['cells']
+            for row in self.as_user(self.fr).get('/api/sheets/fr/rozliczenia/').data['rows']
+        }[self.partner.id]
+        base_total = float(before['money.total'])
+
+        edit_extra = self.patch(
+            self.fr,
+            [
+                {'company_id': self.partner.id, 'column_key': 'money.extra_cost', 'value': 350.5, 'base': 0},
+                {'company_id': self.partner.id, 'column_key': 'money.extra_description', 'value': 'Kara regulaminowa', 'base': ''},
+            ],
+            url='/api/sheets/fr/rozliczenia/cells/',
+        )
+        self.assertEqual(edit_extra.status_code, 200, edit_extra.data)
+
+        after = {
+            row['company_id']: row['cells']
+            for row in self.as_user(self.fr).get('/api/sheets/fr/rozliczenia/').data['rows']
+        }[self.partner.id]
+        self.assertAlmostEqual(float(after['money.extra_cost']), 350.5, places=2)
+        self.assertEqual(after['money.extra_description'], 'Kara regulaminowa')
+        self.assertAlmostEqual(float(after['money.total']), base_total + 350.5, places=2)
+
+    def test_sheet_media_zip_export_layout_drafts_custom_and_scoping(self):
+        from io import BytesIO
+        import tempfile
+        import zipfile
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from companies.models import BasicData
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with self.settings(MEDIA_ROOT=tmpdir):
+                self.partner.opiekun = self.opiekun
+                self.partner.save(update_fields=['opiekun'])
+                BasicData.objects.create(
+                    company=self.partner,
+                    full_name='Partner Sp. z o.o.',
+                    nip='1234567890',
+                )
+                Stand.objects.create(company=self.partner, stand_number='A1', stand_size='standardowy', day='day1')
+                Stand.objects.create(company=self.partner, stand_number='A2', stand_size='standardowy', day='day2')
+                StandDetails.objects.create(
+                    company=self.partner,
+                    fire_cert=SimpleUploadedFile('cert.pdf', b'live-cert', content_type='application/pdf'),
+                    stand_visualization=SimpleUploadedFile('wiz.png', b'live-wiz', content_type='image/png'),
+                    logo_sign_file=SimpleUploadedFile('fryz.png', b'live-fryz', content_type='image/png'),
+                )
+
+                # Custom multi-file column "Mega"
+                created = self.as_user(self.lg).post(
+                    '/api/sheets/lg/glowny/columns/',
+                    {'label': 'Mega', 'group': 'MEDIA', 'kind': 'file_link'},
+                    format='json',
+                )
+                self.assertEqual(created.status_code, 201, created.data)
+                mega_key = created.data['column']['key']
+                up = self.as_user(self.lg).post(
+                    '/api/sheets/lg/glowny/cells/media/',
+                    {
+                        'company_id': self.partner.id,
+                        'column_key': mega_key,
+                        'files': [
+                            SimpleUploadedFile('Karpiński.jpg', b'karp-bytes', content_type='image/jpeg'),
+                            SimpleUploadedFile('Grot.jpg', b'grot-bytes', content_type='image/jpeg'),
+                        ],
+                    },
+                    format='multipart',
+                )
+                self.assertEqual(up.status_code, 200, up.data)
+
+                # Draft file on Basic sp (no live StandDetails file yet)
+                draft_resp = self.as_user(self.lg).post(
+                    '/api/sheets/lg/glowny/cells/file/',
+                    {
+                        'company_id': self.basic.id,
+                        'column_key': 'sign.fire_cert',
+                        'mode': 'draft',
+                        'file': SimpleUploadedFile('roboczy_cert.pdf', b'draft-cert', content_type='application/pdf'),
+                    },
+                    format='multipart',
+                )
+                self.assertEqual(draft_resp.status_code, 200, draft_resp.data)
+
+                # LG exports ZIP across multiple columns and both companies
+                zip_resp = self.as_user(self.lg).post(
+                    '/api/sheets/lg/glowny/media/',
+                    {
+                        'cells': [
+                            {'company_id': self.partner.id, 'column_key': 'sign.fire_cert'},
+                            {'company_id': self.partner.id, 'column_key': 'sign.visualization'},
+                            {'company_id': self.partner.id, 'column_key': 'sign.logo'},
+                            {'company_id': self.partner.id, 'column_key': mega_key},
+                            {'company_id': self.basic.id, 'column_key': 'sign.fire_cert'},
+                        ],
+                    },
+                    format='json',
+                )
+                self.assertEqual(zip_resp.status_code, 200)
+                self.assertEqual(zip_resp['Content-Type'], 'application/zip')
+                self.assertEqual(zip_resp['X-Export-Files-Count'], '6')
+
+                with zipfile.ZipFile(BytesIO(zip_resp.content), 'r') as archive:
+                    names = sorted(archive.namelist())
+                    self.assertEqual(
+                        names,
+                        sorted([
+                            'fire_certs/[A1][A2] Partner Sp. z o.o..pdf',
+                            'stand_visualizations/[A1][A2] Partner Sp. z o.o..png',
+                            'logos/[A1][A2] Partner Sp. z o.o..png',
+                            'Mega/[A1][A2] Partner Sp. z o.o. - Karpiński.jpg',
+                            'Mega/[A1][A2] Partner Sp. z o.o. - Grot.jpg',
+                            'fire_certs/[][] Basic sp.pdf',
+                        ]),
+                    )
+                    self.assertEqual(archive.read('fire_certs/[A1][A2] Partner Sp. z o.o..pdf'), b'live-cert')
+                    self.assertEqual(archive.read('Mega/[A1][A2] Partner Sp. z o.o. - Karpiński.jpg'), b'karp-bytes')
+                    self.assertEqual(archive.read('fire_certs/[][] Basic sp.pdf'), b'draft-cert')
+
+                # Opiekun scoping: requests both companies, gets only partner
+                op_zip = self.as_user(self.opiekun).post(
+                    '/api/sheets/opiekun/glowny/media/',
+                    {
+                        'cells': [
+                            {'company_id': self.partner.id, 'column_key': 'sign.fire_cert'},
+                            {'company_id': self.basic.id, 'column_key': 'sign.fire_cert'},
+                        ],
+                    },
+                    format='json',
+                )
+                self.assertEqual(op_zip.status_code, 200)
+                self.assertEqual(op_zip['X-Export-Files-Count'], '1')
+                with zipfile.ZipFile(BytesIO(op_zip.content), 'r') as archive:
+                    self.assertEqual(archive.namelist(), ['fire_certs/[A1][A2] Partner Sp. z o.o..pdf'])
+
+                # Opiekun cannot hit LG sheet endpoint
+                self.assertEqual(
+                    self.as_user(self.opiekun).post(
+                        '/api/sheets/lg/glowny/media/',
+                        {'cells': [{'company_id': self.partner.id, 'column_key': 'sign.fire_cert'}]},
+                        format='json',
+                    ).status_code,
+                    status.HTTP_404_NOT_FOUND,
+                )
+
+                # Empty result returns 204
+                empty_resp = self.as_user(self.lg).post(
+                    '/api/sheets/lg/glowny/media/',
+                    {'cells': [{'company_id': self.basic.id, 'column_key': 'sign.visualization'}]},
+                    format='json',
+                )
+                self.assertEqual(empty_resp.status_code, status.HTTP_204_NO_CONTENT)
+                self.assertEqual(empty_resp['X-Export-Files-Count'], '0')

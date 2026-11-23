@@ -918,16 +918,12 @@ export function Stage2Form({
           </FieldGroup>
           <FieldGroup>
             <FieldLabel>
-              {t("exhibitor.form.uploadLogo")}{" "}
-              <span className="text-red-500">*</span>
+              {t("exhibitor.form.uploadLogo")}
             </FieldLabel>
             <div className="relative">
               <input
                 type="file"
                 accept="image/*"
-                required={
-                  watchStandType === "provided_stand" && !existingLogoFile
-                }
                 onChange={(e) => {
                   const file = e.target.files?.[0] || null;
                   handleFileChange("logo_sign_file", file);

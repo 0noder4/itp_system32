@@ -56,7 +56,6 @@ from .extras import (
     MAIL4_SENT,
     MAIL5_NOTES,
     MAIL5_SENT,
-    MONTAGE_DATES,
     STAFF_MEAL_DAY1,
     STAFF_MEAL_DAY2,
     STAFF_MEAL_NOTE,
@@ -67,6 +66,7 @@ from .extras import (
     WELCOME_LUNCH_SUM,
     WELCOME_LUNCHES_COUNT,
     WELCOME_LUNCHES_ISSUED,
+    montage_dates,
     montage_tab_title,
 )
 from .form_columns import (
@@ -191,10 +191,9 @@ MATRIX_COLUMNS = (
 
 
 def _montage_tab(index: int) -> TabDef:
-    day = MONTAGE_DATES[index]
     return TabDef(
         key=f'montaz_{index + 1}',
-        title=montage_tab_title(day),
+        title=lambda idx=index: montage_tab_title(montage_dates()[idx]),
         columns=MATRIX_COLUMNS,
         view=VIEW_MATRIX,
         select_related=('stand_details',),

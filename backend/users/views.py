@@ -18,7 +18,14 @@ from .serializers import (
 )
 from users.permissions import HasStaffRole
 from companies.models import Company, Settings as CompanySettings, compute_invitation_expires_at
-from users.models import User, StaffInvitation
+from users.models import (
+    User,
+    StaffInvitation,
+    STAFF_ROLE_FR,
+    STAFF_ROLE_LG,
+    STAFF_ROLE_OPIEKUN,
+    STAFF_ROLE_TR,
+)
 
 class CurrentUserView(APIView):
     """
@@ -214,12 +221,71 @@ class StaffListView(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
+ADMIN_ONLY_INVITE_ROLES = frozenset({STAFF_ROLE_FR, STAFF_ROLE_LG, STAFF_ROLE_TR})
+
+_STAFF_INVITE_COPY = {
+    (STAFF_ROLE_OPIEKUN, 'pl'): (
+        "Dokończ rejestrację opiekuna - Inżynierskie Targi Pracy - ITP System",
+        "Dokończ rejestrację opiekuna",
+        "Zostałeś zaproszony do systemu Inżynierskich Targów Pracy jako opiekun firm.",
+    ),
+    (STAFF_ROLE_OPIEKUN, 'en'): (
+        "Complete guardian registration - Engineering Job Fair - ITP System",
+        "Complete guardian registration",
+        "You have been invited to the Engineering Job Fair platform as a company guardian.",
+    ),
+    (STAFF_ROLE_FR, 'pl'): (
+        "Dokończ rejestrację FR - Inżynierskie Targi Pracy - ITP System",
+        "Dokończ rejestrację FR",
+        "Zostałeś zaproszony do systemu Inżynierskich Targów Pracy jako członek zespołu FR.",
+    ),
+    (STAFF_ROLE_FR, 'en'): (
+        "Complete FR registration - Engineering Job Fair - ITP System",
+        "Complete FR registration",
+        "You have been invited to the Engineering Job Fair platform as an FR team member.",
+    ),
+    (STAFF_ROLE_LG, 'pl'): (
+        "Dokończ rejestrację LG - Inżynierskie Targi Pracy - ITP System",
+        "Dokończ rejestrację LG",
+        "Zostałeś zaproszony do systemu Inżynierskich Targów Pracy jako członek zespołu LG (logistyka).",
+    ),
+    (STAFF_ROLE_LG, 'en'): (
+        "Complete LG registration - Engineering Job Fair - ITP System",
+        "Complete LG registration",
+        "You have been invited to the Engineering Job Fair platform as an LG (logistics) team member.",
+    ),
+    (STAFF_ROLE_TR, 'pl'): (
+        "Dokończ rejestrację TR - Inżynierskie Targi Pracy - ITP System",
+        "Dokończ rejestrację TR",
+        "Zostałeś zaproszony do systemu Inżynierskich Targów Pracy jako członek zespołu TR (warsztaty).",
+    ),
+    (STAFF_ROLE_TR, 'en'): (
+        "Complete TR registration - Engineering Job Fair - ITP System",
+        "Complete TR registration",
+        "You have been invited to the Engineering Job Fair platform as a TR (workshops) team member.",
+    ),
+}
+
+
 class StaffInvitationView(generics.CreateAPIView):
-    """POST /api/staff-invite/ — FR invites an opiekun; sends registration email."""
+    """POST /api/staff-invite/ — FR invites an opiekun (admin can also invite FR/LG/TR); sends registration email."""
 
     serializer_class = StaffInvitationSerializer
     queryset = StaffInvitation.objects.all()
     permission_classes = [IsAuthenticated, HasStaffRole("fr")]
+
+    def create(self, request, *args, **kwargs):
+        raw_role = request.data.get('role') if isinstance(request.data, dict) else None
+        if (
+            isinstance(raw_role, str)
+            and raw_role.strip() in ADMIN_ONLY_INVITE_ROLES
+            and getattr(request.user, 'type', None) != 'admin'
+        ):
+            return Response(
+                {'detail': 'Tylko administrator może zapraszać członków FR, LG i TR.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        return super().create(request, *args, **kwargs)
 
     def perform_create(self, serializer):
         invitation = serializer.save(created_by=self.request.user)
@@ -241,11 +307,14 @@ class StaffInvitationView(generics.CreateAPIView):
         template_name = f"emails/staff_invitation_{language}.html"
         staff_email = invitation.created_by.email if invitation.created_by and invitation.created_by.email else None
         default_email = CompanySettings.get_settings().get_general_contact_email()
+        subject, heading, intro = _STAFF_INVITE_COPY.get(
+            (invitation.role, language),
+            _STAFF_INVITE_COPY[(STAFF_ROLE_OPIEKUN, language)],
+        )
 
         if language == 'pl':
-            subject = "Dokończ rejestrację opiekuna - Inżynierskie Targi Pracy - ITP System"
             plain_message = dedent(f"""
-                Zostałeś zaproszony do systemu Inżynierskich Targów Pracy jako opiekun firm.
+                {intro}
                 Twój login: {invitation.email}
 
                 Dokończ rejestrację:
@@ -254,9 +323,8 @@ class StaffInvitationView(generics.CreateAPIView):
                 Link wygaśnie za {validity_days} dni.
             """).strip()
         else:
-            subject = "Complete guardian registration - Engineering Job Fair - ITP System"
             plain_message = dedent(f"""
-                You have been invited to the Engineering Job Fair platform as a company guardian.
+                {intro}
                 Your login: {invitation.email}
 
                 Complete your registration:
@@ -266,6 +334,8 @@ class StaffInvitationView(generics.CreateAPIView):
             """).strip()
 
         html_content = render_to_string(template_name, {
+            'heading': heading,
+            'intro': intro,
             'login': invitation.email,
             'registration_link': registration_link,
             'logo_url': logo_url,

@@ -13,6 +13,27 @@ export type UpdateOverviewEntry = {
 
 export const updateOverviews: readonly UpdateOverviewEntry[] = [
   {
+    releaseDate: "2026-11-23",
+    highlights: [
+      "Zaproszenia członków zespołu FR, LG i TR bezpośrednio z panelu FR (dla admina) oraz skrócone wpisywanie adresu Best — wystarczy sama nazwa przed @.",
+      "Nowe zbiorcze okno „Eksportuj” w Panelu FR (XLSX, CSV oraz paczka ZIP z plikami mediowymi i opcjonalnymi PDF-ami zamówienia, z wyborem sekcji i zakresu firm) oraz pobieranie mediów jako jedno archiwum ZIP w Arkuszach.",
+      "Rozróżnienie statusu „Szkic w Strapi” od pełnej publikacji na stronie (w dialogu eksportu na stronę, przy usuwaniu szkicu oraz w arkuszu FR → Katalog i Jobwall) i zaktualizowane treści FAQ dla 33. ITP.",
+      "Zaproszenie Wystawcy z opcjonalnym planowanym rozmiarem stoiska (4/6/8 m²) i liczbą dni (1/2), dzięki czemu firma od razu widzi cenę pakietu w Etapie 1 przed przypisaniem numeru na mapie.",
+      "Rozliczenia (FR → Rozliczenia): nowe edytowalne kolumny „Dodatkowe koszty (netto)” i „Opis dodatkowych kosztów” (np. kary lub wycena 12 m²), wliczane do Sumy netto, widoczne w formularzu firmy i w PDF zamówienia.",
+      "Poprawki formularzy i mapy: usuwanie stoiska dla pojedynczego dnia i odznaczanie kliknięciem na mapie, nieobowiązkowy plik logotypu na fryz w Etapie 2 oraz usunięcie godzin przyjazdu z Etapu 5 (w LG → Przyjazdy jest teraz kolumna „Przyjazd od 6:30”).",
+      "Arkusze i backup: dni montażu przesunięte na poniedziałek–środę (bez czwartku), listy rozwijane dla dnia i godziny odbioru zabudowy (14–18), dopasowanie szerokości kolumn do nagłówków oraz spłaszczona mapa hali 2D i lista stoisk w nocnym backupie Excela.",
+    ],
+    worthChecking: [
+      "Panel FR → Zaproś → zakładki FR / LG / TR (konto admina) i Opiekun → wpisz samą nazwę przed @; przy zaproszeniu Wystawcy sprawdź opcjonalny wybór rozmiaru stoiska i liczby dni.",
+      "Panel FR → Eksportuj → wybierz XLSX / CSV / Pliki mediowe ZIP (w tym PDF-y zamówienia), zakres firm i sekcje danych; w Arkuszach sprawdź Eksport → Pliki mediowe (ZIP).",
+      "Panel FR → Edytuj stoisko firmy → odznacz wybrane (niebieskie) stoisko kliknięciem albo wyczyść jeden dzień i zapisz.",
+      "Arkusze → FR → Rozliczenia → wpisz „Dodatkowe koszty (netto)” i opis → sprawdź aktualizację Sumy netto, podsumowania kosztów u wystawcy oraz PDF zamówienia.",
+      "Arkusze → Opiekun / LG → Przyjazdy → sprawdź zakładki montażu (poniedziałek–środa), listy rozwijane „Kiedy odbiór” / „Godzina odbioru” (14–18), kolumnę „Przyjazd od 6:30” oraz przycisk dopasowania szerokości w Ustawieniach.",
+      "Panel firmy → Etap 2 (zabudowa organizatora bez pliku logo) oraz Etap 5 (brak sekcji godzin przyjazdu); sprawdź też Eksport na stronę z odznaczoną publikacją („Szkic w Strapi”).",
+      "Po zalogowaniu → przegląd aktualizacji → data 23.11.2026.",
+    ],
+  },
+  {
     releaseDate: "2026-11-22",
     highlights: [
       "Cennik w ustawieniach systemu (stoiska 4–12 m², pakiety Partner / Partner Główny, pakiety JobWall +2/+3 i limity obiadów) oraz podsumowanie kosztów netto w formularzach wystawcy i w arkuszu FR.",
@@ -175,23 +196,6 @@ export const updateOverviews: readonly UpdateOverviewEntry[] = [
       "Panel staff → firma → Edytuj stoisko → kliknij wolne miejsce na mapie → zapisz; spróbuj zajętego numeru.",
       "Panel firmy → Mapa → własne stoisko podświetlone; bez stoisk innych firm.",
       "Konto admin → Mapa → Przywróć domyślną → potwierdź.",
-    ],
-  },
-  {
-    releaseDate: "2026-10-11",
-    highlights: [
-      "Etap 4 (Jobwall): pierwsze ogłoszenia mogą być darmowe — liczbę ustawia się w ustawieniach systemu; kolejne są płatne, a koszt widać w formularzu.",
-      "Limity długości w etapie 4: opis firmy do katalogu do 1700 znaków; treść oferty (opis + benefity + wymagania) łącznie do 2000 znaków, z licznikiem.",
-      "W opisach etapu 4 są linki do zakładki Katalog i Oferty Pracy na stronie targów.",
-      "Numer edycji targów (np. System 33) ustawia się w panelu admina — widać go w nazwie systemu i tytule przeglądarki bez przebudowy frontendu.",
-      "W etapie 1 numer domu i numer lokalu nie są już wymagane.",
-    ],
-    worthChecking: [
-      "Panel firmy → Etap 4 → komunikat o darmowych ogłoszeniach; dodaj 3. ofertę → koszt jednej płatnej.",
-      "Panel firmy → Etap 4 → licznik znaków przy opisie katalogu i przy ofercie; kliknij link Katalog / Oferty Pracy.",
-      "Django Admin → Settings → numer edycji / liczba darmowych ogłoszeń Jobwall → odśwież panel (nazwa System XX).",
-      "Panel firmy → Etap 1 → zapis bez numeru domu / lokalu.",
-      "Panel staff → po zalogowaniu → przegląd aktualizacji → data 11.10.2026.",
     ],
   },
 ];

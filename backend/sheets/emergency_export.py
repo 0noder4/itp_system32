@@ -17,6 +17,7 @@ from django.core.mail import send_mail
 from companies.models import Settings
 
 from .definitions import CATALOG
+from .map_export import build_map_sheet_entries
 from .service import build_tab_payload, visible_columns
 from .values import present
 from .xlsx import build_xlsx_workbook
@@ -86,7 +87,19 @@ def _build_tab_sheet_entry(sheet, tab, user, *, sheet_name: str) -> dict:
         fills.append([cell_styles.get(f'{row_id}|{col.key}') for col in defs])
         bold.append([False] * width)
 
-    col_widths = [max(10.0, min(50.0, round(col.width / 7.5, 2))) for col in defs]
+    col_widths = [
+        max(
+            10.0,
+            min(
+                50.0,
+                max(
+                    round(col.width / 7.5, 2),
+                    max((len(line) for line in col.label.splitlines()), default=0) + 4.0,
+                ),
+            ),
+        )
+        for col in defs
+    ]
     freeze_cols = min(tab.frozen_columns, width)
     return {
         'name': sheet_name,
@@ -100,7 +113,7 @@ def _build_tab_sheet_entry(sheet, tab, user, *, sheet_name: str) -> dict:
 
 
 def build_emergency_xlsx_files() -> dict[str, bytes]:
-    """Generate 4 per-sheet .xlsx files plus 1 combined workbook."""
+    """Generate 4 per-sheet .xlsx files, hall map .xlsx, plus 1 combined workbook."""
     user = _SystemExportUser()
     files: dict[str, bytes] = {}
     combined_tabs: list[dict] = []
@@ -108,18 +121,24 @@ def build_emergency_xlsx_files() -> dict[str, bytes]:
     for sheet in CATALOG.sheets.values():
         per_sheet_tabs: list[dict] = []
         for tab in sheet.tabs:
+            tab_title = tab.resolve_title()
             per_sheet_tabs.append(
-                _build_tab_sheet_entry(sheet, tab, user, sheet_name=tab.title)
+                _build_tab_sheet_entry(sheet, tab, user, sheet_name=tab_title)
             )
             combined_tabs.append(
                 _build_tab_sheet_entry(
                     sheet,
                     tab,
                     user,
-                    sheet_name=_combined_tab_name(sheet.key, sheet.title, tab.title),
+                    sheet_name=_combined_tab_name(sheet.key, sheet.title, tab_title),
                 )
             )
         files[f'{sheet.key}.xlsx'] = build_xlsx_workbook(per_sheet_tabs)
+
+    map_tabs = build_map_sheet_entries()
+    files['mapa.xlsx'] = build_xlsx_workbook(map_tabs)
+    for map_tab, combined_name in zip(map_tabs, ('Mapa - Wizualna', 'Mapa - Lista stoisk')):
+        combined_tabs.append({**map_tab, 'name': combined_name})
 
     files['wszystkie-arkusze.xlsx'] = build_xlsx_workbook(combined_tabs)
     return files

@@ -11,9 +11,9 @@ from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import TestCase
 
-from companies.models import Company, Feedback, Settings, Workshop
+from companies.models import Company, Feedback, MapLayout, Settings, Stand, Workshop
 
-from .emergency_export import WARSAW_TZ
+from .emergency_export import WARSAW_TZ, build_emergency_xlsx_files
 from .models import SheetCellStyle, StaffMeal
 
 User = get_user_model()
@@ -52,6 +52,12 @@ class EmergencyXlsxExportTests(TestCase):
             status='main',
             opiekun=self.opiekun,
         )
+        Stand.objects.create(
+            company=self.company, day='day1', stand_number='C5', stand_size='rozszerzony'
+        )
+        Stand.objects.create(
+            company=self.company, day='day2', stand_number='C5', stand_size='rozszerzony'
+        )
         Workshop.objects.create(company=self.company, workshop=True, title='Backup Workshop')
         Feedback.objects.create(company=self.company, form='stage_1', status='accepted')
         StaffMeal.objects.create(user=self.opiekun, day1=True, note='bez laktozy')
@@ -77,7 +83,8 @@ class EmergencyXlsxExportTests(TestCase):
                 'fr.xlsx': 3,
                 'tr.xlsx': 1,
                 'opiekun.xlsx': 6,
-                'wszystkie-arkusze.xlsx': 18,
+                'mapa.xlsx': 2,
+                'wszystkie-arkusze.xlsx': 20,
             }
             actual_files = {p.name for p in export_dir.iterdir() if p.is_file()}
             self.assertEqual(actual_files, set(expected_counts))
@@ -97,6 +104,45 @@ class EmergencyXlsxExportTests(TestCase):
             self.assertIn('FEF08A', opiekun_blob)
 
         self.assertEqual(len(mail.outbox), 0)
+
+    def test_mapa_xlsx_visual_list_and_repartitioned_booths(self):
+        from companies.map_seed import apply_repartition
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            files = build_emergency_xlsx_files()
+            mapa_path = Path(tmpdir) / 'mapa.xlsx'
+            mapa_path.write_bytes(files['mapa.xlsx'])
+
+            with zipfile.ZipFile(mapa_path, 'r') as zf:
+                self.assertIsNone(zf.testzip())
+                for name in zf.namelist():
+                    if name.endswith('.xml') or name.endswith('.rels'):
+                        ET.fromstring(zf.read(name))
+
+            self.assertEqual(_sheet_names(mapa_path), ['Mapa wizualna', 'Lista stoisk'])
+            blob = _combined_xml_text(mapa_path)
+            self.assertIn('C5 (8 m²)\nBackupTestCo', blob)
+            for label in ('A1', 'A10', 'B3', 'B8', 'C1', 'C5', 'D9', 'E1', 'E10', 'F1', 'F4'):
+                self.assertIn(label, blob)
+
+            layout = MapLayout.get_solo()
+            day1_b = layout.day1['tracks']['B']
+            layout.day1['tracks']['B'] = apply_repartition(
+                day1_b, ['B8'], [4, 4], ['B8a', 'B8b'], track_letter='B'
+            )
+            layout.save()
+
+            files_repart = build_emergency_xlsx_files()
+            mapa_repart_path = Path(tmpdir) / 'mapa_repart.xlsx'
+            mapa_repart_path.write_bytes(files_repart['mapa.xlsx'])
+            with zipfile.ZipFile(mapa_repart_path, 'r') as zf:
+                self.assertIsNone(zf.testzip())
+                for name in zf.namelist():
+                    if name.endswith('.xml') or name.endswith('.rels'):
+                        ET.fromstring(zf.read(name))
+            repart_blob = _combined_xml_text(mapa_repart_path)
+            self.assertIn('B8a (4 m²)', repart_blob)
+            self.assertIn('B8b (4 m²)', repart_blob)
 
     def test_retention_prunes_old_untagged_but_keeps_tagged_and_recent(self):
         with tempfile.TemporaryDirectory() as tmpdir:

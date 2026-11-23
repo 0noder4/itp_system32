@@ -63,4 +63,5 @@ urlpatterns = [
         name='sheet-staff-guest-detail',
     ),
     path('<slug:sheet_key>/<slug:tab_key>/xlsx/', views.SheetXlsxView.as_view(), name='sheet-xlsx'),
+    path('<slug:sheet_key>/<slug:tab_key>/media/', views.SheetMediaZipView.as_view(), name='sheet-media'),
 ]

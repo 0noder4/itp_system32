@@ -15,10 +15,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { getFileUrl } from "@/components/staff/StageViewer/utils";
 import { applyColumnGroupOverrides, applyColumnOrder } from "@/lib/sheets/columnOrder";
-import { displayText, downloadCsv, extractFiles } from "@/lib/sheets/format";
-import { flatColumnLabel } from "@/lib/sheets/columnWidths";
+import { downloadCsv } from "@/lib/sheets/format";
 import { buildCsvMatrix, buildStyledXlsxPayload } from "@/lib/sheets/xlsxExport";
 import type { SheetColumn, SheetRow, SheetTabPayload } from "@/lib/sheets/types";
 import { cn } from "@/lib/utils";
@@ -103,64 +101,87 @@ function withLocalTabLayout(
   };
 }
 
-function companyLabel(row: SheetRow, columns: SheetColumn[]): string {
-  const nameCol = columns.find((c) => c.key === "company.name") ?? columns[0];
-  if (!nameCol) return String(row.company_id);
-  const text = displayText(nameCol, row.cells[nameCol.key]).trim();
-  return text || String(row.company_id);
+interface MediaCellRef {
+  company_id: number;
+  column_key: string;
 }
 
-function collectMedia(
-  columns: SheetColumn[],
-  rows: SheetRow[],
-  onlyCells?: Set<string>
-): { url: string; filename: string }[] {
-  const out: { url: string; filename: string }[] = [];
+function dedupeMediaCells(cells: MediaCellRef[]): MediaCellRef[] {
+  const out: MediaCellRef[] = [];
   const seen = new Set<string>();
-  for (const row of rows) {
-    const firm = companyLabel(row, columns).replace(/[\\/:*?"<>|]+/g, "_").slice(0, 80);
-    for (const col of columns) {
-      if (col.kind !== "file_link") continue;
-      const id = `${row.company_id}|${col.key}`;
-      if (onlyCells && !onlyCells.has(id)) continue;
-      for (const value of extractFiles(row.cells[col.key])) {
-        if (!value.url) continue;
-        const dedupe = `${value.url}::${value.name}`;
-        if (seen.has(dedupe)) continue;
-        seen.add(dedupe);
-        const safeName = (value.name || "plik").replace(/[\\/:*?"<>|]+/g, "_");
-        out.push({
-          url: value.url,
-          filename: `${firm}__${flatColumnLabel(col.label).replace(/\s+/g, "_")}__${safeName}`,
-        });
-      }
-    }
+  for (const cell of cells) {
+    const id = `${cell.company_id}|${cell.column_key}`;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push(cell);
   }
   return out;
 }
 
-async function downloadBlobFile(url: string, filename: string) {
-  if (url.startsWith("/api/")) {
-    const response = await apiClient.get(url, { responseType: "blob" });
-    const blob = new Blob([response.data]);
-    const href = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = href;
-    link.download = filename;
-    link.click();
-    URL.revokeObjectURL(href);
-    return;
+function collectSelectedMediaCells(
+  columns: SheetColumn[],
+  rows: SheetRow[],
+  selectedCells: { companyId: number; columnKey: string }[]
+): MediaCellRef[] {
+  const fileCols = columns.filter((col) => col.kind === "file_link");
+  if (fileCols.length === 0) return [];
+  const fileColKeys = new Set(fileCols.map((col) => col.key));
+
+  const direct = selectedCells
+    .filter((cell) => fileColKeys.has(cell.columnKey))
+    .map((cell) => ({ company_id: cell.companyId, column_key: cell.columnKey }));
+  if (direct.length > 0) {
+    return dedupeMediaCells(direct);
   }
-  const href = getFileUrl(url) ?? url;
-  const response = await fetch(href, { credentials: "include" });
-  if (!response.ok) throw new Error("fetch failed");
-  const blob = await response.blob();
-  const objectUrl = URL.createObjectURL(blob);
+
+  const companyIds = new Set(selectedCells.map((cell) => cell.companyId));
+  const fallback: MediaCellRef[] = [];
+  for (const row of rows) {
+    if (!companyIds.has(row.company_id)) continue;
+    for (const col of fileCols) {
+      fallback.push({ company_id: row.company_id, column_key: col.key });
+    }
+  }
+  return dedupeMediaCells(fallback);
+}
+
+function collectMediaCellsFromPayloads(payloads: SheetTabPayload[]): MediaCellRef[] {
+  const collected: MediaCellRef[] = [];
+  for (const payload of payloads) {
+    const fileCols = payload.columns.filter((col) => col.kind === "file_link");
+    if (fileCols.length === 0) continue;
+    for (const row of payload.rows) {
+      for (const col of fileCols) {
+        collected.push({ company_id: row.company_id, column_key: col.key });
+      }
+    }
+  }
+  return dedupeMediaCells(collected);
+}
+
+async function downloadSheetMediaZip(
+  sheetKey: string,
+  tabKey: string,
+  cells: MediaCellRef[],
+  date: string
+): Promise<boolean> {
+  if (cells.length === 0) return false;
+  const response = await apiClient.post(
+    `/api/sheets/${sheetKey}/${tabKey}/media/`,
+    { cells },
+    { responseType: "blob" }
+  );
+  if (response.status === 204) {
+    return false;
+  }
+  const blob = new Blob([response.data], { type: "application/zip" });
+  const href = URL.createObjectURL(blob);
   const link = document.createElement("a");
-  link.href = objectUrl;
-  link.download = filename;
+  link.href = href;
+  link.download = `${sheetKey}-media-${date}.zip`;
   link.click();
-  URL.revokeObjectURL(objectUrl);
+  URL.revokeObjectURL(href);
+  return true;
 }
 
 type TabCombine = "merge" | "separate";
@@ -324,34 +345,35 @@ export function SheetExportDialog({
           return;
         }
         onlyCells = new Set(cells.map((c) => `${c.companyId}|${c.columnKey}`));
-        const csvMatrix = buildCsvMatrix(currentColumns, currentRows, onlyCells);
-        if (csvMatrix.length <= 1 || csvMatrix[0].length === 0) {
-          toast.message(t("sheets.export.empty"));
-          return;
-        }
-        if (wantCsv) downloadCsv(`${sheetKey}-${date}.csv`, csvMatrix);
-        if (wantXlsx) {
-          const payload = buildStyledXlsxPayload(currentColumns, currentRows, {
-            onlyCells,
-            cellStyles,
-            customGroupColors,
-            includeGroupRow: false,
-            freezeCols: currentFrozenColumns,
-          });
-          await downloadXlsxBlob(sheetKey, currentTabKey, payload, date);
+        if (wantCsv || wantXlsx) {
+          const csvMatrix = buildCsvMatrix(currentColumns, currentRows, onlyCells);
+          if (csvMatrix.length <= 1 || csvMatrix[0].length === 0) {
+            toast.message(t("sheets.export.empty"));
+            return;
+          }
+          if (wantCsv) downloadCsv(`${sheetKey}-${date}.csv`, csvMatrix);
+          if (wantXlsx) {
+            const payload = buildStyledXlsxPayload(currentColumns, currentRows, {
+              onlyCells,
+              cellStyles,
+              customGroupColors,
+              includeGroupRow: false,
+              freezeCols: currentFrozenColumns,
+            });
+            await downloadXlsxBlob(sheetKey, currentTabKey, payload, date);
+          }
         }
         if (wantMedia) {
-          const files = collectMedia(currentColumns, currentRows, onlyCells);
-          if (files.length === 0) toast.message(t("sheets.export.noMedia"));
-          else {
-            toast.message(t("sheets.export.mediaProgress", { count: files.length }));
-            for (const file of files) {
-              try {
-                await downloadBlobFile(file.url, file.filename);
-              } catch {
-                toast.error(t("sheets.export.mediaFileError", { name: file.filename }));
-              }
-            }
+          const mediaCells = collectSelectedMediaCells(currentColumns, currentRows, cells);
+          const downloaded = await downloadSheetMediaZip(
+            sheetKey,
+            currentTabKey,
+            mediaCells,
+            date
+          );
+          if (!downloaded) {
+            toast.message(t("sheets.export.noMedia"));
+            if (!wantCsv && !wantXlsx) return;
           }
         }
       } else {
@@ -394,56 +416,42 @@ export function SheetExportDialog({
             }
             await downloadXlsxBlob(sheetKey, currentTabKey, { sheets }, date);
           }
-          if (wantMedia) {
-            const files = tabPayloads.flatMap((payload) =>
-              collectMedia(payload.columns, payload.rows)
-            );
-            if (files.length === 0) toast.message(t("sheets.export.noMedia"));
-            else {
-              toast.message(t("sheets.export.mediaProgress", { count: files.length }));
-              for (const file of files) {
-                try {
-                  await downloadBlobFile(file.url, file.filename);
-                } catch {
-                  toast.error(t("sheets.export.mediaFileError", { name: file.filename }));
-                }
-              }
-            }
-          }
         } else {
           const merged = mergeTabPayloads(tabPayloads);
-          const csvMatrix = buildCsvMatrix(merged.columns, merged.rows);
-          if (csvMatrix.length <= 1 || csvMatrix[0].length === 0) {
-            toast.message(t("sheets.export.empty"));
-            return;
-          }
-          if (wantCsv) downloadCsv(`${sheetKey}-${date}.csv`, csvMatrix);
-          if (wantXlsx) {
-            // Merged sheet: pin from the current tab when present, else the first selected.
-            const freezeSource =
-              tabPayloads.find((payload) => payload.tab.key === currentTabKey) ?? tabPayloads[0];
-            const freezeCols = freezeSource?.tab.frozen_columns ?? 1;
-            const payload = buildStyledXlsxPayload(merged.columns, merged.rows, {
-              cellStyles: merged.cellStyles,
-              customGroupColors: mergedGroupColors,
-              includeGroupRow: true,
-              freezeCols,
-            });
-            await downloadXlsxBlob(sheetKey, currentTabKey, payload, date);
-          }
-          if (wantMedia) {
-            const files = collectMedia(merged.columns, merged.rows);
-            if (files.length === 0) toast.message(t("sheets.export.noMedia"));
-            else {
-              toast.message(t("sheets.export.mediaProgress", { count: files.length }));
-              for (const file of files) {
-                try {
-                  await downloadBlobFile(file.url, file.filename);
-                } catch {
-                  toast.error(t("sheets.export.mediaFileError", { name: file.filename }));
-                }
-              }
+          if (wantCsv || wantXlsx) {
+            const csvMatrix = buildCsvMatrix(merged.columns, merged.rows);
+            if (csvMatrix.length <= 1 || csvMatrix[0].length === 0) {
+              toast.message(t("sheets.export.empty"));
+              return;
             }
+            if (wantCsv) downloadCsv(`${sheetKey}-${date}.csv`, csvMatrix);
+            if (wantXlsx) {
+              // Merged sheet: pin from the current tab when present, else the first selected.
+              const freezeSource =
+                tabPayloads.find((payload) => payload.tab.key === currentTabKey) ?? tabPayloads[0];
+              const freezeCols = freezeSource?.tab.frozen_columns ?? 1;
+              const payload = buildStyledXlsxPayload(merged.columns, merged.rows, {
+                cellStyles: merged.cellStyles,
+                customGroupColors: mergedGroupColors,
+                includeGroupRow: true,
+                freezeCols,
+              });
+              await downloadXlsxBlob(sheetKey, currentTabKey, payload, date);
+            }
+          }
+        }
+
+        if (wantMedia) {
+          const mediaCells = collectMediaCellsFromPayloads(tabPayloads);
+          const downloaded = await downloadSheetMediaZip(
+            sheetKey,
+            currentTabKey,
+            mediaCells,
+            date
+          );
+          if (!downloaded) {
+            toast.message(t("sheets.export.noMedia"));
+            if (!wantCsv && !wantXlsx) return;
           }
         }
       }

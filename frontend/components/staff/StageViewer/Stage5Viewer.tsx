@@ -7,7 +7,6 @@ import { Stage5Data, AttendanceOption } from "@/lib/types";
 import { LunchPriceResponse, fetcher } from "@/lib/api";
 import {
   calculateLunchSummary,
-  formatArrivalTime,
   parseLunchPrice,
   toFixedLunchRows,
 } from "@/lib/stage5-utils";
@@ -123,28 +122,6 @@ export function Stage5Viewer({ data }: Stage5ViewerProps) {
             <p className="text-sm text-muted-foreground">—</p>
           )}
         </div>
-
-        {finalData && (
-          <div>
-            <h3 className="font-medium mb-3">
-              {t("exhibitor.form.arrivalTimesTitle")}
-            </h3>
-            <div className="border rounded p-3 space-y-1 text-sm">
-              <p>
-                <span className="font-medium">
-                  {t("exhibitor.form.arrivalTimeDay1", { date: day1Label })}:
-                </span>{" "}
-                {formatArrivalTime(finalData.arrival_time_day1)}
-              </p>
-              <p>
-                <span className="font-medium">
-                  {t("exhibitor.form.arrivalTimeDay2", { date: day2Label })}:
-                </span>{" "}
-                {formatArrivalTime(finalData.arrival_time_day2)}
-              </p>
-            </div>
-          </div>
-        )}
 
         {finalData && (
           <div>

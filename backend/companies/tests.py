@@ -1426,6 +1426,17 @@ class FAQApiTests(TestCase):
         self.assertEqual(deleted.status_code, status.HTTP_204_NO_CONTENT)
         self.assertFalse(FAQItem.objects.filter(id=faq_id).exists())
 
+    def test_faq_updated_copy_for_noakowskiego_and_monday_setup(self):
+        self.client.force_authenticate(self.exhibitor)
+        items = self.client.get("/api/faq/").data
+        answers_pl = "\n".join(item.get("answer_pl", "") for item in items)
+        self.assertIn(
+            "W przypadku własnej zabudowy / wyposażenia dużych gabarytów istnieje możliwość wjazdu na Plac od strony ul. Noakowskiego.",
+            answers_pl,
+        )
+        self.assertNotIn("Wjazd na Plac odbywa się od strony ulicy Stanisława Noakowskiego.", answers_pl)
+        self.assertIn("poniedziałek 8 marca wieczorem", answers_pl)
+
 
 class OrderSummaryPDFTests(TestCase):
     def setUp(self):
@@ -1672,3 +1683,561 @@ class OrderSummaryPDFTests(TestCase):
             self.assertTrue(pdf_bytes.startswith(b"%PDF-"), f"Invalid PDF output for {lang}")
             self.assertNotIn(b"(anonymous)", pdf_bytes)
             self.assertGreater(len(pdf_bytes), 1500)
+
+
+class GroupReviewMeetingTasksTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.fr = User.objects.create_user(
+            username="review-fr",
+            email="review-fr@best.pw.edu.pl",
+            password="x",
+            type="staff",
+            staff_roles=["fr"],
+        )
+        self.owner = User.objects.create_user(
+            username="review-owner",
+            email="review-owner@example.com",
+            password="x",
+            type="company",
+        )
+        self.company = Company.objects.create(
+            name="Review Co",
+            email="review@example.com",
+            status="basic",
+            representative=self.owner,
+            fr_resp=self.fr,
+        )
+        from companies.models import Form
+        self.form = Form.objects.create(company=self.company)
+
+    def test_patch_company_can_delete_day2_or_clear_both_stands(self):
+        from companies.models import Stand
+
+        Stand.objects.create(company=self.company, day="day1", stand_number="B7", stand_size="standardowy")
+        Stand.objects.create(company=self.company, day="day2", stand_number="B7", stand_size="standardowy")
+
+        self.client.force_authenticate(self.fr)
+        resp_one_day = self.client.patch(
+            f"/api/company/{self.company.id}/",
+            {
+                "day1_stand": {"stand_number": "B7", "stand_size": "standardowy"},
+                "day2_stand": None,
+            },
+            format="json",
+        )
+        self.assertEqual(resp_one_day.status_code, status.HTTP_200_OK, resp_one_day.data)
+        self.assertTrue(Stand.objects.filter(company=self.company, day="day1").exists())
+        self.assertFalse(Stand.objects.filter(company=self.company, day="day2").exists())
+
+        resp_clear = self.client.patch(
+            f"/api/company/{self.company.id}/",
+            {"day1_stand": None, "day2_stand": None},
+            format="json",
+        )
+        self.assertEqual(resp_clear.status_code, status.HTTP_200_OK, resp_clear.data)
+        self.assertEqual(Stand.objects.filter(company=self.company).count(), 0)
+
+    def test_stage2_allows_provided_stand_without_logo_sign_file(self):
+        Feedback.objects.create(company=self.company, form="stage_1", status="accepted")
+        self.client.force_authenticate(self.owner)
+        resp_post = self.client.post(
+            f"/api/company/{self.company.id}/form/stage-2/",
+            {
+                "stand_details[stand_type]": "provided_stand",
+                "stand_details[name_sign_text]": "Review Co",
+                "stand_details[el_power_acknowledged]": "true",
+            },
+            format="multipart",
+        )
+        self.assertEqual(resp_post.status_code, status.HTTP_201_CREATED, resp_post.data)
+
+        resp_patch = self.client.patch(
+            f"/api/company/{self.company.id}/form/stage-2/",
+            {
+                "stand_details[stand_type]": "provided_stand",
+                "stand_details[name_sign_text]": "Review Co Updated",
+                "stand_details[el_power_acknowledged]": "true",
+            },
+            format="multipart",
+        )
+        self.assertEqual(resp_patch.status_code, status.HTTP_200_OK, resp_patch.data)
+
+    def test_stage5_succeeds_without_arrival_times(self):
+        from companies.models import StandDetails, Workshop
+
+        for stage_key in ("stage_1", "stage_2", "stage_3", "stage_4"):
+            Feedback.objects.create(company=self.company, form=stage_key, status="accepted")
+        StandDetails.objects.create(company=self.company, stand_type="provided_stand", el_power_acknowledged=True)
+        Workshop.objects.create(company=self.company, workshop=False)
+        self.form.stage_1_completed = True
+        self.form.stage_2_completed = True
+        self.form.stage_3_completed = True
+        self.form.stage_4_completed = True
+        self.form.save()
+
+        self.client.force_authenticate(self.owner)
+        resp = self.client.post(
+            f"/api/company/{self.company.id}/form/stage-5/",
+            {
+                "final_data": {
+                    "el_devices": "",
+                    "el_power": "",
+                    "el_low_power": True,
+                    "lunches_declined": True,
+                    "no_other_delegates": True,
+                    "main_rep_name": "Jan",
+                    "main_rep_surname": "Kowalski",
+                    "main_rep_phone": "+48500600700",
+                    "main_rep_attendance": "both",
+                },
+                "lunches": [],
+                "exhibitors": [],
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED, resp.data)
+
+    def test_invitation_planned_stand_and_extra_cost_flow(self):
+        from decimal import Decimal
+        from companies.models import Settings, Stand
+        from companies.pdf_generator import OrderSummaryPDFGenerator
+        from companies.pricing import calculate_base_package_cost
+
+        self.client.force_authenticate(self.fr)
+        inv_resp = self.client.post(
+            "/api/invite/",
+            {
+                "email": "planned-co@example.com",
+                "company_name": "Planned Co",
+                "company_status": "basic",
+                "planned_stand_size": "standardowy",
+                "planned_days_count": 2,
+                "language": "pl",
+            },
+            format="json",
+        )
+        self.assertEqual(inv_resp.status_code, status.HTTP_201_CREATED, inv_resp.data)
+        inv = CompanyInvitation.objects.get(email="planned-co@example.com")
+        self.assertEqual(inv.planned_stand_size, "standardowy")
+        self.assertEqual(inv.planned_days_count, 2)
+
+        self.client.force_authenticate(user=None)
+        reg_resp = self.client.post(
+            "/api/register/",
+            {
+                "token": str(inv.token),
+                "password": "StrongPassword123!",
+                "first_name": "Anna",
+                "last_name": "Nowak",
+                "phone_number": "+48501502503",
+            },
+            format="json",
+        )
+        self.assertEqual(reg_resp.status_code, status.HTTP_201_CREATED, reg_resp.data)
+
+        planned_co = Company.objects.get(name="Planned Co")
+        sys_settings = Settings.get_settings()
+        base_before = calculate_base_package_cost(planned_co, sys_settings)
+        self.assertFalse(base_before["pending_stand_assignment"])
+        self.assertTrue(base_before["planned_from_invitation"])
+        self.assertEqual(base_before["cost"], sys_settings.stand_price_6m2_2d)
+
+        planned_co.extra_cost = Decimal("500.00")
+        planned_co.extra_cost_description = "Kara regulaminowa"
+        planned_co.save()
+
+        self.client.force_authenticate(planned_co.representative)
+        summary_resp = self.client.get(f"/api/company/{planned_co.id}/cost-summary/")
+        self.assertEqual(summary_resp.status_code, status.HTTP_200_OK, summary_resp.data)
+        self.assertEqual(summary_resp.data["extra"]["cost"], "500.00")
+        self.assertEqual(summary_resp.data["extra"]["description"], "Kara regulaminowa")
+        self.assertEqual(
+            Decimal(summary_resp.data["total_cost"]),
+            sys_settings.stand_price_6m2_2d + Decimal("500.00"),
+        )
+
+        # Assigning a concrete 8m2 stand overrides planned 6m2 price
+        Stand.objects.create(company=planned_co, day="day1", stand_number="C2", stand_size="rozszerzony")
+        Stand.objects.create(company=planned_co, day="day2", stand_number="C2", stand_size="rozszerzony")
+        base_after = calculate_base_package_cost(planned_co, sys_settings)
+        self.assertFalse(base_after["planned_from_invitation"])
+        self.assertEqual(base_after["cost"], sys_settings.stand_price_8m2_2d)
+
+        for lang in ("pl", "en"):
+            pdf_bytes = OrderSummaryPDFGenerator(planned_co, language=lang).generate().getvalue()
+            self.assertTrue(pdf_bytes.startswith(b"%PDF-"))
+
+
+class ExportXLSXAndMediaApiTests(TestCase):
+    def setUp(self):
+        from decimal import Decimal
+        from companies.models import (
+            Address,
+            BasicData,
+            Description,
+            FinalData,
+            Form,
+            Jobwall,
+            Lunch,
+            PDI,
+            Stand,
+            StandDetails,
+            WebsitePublication,
+        )
+
+        self.client = APIClient()
+        self.fr_staff = User.objects.create_user(
+            username="export2-fr",
+            email="export2-fr@example.com",
+            password="TestPass123!",
+            type="staff",
+            staff_roles=["fr"],
+            first_name="Ewa",
+            last_name="FR",
+            language="pl",
+        )
+        self.lg_staff = User.objects.create_user(
+            username="export2-lg",
+            email="export2-lg@example.com",
+            password="TestPass123!",
+            type="staff",
+            staff_roles=["lg"],
+            language="pl",
+        )
+        self.opiekun = User.objects.create_user(
+            username="export2-opiekun",
+            email="export2-op@example.com",
+            password="TestPass123!",
+            type="staff",
+            staff_roles=["opiekun"],
+            first_name="Jan",
+            last_name="Opiekun",
+            phone_number="+48600700800",
+        )
+        self.rep_a = User.objects.create_user(
+            username="export2-rep-a",
+            email="rep-a@example.com",
+            password="TestPass123!",
+            type="company",
+            first_name="Anna",
+            last_name="Rep",
+            language="en",
+        )
+
+        self.company_a = Company.objects.create(
+            name="Alpha Tech",
+            email="alpha@example.com",
+            status="basic",
+            representative=self.rep_a,
+            fr_resp=self.fr_staff,
+            opiekun=self.opiekun,
+            extra_cost=Decimal("250.00"),
+            extra_cost_description="Dodatkowe zasilanie",
+        )
+        Form.objects.create(
+            company=self.company_a,
+            stage_1_completed=True,
+            stage_2_completed=True,
+            stage_3_completed=False,
+            stage_4_completed=True,
+            stage_5_completed=True,
+        )
+        bd_a = BasicData.objects.create(
+            company=self.company_a,
+            full_name="Alpha Tech Sp. z o.o.",
+            nip="1112223344",
+        )
+        Address.objects.create(
+            form=bd_a,
+            street="Polna",
+            home_number="10",
+            apt_number="1",
+            city="Warszawa",
+            country="Polska",
+            postal_code="00-001",
+        )
+        Stand.objects.create(
+            company=self.company_a,
+            day="day1",
+            stand_number="A1",
+            stand_size="podstawowy",
+        )
+        StandDetails.objects.create(
+            company=self.company_a,
+            stand_type="provided_stand",
+            el_power_acknowledged=True,
+        )
+        Description.objects.create(company=self.company_a, descr="Opis Alpha")
+        Jobwall.objects.create(
+            company=self.company_a,
+            name="Backend Intern",
+            form="s",
+            workload="pelen",
+            contract="uop",
+            description="Praca w Pythonie",
+            benefits="Kawa",
+            requirements="Django",
+            url="https://example.com/jobs/1",
+        )
+        WebsitePublication.objects.create(
+            company=self.company_a,
+            strapi_document_id="doc-1",
+            last_exported_at=timezone.now(),
+            content_published=True,
+        )
+        fd_a = FinalData.objects.create(
+            company=self.company_a,
+            el_low_power=True,
+            lunches_declined=True,
+            no_other_delegates=True,
+        )
+        PDI.objects.create(form=fd_a, tickets_quantity=1)
+        Lunch.objects.create(form=fd_a, day="day1", lunch_quantity=0)
+        for stage_num in (1, 2, 4, 5):
+            Feedback.objects.create(
+                company=self.company_a,
+                form=f"stage_{stage_num}",
+                status="accepted",
+            )
+
+        self.company_b = Company.objects.create(
+            name="Beta Ineligible",
+            email="beta@example.com",
+            status="partner",
+        )
+
+    def test_csv_sections_and_separate_zip(self):
+        import io
+        import zipfile
+
+        self.client.force_authenticate(self.fr_staff)
+
+        # Subset: billing only (ID + Nazwa automatically prepended)
+        resp_billing = self.client.post(
+            "/api/export/csv/",
+            {"company_ids": [self.company_a.id], "sections": ["billing"]},
+            format="json",
+        )
+        self.assertEqual(resp_billing.status_code, status.HTTP_200_OK)
+        text = b"".join(resp_billing.streaming_content).decode("utf-8").replace("\ufeff", "")
+        lines = [line for line in text.splitlines() if line.strip()]
+        self.assertEqual(len(lines), 2)
+        headers = lines[0].split(";")
+        self.assertEqual(headers[:2], ["ID", "Nazwa"])
+        self.assertIn("Dodatkowe koszty (netto)", headers)
+        self.assertIn("Suma netto (PLN)", headers)
+        self.assertIn("250.00", lines[1])
+        self.assertIn("Dodatkowe zasilanie", lines[1])
+
+        # Subset: basic + stage_4
+        resp_cat = self.client.post(
+            "/api/export/csv/",
+            {"company_ids": [self.company_a.id], "sections": ["basic", "stage_4"]},
+            format="json",
+        )
+        self.assertEqual(resp_cat.status_code, status.HTTP_200_OK)
+        cat_text = b"".join(resp_cat.streaming_content).decode("utf-8").replace("\ufeff", "")
+        self.assertIn("Jan Opiekun", cat_text)
+        self.assertIn("Opis Alpha", cat_text)
+        self.assertIn("Wysłano na stronę", cat_text)
+        self.assertIn("Backend Intern", cat_text)
+        self.assertIn("1: OK", cat_text)
+
+        # Separate CSVs -> ZIP
+        resp_zip = self.client.post(
+            "/api/export/csv/",
+            {
+                "company_ids": [self.company_a.id],
+                "sections": ["basic", "billing"],
+                "combine": "separate",
+            },
+            format="json",
+        )
+        self.assertEqual(resp_zip.status_code, status.HTTP_200_OK)
+        self.assertIn("application/zip", resp_zip["Content-Type"])
+        with zipfile.ZipFile(io.BytesIO(resp_zip.content), "r") as zf:
+            names = set(zf.namelist())
+            self.assertEqual(names, {"01_dane_podstawowe.csv", "07_rozliczenia.csv"})
+            billing_csv = zf.read("07_rozliczenia.csv").decode("utf-8-sig")
+            self.assertIn("Dodatkowe zasilanie", billing_csv)
+
+    def test_xlsx_merge_and_separate_and_validation(self):
+        import io
+        import xml.etree.ElementTree as ET
+        import zipfile
+
+        # Permissions check
+        self.client.force_authenticate(self.lg_staff)
+        resp_forbidden = self.client.post(
+            "/api/export/xlsx/",
+            {"company_ids": [self.company_a.id]},
+            format="json",
+        )
+        self.assertEqual(resp_forbidden.status_code, status.HTTP_403_FORBIDDEN)
+
+        self.client.force_authenticate(self.fr_staff)
+
+        # GET rejected
+        self.assertEqual(self.client.get("/api/export/xlsx/").status_code, status.HTTP_400_BAD_REQUEST)
+
+        # Invalid payloads
+        self.assertEqual(
+            self.client.post("/api/export/xlsx/", {"company_ids": []}, format="json").status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+        self.assertEqual(
+            self.client.post(
+                "/api/export/xlsx/",
+                {"company_ids": [self.company_a.id], "sections": ["nope"]},
+                format="json",
+            ).status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+        self.assertEqual(
+            self.client.post(
+                "/api/export/xlsx/",
+                {"company_ids": [self.company_a.id], "combine": "invalid"},
+                format="json",
+            ).status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+        # Merge workbook
+        resp_merge = self.client.post(
+            "/api/export/xlsx/",
+            {"company_ids": [self.company_a.id, self.company_b.id], "combine": "merge"},
+            format="json",
+        )
+        self.assertEqual(resp_merge.status_code, status.HTTP_200_OK)
+        self.assertIn(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            resp_merge["Content-Type"],
+        )
+        with zipfile.ZipFile(io.BytesIO(resp_merge.content), "r") as zf:
+            self.assertIsNone(zf.testzip())
+            wb = ET.fromstring(zf.read("xl/workbook.xml"))
+            sheet_names = [
+                el.attrib.get("name")
+                for el in wb.iter("{http://schemas.openxmlformats.org/spreadsheetml/2006/main}sheet")
+            ]
+            self.assertEqual(sheet_names, ["Firmy"])
+            sheet1_xml = zf.read("xl/worksheets/sheet1.xml").decode("utf-8")
+            self.assertIn("Alpha Tech", sheet1_xml)
+            self.assertIn("Beta Ineligible", sheet1_xml)
+
+        # Separate sheets workbook
+        resp_sep = self.client.post(
+            "/api/export/xlsx/",
+            {
+                "company_ids": [self.company_a.id],
+                "sections": ["basic", "stage_1", "billing"],
+                "combine": "separate",
+            },
+            format="json",
+        )
+        self.assertEqual(resp_sep.status_code, status.HTTP_200_OK)
+        with zipfile.ZipFile(io.BytesIO(resp_sep.content), "r") as zf:
+            self.assertIsNone(zf.testzip())
+            wb = ET.fromstring(zf.read("xl/workbook.xml"))
+            sheet_names = [
+                el.attrib.get("name")
+                for el in wb.iter("{http://schemas.openxmlformats.org/spreadsheetml/2006/main}sheet")
+            ]
+            self.assertEqual(
+                sheet_names,
+                ["Dane podstawowe", "Etap 1 - Faktura", "Rozliczenia"],
+            )
+
+    def test_media_export_filtered_and_order_pdf_and_204(self):
+        import io
+        import tempfile
+        import zipfile
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from companies.models import StandDetails
+
+        self.client.force_authenticate(self.fr_staff)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with self.settings(MEDIA_ROOT=tmpdir):
+                sd_a = self.company_a.stand_details
+                sd_a.logo_sign_file.save(
+                    "alpha_logo.png",
+                    SimpleUploadedFile("alpha_logo.png", b"PNGDATA", content_type="image/png"),
+                )
+                sd_a.fire_cert.save(
+                    "alpha_cert.pdf",
+                    SimpleUploadedFile("alpha_cert.pdf", b"%PDF-cert", content_type="application/pdf"),
+                )
+                StandDetails.objects.create(
+                    company=self.company_b,
+                    stand_type="provided_stand",
+                    logo_sign_file=SimpleUploadedFile(
+                        "beta_logo.png", b"BETAPNG", content_type="image/png"
+                    ),
+                )
+
+                # Scoped POST: only company_a and only logo_sign
+                resp_filtered = self.client.post(
+                    "/api/export/media/",
+                    {"company_ids": [self.company_a.id], "categories": ["logo_sign"]},
+                    format="json",
+                )
+                self.assertEqual(resp_filtered.status_code, status.HTTP_200_OK)
+                self.assertEqual(resp_filtered["X-Export-Files-Count"], "1")
+                with zipfile.ZipFile(io.BytesIO(resp_filtered.content), "r") as zf:
+                    names = zf.namelist()
+                    self.assertEqual(len(names), 1)
+                    self.assertTrue(names[0].startswith("logos/"))
+                    self.assertIn("Alpha Tech", names[0])
+
+                # Backward-compatible GET exports all default media categories for all companies
+                resp_get = self.client.get("/api/export/media/")
+                self.assertEqual(resp_get.status_code, status.HTTP_200_OK)
+                with zipfile.ZipFile(io.BytesIO(resp_get.content), "r") as zf:
+                    names = zf.namelist()
+                    self.assertEqual(len(names), 3)
+                    self.assertTrue(any(n.startswith("logos/") and "Alpha Tech" in n for n in names))
+                    self.assertTrue(any(n.startswith("fire_certs/") and "Alpha Tech" in n for n in names))
+                    self.assertTrue(any(n.startswith("logos/") and "Beta Ineligible" in n for n in names))
+
+                # Order PDF export for mixed eligibility
+                resp_pdf = self.client.post(
+                    "/api/export/media/",
+                    {
+                        "company_ids": [self.company_a.id, self.company_b.id],
+                        "categories": ["order_pdf"],
+                    },
+                    format="json",
+                )
+                self.assertEqual(resp_pdf.status_code, status.HTTP_200_OK)
+                self.assertEqual(resp_pdf["X-Export-Files-Count"], "1")
+                self.assertEqual(resp_pdf["X-Export-Pdf-Included"], "1")
+                self.assertEqual(resp_pdf["X-Export-Pdf-Skipped"], "1")
+                with zipfile.ZipFile(io.BytesIO(resp_pdf.content), "r") as zf:
+                    names = set(zf.namelist())
+                    pdf_files = [n for n in names if n.startswith("order_pdfs/") and n.endswith(".pdf")]
+                    self.assertEqual(len(pdf_files), 1)
+                    self.assertTrue(zf.read(pdf_files[0]).startswith(b"%PDF-"))
+                    self.assertIn("order_pdfs/_pominiete_pdf.txt", names)
+                    skipped_txt = zf.read("order_pdfs/_pominiete_pdf.txt").decode("utf-8")
+                    self.assertIn("Beta Ineligible", skipped_txt)
+
+                # Empty result -> 204
+                resp_empty = self.client.post(
+                    "/api/export/media/",
+                    {"company_ids": [self.company_b.id], "categories": ["order_pdf"]},
+                    format="json",
+                )
+                self.assertEqual(resp_empty.status_code, status.HTTP_204_NO_CONTENT)
+                self.assertEqual(resp_empty["X-Export-Files-Count"], "0")
+                self.assertEqual(resp_empty["X-Export-Pdf-Skipped"], "1")
+
+                # Invalid categories -> 400
+                resp_bad = self.client.post(
+                    "/api/export/media/",
+                    {"categories": ["unknown"]},
+                    format="json",
+                )
+                self.assertEqual(resp_bad.status_code, status.HTTP_400_BAD_REQUEST)
+

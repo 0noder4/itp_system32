@@ -278,4 +278,7 @@ CORS_ALLOW_HEADERS = [
 
 CORS_EXPOSE_HEADERS = [
     'Content-Disposition',
+    'X-Export-Files-Count',
+    'X-Export-Pdf-Included',
+    'X-Export-Pdf-Skipped',
 ]

@@ -3,9 +3,13 @@ import type { SheetColumn, SheetRow } from "@/lib/sheets/types";
 
 /** Approx. glyph width for text-sm tabular-ish UI. */
 const CHAR_PX = 7.4;
+const HEADER_CHAR_PX = 8.2;
 /** Horizontal cell padding + sort/edit chrome. */
 const PAD_PX = 28;
-const EDIT_DOT_PX = 10;
+const HEADER_PAD_PX = 24;
+const EDIT_DOT_PX = 12;
+const INFO_ICON_PX = 16;
+const SORT_ICON_PX = 14;
 
 export const COLUMN_WIDTH_MIN = 48;
 export const COLUMN_WIDTH_MAX = 640;
@@ -58,6 +62,10 @@ export function readStoredWidths(sheet: string, tab?: string): Record<string, nu
 export function writeStoredWidths(sheet: string, widths: Record<string, number>) {
   if (typeof window === "undefined") return;
   try {
+    if (Object.keys(widths).length === 0) {
+      window.localStorage.removeItem(widthsStorageKey(sheet));
+      return;
+    }
     window.localStorage.setItem(widthsStorageKey(sheet), JSON.stringify(widths));
   } catch {
     /* ignore quota / private mode */
@@ -99,28 +107,40 @@ function measureText(text: string, extra = 0): number {
   return Math.ceil(len * CHAR_PX) + PAD_PX + extra;
 }
 
+function measureHeader(col: SheetColumn): number {
+  const len = longestLineLen(col.label);
+  if (len <= 0) return 0;
+  const chrome =
+    HEADER_PAD_PX +
+    SORT_ICON_PX +
+    (col.editable ? EDIT_DOT_PX : 0) +
+    (col.is_custom && col.help ? INFO_ICON_PX : 0);
+  return Math.ceil(len * HEADER_CHAR_PX) + chrome;
+}
+
 /**
- * Fit each column to the wider of multi-line header vs cell contents,
- * clamped so short stand/status columns stay tight and long text does not explode.
- * Backend `width` is only a soft preferred max for empty grids.
+ * Fit each column to the wider of multi-line header vs cell contents.
+ * Only cell contents are clamped by kind so long notes don't explode,
+ * while headers always fit without truncation.
  */
 export function fitColumnWidths(columns: SheetColumn[], rows: SheetRow[]): number[] {
   return columns.map((col) => {
     const min = MIN_BY_KIND[col.kind] ?? 56;
     const max = MAX_BY_KIND[col.kind] ?? 280;
-    const header = measureText(col.label, col.editable ? EDIT_DOT_PX : 0);
+    const header = measureHeader(col);
 
     let content = 0;
     for (const row of rows) {
       content = Math.max(content, measureText(displayText(col, row.cells[col.key])));
     }
 
+    const boundedContent = Math.min(max, content);
     // Empty sheet: lean on header, allow backend hint as a mild floor for name-like cols.
     const emptyFloor =
-      rows.length === 0 ? Math.min(col.width, Math.max(header, min + 24)) : 0;
+      rows.length === 0 ? Math.min(max, col.width, Math.max(header, min + 24)) : 0;
 
-    const raw = Math.max(min, header, content, emptyFloor);
-    return Math.min(max, raw);
+    const raw = Math.max(min, header, boundedContent, emptyFloor);
+    return Math.min(COLUMN_WIDTH_MAX, raw);
   });
 }
 

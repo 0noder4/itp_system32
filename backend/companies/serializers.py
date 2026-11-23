@@ -27,6 +27,7 @@ from .models import (
     CARPET_CHOICE_RIPS,
     CARPET_CHOICE_WELUR,
     CARPET_COLOR_CODES_BY_CHOICE,
+    STATUS_BASIC,
     apply_default_carpet,
     company_chooses_carpet,
     company_can_access_stage3,
@@ -90,7 +91,7 @@ class CompanySerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Company
-        fields = ("id", "name", "status", "email", "language", "representative", "representative_name", "representative_surname", "representative_phone_number", "representative_username", "fr_resp", "fr_resp_name", "fr_resp_surname", "fr_resp_email", "fr_resp_phone_number", "fr_resp_username", "opiekun", "opiekun_name", "opiekun_surname", "opiekun_username", "day1_stand", "day2_stand", "completed_stages_count", "stage_1_completed", "stage_2_completed", "stage_3_completed", "stage_4_completed", "stage_5_completed", "stage_statuses", "created_at", "updated_at")
+        fields = ("id", "name", "status", "email", "language", "planned_stand_size", "planned_days_count", "extra_cost", "extra_cost_description", "representative", "representative_name", "representative_surname", "representative_phone_number", "representative_username", "fr_resp", "fr_resp_name", "fr_resp_surname", "fr_resp_email", "fr_resp_phone_number", "fr_resp_username", "opiekun", "opiekun_name", "opiekun_surname", "opiekun_username", "day1_stand", "day2_stand", "completed_stages_count", "stage_1_completed", "stage_2_completed", "stage_3_completed", "stage_4_completed", "stage_5_completed", "stage_statuses", "created_at", "updated_at")
     
     def get_representative_name(self, obj):
         if obj.representative:
@@ -279,7 +280,7 @@ class CompanyInvitationSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = CompanyInvitation
-        fields = ("id", "email", "company_name", "created_at", "updated_at", "expires_at", "is_accepted", "company_status", "language", "invitation_status", "invitation_link", "fr_resp", "fr_resp_name", "fr_resp_surname", "fr_resp_email")
+        fields = ("id", "email", "company_name", "created_at", "updated_at", "expires_at", "is_accepted", "company_status", "planned_stand_size", "planned_days_count", "language", "invitation_status", "invitation_link", "fr_resp", "fr_resp_name", "fr_resp_surname", "fr_resp_email")
     
     def get_invitation_status(self, obj):
         return obj.get_invitation_status()
@@ -335,6 +336,26 @@ class CompanyInvitationSerializer(serializers.ModelSerializer):
 
         return value
 
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        company_status = attrs.get(
+            'company_status',
+            getattr(self.instance, 'company_status', STATUS_BASIC),
+        )
+        if company_status != STATUS_BASIC:
+            attrs['planned_stand_size'] = ''
+            attrs['planned_days_count'] = None
+        else:
+            size = (attrs.get('planned_stand_size') or '').strip()
+            if not size:
+                attrs['planned_stand_size'] = ''
+                attrs['planned_days_count'] = None
+            else:
+                attrs['planned_stand_size'] = size
+                if attrs.get('planned_days_count') is None:
+                    attrs['planned_days_count'] = 2
+        return attrs
+
 
 class CompanyRegistrationSerializer(serializers.Serializer):
     token = serializers.UUIDField(write_only=True)
@@ -378,6 +399,8 @@ class CompanyRegistrationSerializer(serializers.Serializer):
             email = invitation.email,
             representative = user,
             status = invitation.company_status,
+            planned_stand_size = invitation.planned_stand_size,
+            planned_days_count = invitation.planned_days_count,
             fr_resp = invitation.created_by  # Set fr_resp to the staff member who created the invitation
         )
 
@@ -1559,12 +1582,6 @@ class Stage5Serializer(serializers.Serializer):
 
         if main_rep_errors:
             errors['final_data'] = {**errors.get('final_data', {}), **main_rep_errors}
-
-        for arrival_field in ('arrival_time_day1', 'arrival_time_day2'):
-            if not final_data.get(arrival_field):
-                errors.setdefault('final_data', {})[arrival_field] = (
-                    'Arrival time is required.'
-                )
 
         if no_other_delegates:
             data['exhibitors'] = []

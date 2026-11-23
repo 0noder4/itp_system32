@@ -209,6 +209,23 @@ export default function InvitationDetailPage() {
                   <CompanyStatusBadge status={invitation.company_status} />
                 </div>
               </div>
+              {invitation.company_status === "basic" &&
+                invitation.planned_stand_size && (
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">
+                      {t("companies.invite.plannedStandSizeLabel")}
+                    </p>
+                    <p className="text-lg">
+                      {t(
+                        `companies.stand.sizes.${invitation.planned_stand_size}`
+                      )}{" "}
+                      ·{" "}
+                      {invitation.planned_days_count === 1
+                        ? t("companies.invite.oneDay")
+                        : t("companies.invite.twoDays")}
+                    </p>
+                  </div>
+                )}
               <div>
                 <p className="text-sm font-medium text-muted-foreground">
                   {t("companies.invitations.status.label")}

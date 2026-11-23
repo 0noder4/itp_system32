@@ -32,6 +32,8 @@ PARENT_RELATIONS = {'company', 'form', 'stand_details', 'dl'}
 EXCLUDED_FIELDS: dict[str, str] = {
     'WorkshopFacilitator.workshop': 'powiązanie z warsztatem (techniczne)',
     'Lunch.diet_info': 'usunięte z formularza (vouchery Chochelki)',
+    'FinalData.arrival_time_day1': 'usunięte z formularza (godziny przyjazdu ustala opiekun w Mailu #3)',
+    'FinalData.arrival_time_day2': 'usunięte z formularza (godziny przyjazdu ustala opiekun w Mailu #3)',
 }
 
 # Fields still waiting for a column. Empty once every form field has a home.

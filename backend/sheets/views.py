@@ -19,6 +19,7 @@ from .service import (
     SheetValidationError,
     apply_cell_styles,
     apply_changes,
+    build_sheet_media_zip,
     build_tab_payload,
     can_manage_custom_columns,
     company_queryset,
@@ -70,7 +71,7 @@ class SheetCatalogView(APIView):
                 'key': sheet.key,
                 'title': sheet.title,
                 'scoped': sheet.is_scoped_for(user),
-                'tabs': [{'key': tab.key, 'title': tab.title} for tab in sheet.tabs_for(user)],
+                'tabs': [{'key': tab.key, 'title': tab.resolve_title()} for tab in sheet.tabs_for(user)],
             }
             for sheet in CATALOG.sheets_for(user)
         ])
@@ -841,6 +842,52 @@ class SheetXlsxView(APIView):
             )
         options = _posted_xlsx_options(request.data, matrix)
         return _xlsx_response(matrix, f'{sheet_key}-{tab_key}', **options)
+
+
+class SheetMediaZipView(APIView):
+    """POST .../media/ — export selected (company_id, column_key) media cells as an organized ZIP."""
+
+    permission_classes = [IsAuthenticated, HasAnyStaffRole]
+
+    def post(self, request, sheet_key, tab_key):
+        from datetime import datetime
+
+        sheet, tab = _resolve(request.user, sheet_key, tab_key)
+        if tab is None:
+            return Response({'detail': 'Nie znaleziono arkusza.'}, status=status.HTTP_404_NOT_FOUND)
+
+        raw_cells = request.data.get('cells') if isinstance(request.data, dict) else None
+        if not isinstance(raw_cells, list) or len(raw_cells) == 0:
+            return Response(
+                {'detail': 'Oczekiwano {"cells": [{"company_id": ..., "column_key": ...}]}.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if len(raw_cells) > 20000:
+            return Response(
+                {'detail': 'Za dużo komórek naraz.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        zip_bytes, files_count, pdf_included, pdf_skipped = build_sheet_media_zip(
+            sheet, request.user, raw_cells
+        )
+        if files_count == 0:
+            response = HttpResponse(status=status.HTTP_204_NO_CONTENT)
+            response['X-Export-Files-Count'] = '0'
+            response['X-Export-Pdf-Included'] = '0'
+            response['X-Export-Pdf-Skipped'] = str(pdf_skipped)
+            return response
+
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f'{sheet_key}_media_{timestamp}.zip'
+        response = HttpResponse(zip_bytes, content_type='application/zip')
+        response['Content-Disposition'] = (
+            f'attachment; filename="{filename}"; filename*=UTF-8\'\'{filename}'
+        )
+        response['X-Export-Files-Count'] = str(files_count)
+        response['X-Export-Pdf-Included'] = str(pdf_included)
+        response['X-Export-Pdf-Skipped'] = str(pdf_skipped)
+        return response
 
 
 class SheetCustomColumnsView(APIView):

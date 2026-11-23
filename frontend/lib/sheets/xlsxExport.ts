@@ -35,10 +35,16 @@ function filterScope(
   };
 }
 
-/** Excel column width ≈ pixels / 7 (Calibri 11 rough). */
+function longestHeaderLine(label: string): number {
+  return Math.max(0, ...label.split("\n").map((line) => line.trim().length));
+}
+
+/** Excel column width ≈ pixels / 7 (Calibri 11 rough), never narrower than the header. */
 function excelWidth(col: SheetColumn): number {
   const px = typeof col.width === "number" ? col.width : 120;
-  return Math.min(40, Math.max(8, Math.round((px / 7) * 10) / 10));
+  const fromPx = Math.round((px / 7) * 10) / 10;
+  const fromHeader = longestHeaderLine(col.label) + 4;
+  return Math.min(45, Math.max(8, fromPx, fromHeader));
 }
 
 /**

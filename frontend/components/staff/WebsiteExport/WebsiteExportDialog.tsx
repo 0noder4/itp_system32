@@ -24,11 +24,13 @@ import {
 const BATCH_SIZE = 10;
 const CATALOGUE_URL = "https://targipracy.org.pl/catalogue";
 
-type PreviewStatus = "ready" | "unchanged" | "skipped" | "missing";
+type PreviewStatus = "ready" | "draft" | "unchanged" | "skipped" | "missing";
 
 const STATUS_BADGE_CLASS: Record<PreviewStatus, string> = {
   ready:
     "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200",
+  draft:
+    "bg-amber-100 text-amber-900 dark:bg-amber-900/60 dark:text-amber-200",
   unchanged: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200",
   skipped:
     "bg-danger/10 text-danger dark:bg-danger/20 dark:text-danger-foreground",
@@ -42,6 +44,7 @@ type PreviewCompany = {
   status: PreviewStatus;
   skip_reason: string | null;
   changed_since_export: boolean;
+  content_published?: boolean;
   last_exported_at: string | null;
   last_error: string;
   jobs_removed?: string[];
@@ -133,16 +136,21 @@ export function WebsiteExportDialog({
   const selected = data?.companies.find((c) => c.company_id === selectedId);
   const exportableIds =
     data?.companies
-      .filter((c) => c.status === "ready")
+      .filter((c) => c.status === "ready" || c.status === "draft")
       .map((c) => c.company_id) ?? [];
-  const removableIds =
-    data?.companies
-      .filter((c) => c.can_remove)
-      .map((c) => c.company_id) ?? [];
+  const removableCompanies =
+    data?.companies.filter((c) => c.can_remove) ?? [];
+  const removableIds = removableCompanies.map((c) => c.company_id);
+  const allRemovableAreDrafts =
+    removableCompanies.length > 0 &&
+    removableCompanies.every((c) => !c.content_published);
   const busy = isExporting || isRemoving;
+  const isDraftOnly = !publishContent && !publishHallMap;
+  const isContentDraft = !publishContent;
 
   const statusLabel = (row: PreviewCompany) => {
     if (row.status === "ready") return t("websiteExport.status.ready");
+    if (row.status === "draft") return t("websiteExport.status.draft");
     if (row.status === "unchanged") return t("websiteExport.status.unchanged");
     if (row.status === "missing") return t("websiteExport.status.missing");
     const reasonKey = row.skip_reason
@@ -201,13 +209,23 @@ export function WebsiteExportDialog({
         }));
       }
       if (okCount > 0) {
-        toast.success(t("websiteExport.success"), {
-          description: t("websiteExport.successDescription", {
-            ok: okCount,
-            failed: failCount,
-            skipped: skippedCount,
-          }),
-        });
+        if (!publishContent) {
+          toast.info(t("websiteExport.draftSaved"), {
+            description: t("websiteExport.draftSavedDescription", {
+              ok: okCount,
+              failed: failCount,
+              skipped: skippedCount,
+            }),
+          });
+        } else {
+          toast.success(t("websiteExport.success"), {
+            description: t("websiteExport.successDescription", {
+              ok: okCount,
+              failed: failCount,
+              skipped: skippedCount,
+            }),
+          });
+        }
       } else if (failCount > 0) {
         toast.error(t("websiteExport.error"), {
           description: t("websiteExport.errorDescription"),
@@ -461,9 +479,14 @@ export function WebsiteExportDialog({
                   className="border-danger text-danger hover:bg-danger/10"
                   onClick={() => setShowRemoveConfirm(true)}
                 >
-                  {t("websiteExport.removeButton", {
-                    count: removableIds.length,
-                  })}
+                  {t(
+                    allRemovableAreDrafts
+                      ? "websiteExport.removeDraftButton"
+                      : "websiteExport.removeButton",
+                    {
+                      count: removableIds.length,
+                    }
+                  )}
                 </Button>
               ) : null}
             </div>
@@ -495,11 +518,19 @@ export function WebsiteExportDialog({
       >
         <DialogContent className="sm:max-w-[420px]">
           <DialogHeader>
-            <DialogTitle>{t("websiteExport.confirmTitle")}</DialogTitle>
+            <DialogTitle>
+              {isDraftOnly
+                ? t("websiteExport.confirmDraftTitle")
+                : t("websiteExport.confirmTitle")}
+            </DialogTitle>
             <DialogDescription>
-              {t("websiteExport.confirmDescription", {
-                count: exportableIds.length,
-              })}
+              {isDraftOnly
+                ? t("websiteExport.confirmDraftDescription", {
+                    count: exportableIds.length,
+                  })
+                : t("websiteExport.confirmDescription", {
+                    count: exportableIds.length,
+                  })}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -537,6 +568,13 @@ export function WebsiteExportDialog({
                 </span>
               </span>
             </label>
+            {(isDraftOnly || isContentDraft) && (
+              <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-900 dark:text-amber-200">
+                {isDraftOnly
+                  ? t("websiteExport.draftOnlyWarning")
+                  : t("websiteExport.contentDraftWarning")}
+              </div>
+            )}
           </div>
           {isExporting ? (
             <p className="text-sm text-muted-foreground">
@@ -563,7 +601,9 @@ export function WebsiteExportDialog({
               }}
               onClick={runExport}
             >
-              {t("websiteExport.confirmSend")}
+              {isContentDraft
+                ? t("websiteExport.confirmSaveDraft")
+                : t("websiteExport.confirmSend")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -578,11 +618,22 @@ export function WebsiteExportDialog({
       >
         <DialogContent className="sm:max-w-[420px]">
           <DialogHeader>
-            <DialogTitle>{t("websiteExport.removeConfirmTitle")}</DialogTitle>
+            <DialogTitle>
+              {t(
+                allRemovableAreDrafts
+                  ? "websiteExport.removeDraftConfirmTitle"
+                  : "websiteExport.removeConfirmTitle"
+              )}
+            </DialogTitle>
             <DialogDescription>
-              {t("websiteExport.removeConfirmDescription", {
-                count: removableIds.length,
-              })}
+              {t(
+                allRemovableAreDrafts
+                  ? "websiteExport.removeDraftConfirmDescription"
+                  : "websiteExport.removeConfirmDescription",
+                {
+                  count: removableIds.length,
+                }
+              )}
             </DialogDescription>
           </DialogHeader>
           {isRemoving ? (
@@ -608,7 +659,11 @@ export function WebsiteExportDialog({
               disabled={isRemoving}
               onClick={runRemove}
             >
-              {t("websiteExport.removeConfirmSend")}
+              {t(
+                allRemovableAreDrafts
+                  ? "websiteExport.removeDraftConfirmSend"
+                  : "websiteExport.removeConfirmSend"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -577,6 +577,11 @@ export function SheetSettingsDialog({
     setPendingDrop(null);
   };
 
+  const resetWidths = () => {
+    commitLayoutChange({ ...captureLayout(true), widths: {} }, true);
+    toast.success(t("sheets.settings.resetWidthsSuccess"));
+  };
+
   const syncFromDefault = async () => {
     setBusy(true);
     try {
@@ -1114,6 +1119,15 @@ export function SheetSettingsDialog({
               <h3 className="text-sm font-medium">{t("sheets.settings.layoutSection")}</h3>
               <p className="text-xs text-muted-foreground">{t("sheets.settings.layoutHint")}</p>
               <div className="flex flex-col gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={busy}
+                  onClick={resetWidths}
+                >
+                  {t("sheets.settings.resetWidthsButton")}
+                </Button>
                 <Button
                   type="button"
                   size="sm"

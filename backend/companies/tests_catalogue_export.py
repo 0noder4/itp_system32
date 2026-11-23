@@ -298,7 +298,35 @@ class CatalogueExportServiceTests(TestCase):
     def test_export_can_leave_content_as_draft(self):
         payload = self.service.export([self.company.id], publish_content=False)
         self.assertTrue(payload["results"][0]["ok"])
+        self.assertFalse(payload["results"][0]["published"])
         self.assertFalse(self.client.create_company.call_args.kwargs.get("publish"))
+
+        pub = WebsitePublication.objects.get(company=self.company)
+        self.assertFalse(pub.content_published)
+
+        preview = self.service.preview([self.company.id])["companies"][0]
+        self.assertEqual(preview["status"], "draft")
+        self.assertFalse(preview["content_published"])
+        self.assertTrue(preview["can_remove"])
+        self.assertTrue(preview["changed_since_export"])
+
+        # Publishing an unchanged draft works directly without removing first.
+        republish = self.service.export([self.company.id], publish_content=True)
+        self.assertTrue(republish["results"][0]["ok"])
+        self.assertFalse(republish["results"][0]["skipped"])
+        self.assertTrue(republish["results"][0]["published"])
+        self.assertTrue(self.client.update_company.call_args.kwargs.get("publish"))
+
+        pub.refresh_from_db()
+        self.assertTrue(pub.content_published)
+
+        after = self.service.preview([self.company.id])["companies"][0]
+        self.assertEqual(after["status"], "unchanged")
+        self.assertTrue(after["content_published"])
+
+        self.service.remove([self.company.id])
+        pub.refresh_from_db()
+        self.assertFalse(pub.content_published)
 
     def test_export_can_leave_hall_map_as_draft(self):
         payload = self.service.export(

@@ -1,3 +1,4 @@
+from decimal import Decimal
 from django.db import models
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -41,6 +42,11 @@ SIZE_OPT = [
     ('standardowy', '6m2'),
     ('rozszerzony', '8m2'),
     ('12m2', '12m2'),
+]
+
+PLANNED_DAYS_CHOICES = [
+    (1, '1 dzień'),
+    (2, '2 dni'),
 ]
 
 STATE_OPT = [
@@ -222,6 +228,31 @@ class Company(models.Model):
         default=STATUS_BASIC,
         verbose_name="pakiet",
     )
+    planned_stand_size = models.CharField(
+        max_length=11,
+        choices=SIZE_OPT,
+        blank=True,
+        default="",
+        verbose_name="planowany rozmiar stoiska",
+    )
+    planned_days_count = models.PositiveSmallIntegerField(
+        choices=PLANNED_DAYS_CHOICES,
+        null=True,
+        blank=True,
+        verbose_name="planowana liczba dni",
+    )
+    extra_cost = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        verbose_name="dodatkowe koszty (netto)",
+    )
+    extra_cost_description = models.CharField(
+        max_length=500,
+        blank=True,
+        default="",
+        verbose_name="opis dodatkowych kosztów",
+    )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="utworzono")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="zmodyfikowano")
 
@@ -275,6 +306,19 @@ class CompanyInvitation(models.Model):
         choices=COMPANY_STATUS_CHOICES,
         default=STATUS_BASIC,
         verbose_name="pakiet",
+    )
+    planned_stand_size = models.CharField(
+        max_length=11,
+        choices=SIZE_OPT,
+        blank=True,
+        default="",
+        verbose_name="planowany rozmiar stoiska",
+    )
+    planned_days_count = models.PositiveSmallIntegerField(
+        choices=PLANNED_DAYS_CHOICES,
+        null=True,
+        blank=True,
+        verbose_name="planowana liczba dni",
     )
     
     created_by = models.ForeignKey(
@@ -1056,6 +1100,11 @@ class WebsitePublication(models.Model):
     strapi_jobs = models.JSONField(default=dict, blank=True, verbose_name="oferty pracy w Strapi")
     payload_hash = models.CharField(max_length=64, blank=True, default="", verbose_name="hash danych")
     last_exported_at = models.DateTimeField(null=True, blank=True, verbose_name="ostatni eksport")
+    content_published = models.BooleanField(
+        default=False,
+        verbose_name="opublikowana na stronie",
+        help_text="True = karta firmy i oferty opublikowane publicznie; False = tylko szkic w Strapi.",
+    )
     last_error = models.TextField(blank=True, default="", verbose_name="ostatni błąd")
 
     class Meta:

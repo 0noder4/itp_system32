@@ -290,6 +290,8 @@ class CompanyDetailView(APIView):
         existing_day2 = Stand.objects.filter(company=company, day='day2').first()
         
         # Handle stand updates
+        has_day1 = 'day1_stand' in request.data
+        has_day2 = 'day2_stand' in request.data
         day1_stand_data = request.data.get('day1_stand')
         day2_stand_data = request.data.get('day2_stand')
 
@@ -312,7 +314,7 @@ class CompanyDetailView(APIView):
             ("day1", day1_stand_data),
             ("day2", day2_stand_data),
         ):
-            if stand_data is None:
+            if not isinstance(stand_data, dict):
                 continue
             raw_num = stand_data.get("stand_number")
             raw_size = stand_data.get("stand_size")
@@ -343,46 +345,34 @@ class CompanyDetailView(APIView):
                     },
                     status=status.HTTP_409_CONFLICT,
                 )
-        
-        if day1_stand_data is not None:
-            if day1_stand_data.get('stand_number') and day1_stand_data.get('stand_size'):
-                stand_number = day1_stand_data.get('stand_number').strip()
-                # Check if stand actually changed
-                if not existing_day1 or existing_day1.stand_number != stand_number or existing_day1.stand_size != day1_stand_data.get('stand_size'):
+
+        for day_key, present, stand_data, existing_stand in (
+            ("day1", has_day1, day1_stand_data, existing_day1),
+            ("day2", has_day2, day2_stand_data, existing_day2),
+        ):
+            if not present:
+                continue
+            raw_num = stand_data.get('stand_number') if isinstance(stand_data, dict) else None
+            raw_size = stand_data.get('stand_size') if isinstance(stand_data, dict) else None
+            stand_number = str(raw_num).strip() if raw_num else ''
+            if stand_number and raw_size:
+                if (
+                    not existing_stand
+                    or existing_stand.stand_number != stand_number
+                    or existing_stand.stand_size != raw_size
+                ):
                     Stand.objects.update_or_create(
                         company=company,
-                        day='day1',
+                        day=day_key,
                         defaults={
                             'stand_number': stand_number,
-                            'stand_size': day1_stand_data.get('stand_size')
-                        }
+                            'stand_size': raw_size,
+                        },
                     )
                     stands_changed = True
-            elif day1_stand_data is None or (not day1_stand_data.get('stand_number') and not day1_stand_data.get('stand_size')):
-                # Delete stand if both fields are empty/None
-                if existing_day1:
-                    Stand.objects.filter(company=company, day='day1').delete()
-                    stands_changed = True
-        
-        if day2_stand_data is not None:
-            if day2_stand_data.get('stand_number') and day2_stand_data.get('stand_size'):
-                stand_number = day2_stand_data.get('stand_number').strip()
-                # Check if stand actually changed
-                if not existing_day2 or existing_day2.stand_number != stand_number or existing_day2.stand_size != day2_stand_data.get('stand_size'):
-                    Stand.objects.update_or_create(
-                        company=company,
-                        day='day2',
-                        defaults={
-                            'stand_number': stand_number,
-                            'stand_size': day2_stand_data.get('stand_size')
-                        }
-                    )
-                    stands_changed = True
-            elif day2_stand_data is None or (not day2_stand_data.get('stand_number') and not day2_stand_data.get('stand_size')):
-                # Delete stand if both fields are empty/None
-                if existing_day2:
-                    Stand.objects.filter(company=company, day='day2').delete()
-                    stands_changed = True
+            elif existing_stand:
+                Stand.objects.filter(company=company, day=day_key).delete()
+                stands_changed = True
         
         # Send email notification if stands were changed
         if stands_changed:
@@ -1163,30 +1153,14 @@ class FormStage2View(APIView):
                 return Response({
                     "detail": "Name sign text is required for our stand"
                 }, status=status.HTTP_400_BAD_REQUEST)
-            
-            # Check if logo_sign_file exists - check both stand_details_dict and request.FILES
-            has_logo = False
-            # First check if it's already in stand_details_dict as a file object
+
+            # Optional logo_sign_file — copy from request.FILES if uploaded outside stand_details_dict
             logo_in_dict = stand_details_dict.get('logo_sign_file')
-            if logo_in_dict and (hasattr(logo_in_dict, 'read') or hasattr(logo_in_dict, 'name')):
-                has_logo = True
-                logger.info(f"Found logo_sign_file in stand_details_dict: {logo_in_dict.name if hasattr(logo_in_dict, 'name') else 'file object'}")
-            
-            # If not found, check request.FILES directly
-            if not has_logo:
+            if not (logo_in_dict and (hasattr(logo_in_dict, 'read') or hasattr(logo_in_dict, 'name'))):
                 for key in request.FILES.keys():
                     if 'logo_sign_file' in key:
-                        has_logo = True
-                        logger.info(f"Found logo_sign_file in request.FILES: {key}")
-                        # Add it to stand_details_dict
                         stand_details_dict['logo_sign_file'] = request.FILES[key]
                         break
-            
-            if not is_draft and not is_update and not has_logo:
-                logger.error(f"Logo validation failed. stand_details_dict keys: {list(stand_details_dict.keys())}, request.FILES keys: {list(request.FILES.keys())}")
-                return Response({
-                    "detail": "Logo file is required for our stand"
-                }, status=status.HTTP_400_BAD_REQUEST)
         
         # Update data structure with stand_details_dict (files should now be included)
         data['stand_details'] = stand_details_dict
@@ -1338,14 +1312,6 @@ class FormStage2View(APIView):
             if not stand_details_data.get('name_sign_text') and not stand.name_sign_text:
                 return Response({
                     "detail": "Name sign text is required for our stand"
-                }, status=status.HTTP_400_BAD_REQUEST)
-            # Check if logo_sign_file exists in parsed data, request.FILES, or already in database
-            has_logo = stand_details_data.get('logo_sign_file') is not None or stand.logo_sign_file
-            if not has_logo:
-                has_logo = any('logo_sign_file' in key for key in list(request.FILES.keys()))
-            if not has_logo:
-                return Response({
-                    "detail": "Logo file is required for our stand"
                 }, status=status.HTTP_400_BAD_REQUEST)
         
         instance_data = {
@@ -2919,11 +2885,168 @@ class SendInvitationRemindersView(APIView):
             )
 
 
+MEDIA_CATEGORIES = (
+    'logo_sign',
+    'catalogue_logo',
+    'stand_visualization',
+    'fire_cert',
+    'order_pdf',
+)
+DEFAULT_MEDIA_CATEGORIES = (
+    'logo_sign',
+    'catalogue_logo',
+    'stand_visualization',
+    'fire_cert',
+)
+
+
+def _parse_company_ids(raw_ids, *, required: bool = True):
+    if raw_ids is None:
+        if required:
+            return None, Response(
+                {
+                    'error': 'company_ids required',
+                    'detail': 'Provide a non-empty list of company_ids.',
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return None, None
+
+    if not isinstance(raw_ids, list) or len(raw_ids) == 0:
+        return None, Response(
+            {
+                'error': 'company_ids required',
+                'detail': 'Provide a non-empty list of company_ids.',
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    parsed_ids = []
+    seen = set()
+    for raw_id in raw_ids:
+        if isinstance(raw_id, bool):
+            return None, Response(
+                {
+                    'error': 'invalid company_ids',
+                    'detail': 'All company_ids must be integers.',
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            pk = int(raw_id)
+        except (TypeError, ValueError):
+            return None, Response(
+                {
+                    'error': 'invalid company_ids',
+                    'detail': 'All company_ids must be integers.',
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if pk in seen:
+            continue
+        seen.add(pk)
+        parsed_ids.append(pk)
+
+    if not parsed_ids:
+        return None, Response(
+            {
+                'error': 'company_ids required',
+                'detail': 'Provide a non-empty list of company_ids.',
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    return parsed_ids, None
+
+
+def _parse_tabular_export_params(request):
+    from companies.services.export_service import EXPORT_SECTIONS
+
+    parsed_ids, err = _parse_company_ids(request.data.get('company_ids'), required=True)
+    if err is not None:
+        return None, err
+
+    raw_sections = request.data.get('sections')
+    if raw_sections is None:
+        sections = list(EXPORT_SECTIONS)
+    else:
+        if not isinstance(raw_sections, list) or len(raw_sections) == 0:
+            return None, Response(
+                {
+                    'error': 'invalid sections',
+                    'detail': 'sections must be a non-empty list of section keys.',
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        valid_set = set(EXPORT_SECTIONS)
+        requested = set()
+        for item in raw_sections:
+            if not isinstance(item, str) or item not in valid_set:
+                return None, Response(
+                    {
+                        'error': 'invalid sections',
+                        'detail': f'Unknown export section: {item!r}.',
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            requested.add(item)
+        sections = [sec for sec in EXPORT_SECTIONS if sec in requested]
+
+    combine = request.data.get('combine', 'merge')
+    if combine not in ('merge', 'separate'):
+        return None, Response(
+            {
+                'error': 'invalid combine',
+                'detail': "combine must be 'merge' or 'separate'.",
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    return (parsed_ids, sections, combine), None
+
+
+def _check_order_summary_eligibility(company: Company) -> tuple[bool, str]:
+    """Check if company meets OrderSummaryPDFView prerequisites without raising."""
+    try:
+        form = company.form
+    except Form.DoesNotExist:
+        return False, 'brak formularza'
+
+    required_stages = (
+        [1, 2, 3, 4, 5]
+        if company_can_access_stage3(company)
+        else [1, 2, 4, 5]
+    )
+    missing_completed = [
+        str(s) for s in required_stages if not getattr(form, f'stage_{s}_completed', False)
+    ]
+    if missing_completed:
+        return False, f"nieukończone etapy: {', '.join(missing_completed)}"
+
+    latest_feedback = {}
+    for fb in company.feedback.all():
+        cur = latest_feedback.get(fb.form)
+        if cur is None or fb.id > cur.id:
+            latest_feedback[fb.form] = fb
+
+    unaccepted = []
+    for stage_num in required_stages:
+        fb = latest_feedback.get(f'stage_{stage_num}')
+        if not fb or fb.status != 'accepted':
+            unaccepted.append(str(stage_num))
+    if unaccepted:
+        return False, f"niezaakceptowane etapy: {', '.join(unaccepted)}"
+
+    if not list(company.stand_all.all()):
+        return False, 'brak przypisanego stoiska'
+
+    return True, ''
+
+
 class ExportCSVView(APIView):
     """
-    Export selected companies to CSV format.
+    Export selected companies to CSV (or ZIP of per-section CSVs).
 
-    Accessible only to admin/staff users via JWT authentication.
+    Accessible only to FR/admin users via JWT authentication.
     Requires POST with ordered company_ids; GET is rejected to avoid full dumps.
     """
     permission_classes = [IsAuthenticated, HasStaffRole("fr")]
@@ -2938,54 +3061,37 @@ class ExportCSVView(APIView):
         )
 
     def post(self, request):
-        from django.http import StreamingHttpResponse, HttpResponseServerError, JsonResponse
+        from django.http import HttpResponse, StreamingHttpResponse, HttpResponseServerError, JsonResponse
         from companies.services.export_service import ExportService
         from datetime import datetime
 
-        company_ids = request.data.get('company_ids')
-        if not isinstance(company_ids, list) or len(company_ids) == 0:
-            return Response(
-                {
-                    'error': 'company_ids required',
-                    'detail': 'Provide a non-empty list of company_ids.',
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        parsed_ids = []
-        seen = set()
-        for raw_id in company_ids:
-            try:
-                pk = int(raw_id)
-            except (TypeError, ValueError):
-                return Response(
-                    {
-                        'error': 'invalid company_ids',
-                        'detail': 'All company_ids must be integers.',
-                    },
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-            if pk in seen:
-                continue
-            seen.add(pk)
-            parsed_ids.append(pk)
-
-        if not parsed_ids:
-            return Response(
-                {
-                    'error': 'company_ids required',
-                    'detail': 'Provide a non-empty list of company_ids.',
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        parsed, err = _parse_tabular_export_params(request)
+        if err is not None:
+            return err
+        parsed_ids, sections, combine = parsed
 
         try:
             export_service = ExportService(
                 user=request.user,
-                filters={'company_ids': parsed_ids},
+                filters={'company_ids': parsed_ids, 'sections': sections},
             )
 
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+
+            if combine == 'separate' and len(sections) > 1:
+                zip_bytes = export_service.generate_csv_zip()
+                filename = f'companies_export_csv_{timestamp}.zip'
+                response = HttpResponse(zip_bytes, content_type='application/zip')
+                response['Content-Disposition'] = (
+                    f'attachment; filename="{filename}"; filename*=UTF-8\'\'{filename}'
+                )
+                logger.info(
+                    "CSV ZIP export completed by user %s for %s companies",
+                    request.user.username,
+                    len(parsed_ids),
+                )
+                return response
+
             filename = f'companies_export_{timestamp}.csv'
 
             def csv_generator():
@@ -3030,6 +3136,69 @@ class ExportCSVView(APIView):
             return HttpResponseServerError(
                 error_message,
                 content_type='text/plain; charset=utf-8'
+            )
+
+
+class ExportXLSXView(APIView):
+    """
+    Export selected companies to a styled XLSX workbook.
+
+    Accessible only to FR/admin users via JWT authentication.
+    Requires POST with ordered company_ids.
+    """
+    permission_classes = [IsAuthenticated, HasStaffRole("fr")]
+
+    def get(self, request):
+        return Response(
+            {
+                'error': 'company_ids required',
+                'detail': 'Use POST with a non-empty company_ids list to export XLSX.',
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    def post(self, request):
+        from django.http import HttpResponse
+        from companies.services.export_service import ExportService
+        from datetime import datetime
+
+        parsed, err = _parse_tabular_export_params(request)
+        if err is not None:
+            return err
+        parsed_ids, sections, combine = parsed
+
+        try:
+            export_service = ExportService(
+                user=request.user,
+                filters={'company_ids': parsed_ids, 'sections': sections},
+            )
+            xlsx_bytes = export_service.generate_xlsx(combine=combine)
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            filename = f'companies_export_{timestamp}.xlsx'
+            response = HttpResponse(
+                xlsx_bytes,
+                content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            )
+            response['Content-Disposition'] = (
+                f'attachment; filename="{filename}"; filename*=UTF-8\'\'{filename}'
+            )
+            logger.info(
+                "XLSX export completed by user %s for %s companies (combine=%s)",
+                request.user.username,
+                len(parsed_ids),
+                combine,
+            )
+            return response
+        except Exception as exc:
+            logger.error(
+                "XLSX export failed for user %s: %s",
+                request.user.username,
+                exc,
+                exc_info=True,
+            )
+            return Response(
+                {'error': 'XLSX export failed', 'detail': str(exc)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
 
@@ -3079,52 +3248,31 @@ class ExportLogosView(APIView):
 
 class ExportMediaFilesView(APIView):
     """
-    Export active media files referenced in exhibitor forms as a ZIP file.
-    
-    Accessible only to admin/staff users via JWT authentication.
-    Creates a ZIP archive containing files referenced in:
-    - StandDetails.logo_sign_file (logos/)
-    - StandDetails.fire_cert (fire_certs/)
-    - StandDetails.stand_visualization (stand_visualizations/)
-    - Description.logo_file (catalogue_logos/)
-    
-    Files are named: "folder/[stand_code_day1][stand_code_day2] full company name.extension"
-    Folder structure is preserved: logos/, fire_certs/, stand_visualizations/, catalogue_logos/
+    Export active media files (and optionally order summary PDFs) as a ZIP file.
+
+    GET: all companies, default media categories (logos, fire certs, visualizations, catalogue logos).
+    POST: optional company_ids and categories filtering, plus optional order_pdf generation.
     """
     permission_classes = [IsAuthenticated, HasStaffRole("fr")]
 
     def _format_filename(self, company, original_filename, folder_prefix):
         """
         Format filename as: "folder_prefix/[stand_code_day1][stand_code_day2] full company name.extension"
-        
-        Args:
-            company: Company instance
-            original_filename: Original filename (relative path from MEDIA_ROOT)
-            folder_prefix: Folder prefix (logos/, fire_certs/, catalogue_logos/)
-        
-        Returns:
-            Formatted filename string with folder structure
         """
-        import re
-        
-        # Get stand codes for day1 and day2
         stands = list(company.stand_all.all())
         day1_stand = next((s for s in stands if s.day == 'day1'), None)
         day2_stand = next((s for s in stands if s.day == 'day2'), None)
-        
-        # Get stand numbers, use empty string if not set or 'brak'
+
         stand_code_day1 = ''
         if day1_stand and day1_stand.stand_number and day1_stand.stand_number != 'brak':
             stand_code_day1 = day1_stand.stand_number
-        
+
         stand_code_day2 = ''
         if day2_stand and day2_stand.stand_number and day2_stand.stand_number != 'brak':
             stand_code_day2 = day2_stand.stand_number
-        
-        # Format stand codes in brackets: [day1][day2]
+
         stand_prefix = f"[{stand_code_day1}][{stand_code_day2}]"
-        
-        # Get full company name from BasicData, fallback to company.name
+
         try:
             if hasattr(company, 'basic_data') and company.basic_data:
                 full_company_name = company.basic_data.full_name or company.name
@@ -3132,175 +3280,275 @@ class ExportMediaFilesView(APIView):
                 full_company_name = company.name
         except Exception:
             full_company_name = company.name
-        
-        # Get file extension from original filename
+
         _, ext = os.path.splitext(original_filename)
         if not ext:
             ext = os.path.splitext(os.path.basename(original_filename))[1]
-        
-        # Sanitize company name (remove invalid filename characters)
-        sanitized_name = re.sub(r'[<>:"/\\|?*]', '_', full_company_name)
-        sanitized_name = sanitized_name.strip()
-        
-        # Combine parts: folder_prefix/[stand_code_day1][stand_code_day2] full company name.extension
-        formatted_name = f"{folder_prefix}{stand_prefix} {sanitized_name}{ext}"
-        
-        return formatted_name
 
-    def get(self, request):
+        sanitized_name = re.sub(r'[<>:"/\\|?*]', '_', full_company_name).strip()
+        return f"{folder_prefix}{stand_prefix} {sanitized_name}{ext}"
+
+    def _unique_arcname(self, arcnames_added: set[str], formatted_name: str, company_id: int) -> str:
+        if formatted_name not in arcnames_added:
+            arcnames_added.add(formatted_name)
+            return formatted_name
+        name_part, ext = os.path.splitext(formatted_name)
+        candidate = f"{name_part}_{company_id}{ext}"
+        suffix = 2
+        while candidate in arcnames_added:
+            candidate = f"{name_part}_{company_id}_{suffix}{ext}"
+            suffix += 1
+        arcnames_added.add(candidate)
+        return candidate
+
+    def _add_model_files_to_zip(
+        self,
+        zip_file,
+        queryset,
+        field_name: str,
+        folder_prefix: str,
+        arcnames_added: set[str],
+    ) -> int:
+        added = 0
+        for record in queryset:
+            file_field = getattr(record, field_name, None)
+            if not file_field:
+                continue
+            try:
+                file_path = file_field.path
+                if os.path.exists(file_path):
+                    formatted_name = self._format_filename(
+                        record.company,
+                        file_field.name,
+                        folder_prefix,
+                    )
+                    arcname = self._unique_arcname(
+                        arcnames_added,
+                        formatted_name,
+                        record.company.id,
+                    )
+                    zip_file.write(file_path, arcname=arcname)
+                    added += 1
+                else:
+                    logger.warning(
+                        "File does not exist: %s for company %s",
+                        file_path,
+                        record.company.name,
+                    )
+            except Exception as exc:
+                logger.warning(
+                    "Could not add %s for company %s: %s",
+                    field_name,
+                    record.company.name,
+                    exc,
+                    exc_info=True,
+                )
+        return added
+
+    def _build_media_response(
+        self,
+        request,
+        *,
+        company_ids: list[int] | None,
+        categories: tuple[str, ...] | list[str],
+        allow_empty_204: bool,
+    ):
+        from django.db.models import Case, IntegerField, When
         from django.http import HttpResponse
         from datetime import datetime
-        import zipfile
         from io import BytesIO
+        import zipfile
 
+        category_set = set(categories)
         buffer = BytesIO()
-        arcnames_added = set()  # Track arcnames to avoid duplicates in ZIP
+        arcnames_added: set[str] = set()
         files_count = 0
-        
+        pdf_included = 0
+        skipped_pdfs: list[str] = []
+
+        def _stand_qs(field_name: str):
+            qs = StandDetails.objects.filter(
+                **{f'{field_name}__isnull': False}
+            ).exclude(**{field_name: ''})
+            if company_ids is not None:
+                qs = qs.filter(company_id__in=company_ids)
+            return qs.select_related('company').prefetch_related(
+                'company__stand_all',
+                'company__basic_data',
+            )
+
         with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-            # Export logo_sign_file from StandDetails (goes to logos/ folder)
-            stand_details_with_logos = StandDetails.objects.filter(
-                logo_sign_file__isnull=False
-            ).exclude(logo_sign_file='').select_related('company').prefetch_related('company__stand_all', 'company__basic_data')
-            
-            for stand_detail in stand_details_with_logos:
-                if stand_detail.logo_sign_file:
-                    try:
-                        file_path = stand_detail.logo_sign_file.path
-                        if os.path.exists(file_path):
-                            formatted_name = self._format_filename(
-                                stand_detail.company,
-                                stand_detail.logo_sign_file.name,
-                                'logos/'
-                            )
-                            # Only add if arcname is unique (handle duplicate names)
-                            if formatted_name not in arcnames_added:
-                                zip_file.write(file_path, arcname=formatted_name)
-                                arcnames_added.add(formatted_name)
-                                files_count += 1
-                            else:
-                                # If duplicate name, append company ID to make it unique
-                                name_part, ext = os.path.splitext(formatted_name)
-                                unique_name = f"{name_part}_{stand_detail.company.id}{ext}"
-                                zip_file.write(file_path, arcname=unique_name)
-                                arcnames_added.add(unique_name)
-                                files_count += 1
-                        else:
-                            logger.warning(f"File does not exist: {file_path} for company {stand_detail.company.name}")
-                    except Exception as e:
-                        logger.warning(f"Could not add logo_sign_file for company {stand_detail.company.name}: {e}", exc_info=True)
-                        continue
+            if 'logo_sign' in category_set:
+                files_count += self._add_model_files_to_zip(
+                    zip_file, _stand_qs('logo_sign_file'), 'logo_sign_file', 'logos/', arcnames_added
+                )
+            if 'fire_cert' in category_set:
+                files_count += self._add_model_files_to_zip(
+                    zip_file, _stand_qs('fire_cert'), 'fire_cert', 'fire_certs/', arcnames_added
+                )
+            if 'stand_visualization' in category_set:
+                files_count += self._add_model_files_to_zip(
+                    zip_file,
+                    _stand_qs('stand_visualization'),
+                    'stand_visualization',
+                    'stand_visualizations/',
+                    arcnames_added,
+                )
+            if 'catalogue_logo' in category_set:
+                desc_qs = Description.objects.filter(
+                    logo_file__isnull=False
+                ).exclude(logo_file='')
+                if company_ids is not None:
+                    desc_qs = desc_qs.filter(company_id__in=company_ids)
+                desc_qs = desc_qs.select_related('company').prefetch_related(
+                    'company__stand_all',
+                    'company__basic_data',
+                )
+                files_count += self._add_model_files_to_zip(
+                    zip_file, desc_qs, 'logo_file', 'catalogue_logos/', arcnames_added
+                )
 
-            # Export fire_cert from StandDetails (goes to fire_certs/ folder)
-            stand_details_with_certs = StandDetails.objects.filter(
-                fire_cert__isnull=False
-            ).exclude(fire_cert='').select_related('company').prefetch_related('company__stand_all', 'company__basic_data')
-            
-            for stand_detail in stand_details_with_certs:
-                if stand_detail.fire_cert:
-                    try:
-                        file_path = stand_detail.fire_cert.path
-                        if os.path.exists(file_path):
-                            formatted_name = self._format_filename(
-                                stand_detail.company,
-                                stand_detail.fire_cert.name,
-                                'fire_certs/'
-                            )
-                            # Only add if arcname is unique (handle duplicate names)
-                            if formatted_name not in arcnames_added:
-                                zip_file.write(file_path, arcname=formatted_name)
-                                arcnames_added.add(formatted_name)
-                                files_count += 1
-                            else:
-                                # If duplicate name, append company ID to make it unique
-                                name_part, ext = os.path.splitext(formatted_name)
-                                unique_name = f"{name_part}_{stand_detail.company.id}{ext}"
-                                zip_file.write(file_path, arcname=unique_name)
-                                arcnames_added.add(unique_name)
-                                files_count += 1
-                        else:
-                            logger.warning(f"File does not exist: {file_path} for company {stand_detail.company.name}")
-                    except Exception as e:
-                        logger.warning(f"Could not add fire_cert for company {stand_detail.company.name}: {e}", exc_info=True)
-                        continue
+            if 'order_pdf' in category_set:
+                from .pdf_generator import OrderSummaryPDFGenerator
 
-            # Export stand_visualization from StandDetails (goes to stand_visualizations/ folder)
-            stand_details_with_viz = StandDetails.objects.filter(
-                stand_visualization__isnull=False
-            ).exclude(stand_visualization='').select_related('company').prefetch_related('company__stand_all', 'company__basic_data')
+                user_language = getattr(request.user, 'language', 'pl') or 'pl'
+                if user_language not in ('en', 'pl'):
+                    user_language = 'pl'
 
-            for stand_detail in stand_details_with_viz:
-                if stand_detail.stand_visualization:
-                    try:
-                        file_path = stand_detail.stand_visualization.path
-                        if os.path.exists(file_path):
-                            formatted_name = self._format_filename(
-                                stand_detail.company,
-                                stand_detail.stand_visualization.name,
-                                'stand_visualizations/'
-                            )
-                            if formatted_name not in arcnames_added:
-                                zip_file.write(file_path, arcname=formatted_name)
-                                arcnames_added.add(formatted_name)
-                                files_count += 1
-                            else:
-                                name_part, ext = os.path.splitext(formatted_name)
-                                unique_name = f"{name_part}_{stand_detail.company.id}{ext}"
-                                zip_file.write(file_path, arcname=unique_name)
-                                arcnames_added.add(unique_name)
-                                files_count += 1
-                        else:
-                            logger.warning(f"File does not exist: {file_path} for company {stand_detail.company.name}")
-                    except Exception as e:
-                        logger.warning(f"Could not add stand_visualization for company {stand_detail.company.name}: {e}", exc_info=True)
-                        continue
+                if company_ids is not None:
+                    order = Case(
+                        *[When(id=pk, then=pos) for pos, pk in enumerate(company_ids)],
+                        output_field=IntegerField(),
+                    )
+                    pdf_companies = (
+                        Company.objects.filter(id__in=company_ids)
+                        .select_related('form', 'basic_data')
+                        .prefetch_related('stand_all', 'feedback')
+                        .order_by(order)
+                    )
+                else:
+                    pdf_companies = (
+                        Company.objects.all()
+                        .select_related('form', 'basic_data')
+                        .prefetch_related('stand_all', 'feedback')
+                        .order_by('id')
+                    )
 
-            # Export logo_file from Description (goes to catalogue_logos/ folder)
-            descriptions_with_logos = Description.objects.filter(
-                logo_file__isnull=False
-            ).exclude(logo_file='').select_related('company').prefetch_related('company__stand_all', 'company__basic_data')
-            
-            for description in descriptions_with_logos:
-                if description.logo_file:
-                    try:
-                        file_path = description.logo_file.path
-                        if os.path.exists(file_path):
-                            formatted_name = self._format_filename(
-                                description.company,
-                                description.logo_file.name,
-                                'catalogue_logos/'
-                            )
-                            # Only add if arcname is unique (handle duplicate names)
-                            if formatted_name not in arcnames_added:
-                                zip_file.write(file_path, arcname=formatted_name)
-                                arcnames_added.add(formatted_name)
-                                files_count += 1
-                            else:
-                                # If duplicate name, append company ID to make it unique
-                                name_part, ext = os.path.splitext(formatted_name)
-                                unique_name = f"{name_part}_{description.company.id}{ext}"
-                                zip_file.write(file_path, arcname=unique_name)
-                                arcnames_added.add(unique_name)
-                                files_count += 1
-                        else:
-                            logger.warning(f"File does not exist: {file_path} for company {description.company.name}")
-                    except Exception as e:
-                        logger.warning(f"Could not add logo_file for company {description.company.name}: {e}", exc_info=True)
+                for company in pdf_companies:
+                    eligible, reason = _check_order_summary_eligibility(company)
+                    if not eligible:
+                        skipped_pdfs.append(f"{company.name} (ID {company.id}): {reason}")
                         continue
+                    try:
+                        pdf_bytes = OrderSummaryPDFGenerator(
+                            company, language=user_language
+                        ).generate().getvalue()
+                        formatted_name = self._format_filename(
+                            company, 'podsumowanie.pdf', 'order_pdfs/'
+                        )
+                        arcname = self._unique_arcname(
+                            arcnames_added, formatted_name, company.id
+                        )
+                        zip_file.writestr(arcname, pdf_bytes)
+                        files_count += 1
+                        pdf_included += 1
+                    except Exception as exc:
+                        logger.warning(
+                            "Could not generate order summary PDF for company %s: %s",
+                            company.id,
+                            exc,
+                            exc_info=True,
+                        )
+                        skipped_pdfs.append(f"{company.name} (ID {company.id}): błąd generowania PDF")
+
+            if skipped_pdfs and files_count > 0:
+                notes_lines = [
+                    'Firmy pominięte przy generowaniu PDF podsumowania zamówienia:',
+                    '',
+                    *skipped_pdfs,
+                    '',
+                ]
+                zip_file.writestr(
+                    'order_pdfs/_pominiete_pdf.txt',
+                    '\n'.join(notes_lines).encode('utf-8'),
+                )
+
+        if allow_empty_204 and files_count == 0:
+            response = HttpResponse(status=status.HTTP_204_NO_CONTENT)
+            response['X-Export-Files-Count'] = '0'
+            response['X-Export-Pdf-Included'] = '0'
+            response['X-Export-Pdf-Skipped'] = str(len(skipped_pdfs))
+            return response
 
         buffer.seek(0)
-        
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         filename = f'media_files_{timestamp}.zip'
-        
+
         response = HttpResponse(buffer.getvalue(), content_type='application/zip')
-        response['Content-Disposition'] = f'attachment; filename="{filename}"'
-        
+        response['Content-Disposition'] = (
+            f'attachment; filename="{filename}"; filename*=UTF-8\'\'{filename}'
+        )
+        response['X-Export-Files-Count'] = str(files_count)
+        response['X-Export-Pdf-Included'] = str(pdf_included)
+        response['X-Export-Pdf-Skipped'] = str(len(skipped_pdfs))
+
         logger.info(
-            f"Media files ZIP export initiated by user {request.user.username} - "
-            f"{files_count} files exported"
+            "Media files ZIP export initiated by user %s - %s files exported (pdfs=%s, skipped=%s)",
+            request.user.username,
+            files_count,
+            pdf_included,
+            len(skipped_pdfs),
         )
         return response
+
+    def get(self, request):
+        return self._build_media_response(
+            request,
+            company_ids=None,
+            categories=DEFAULT_MEDIA_CATEGORIES,
+            allow_empty_204=False,
+        )
+
+    def post(self, request):
+        data = request.data if isinstance(request.data, dict) else {}
+        parsed_ids, err = _parse_company_ids(data.get('company_ids'), required=False)
+        if err is not None:
+            return err
+
+        raw_categories = data.get('categories')
+        if raw_categories is None:
+            categories = list(DEFAULT_MEDIA_CATEGORIES)
+        else:
+            if not isinstance(raw_categories, list) or len(raw_categories) == 0:
+                return Response(
+                    {
+                        'error': 'invalid categories',
+                        'detail': 'categories must be a non-empty list of media category keys.',
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            valid = set(MEDIA_CATEGORIES)
+            categories = []
+            seen = set()
+            for item in raw_categories:
+                if not isinstance(item, str) or item not in valid:
+                    return Response(
+                        {
+                            'error': 'invalid categories',
+                            'detail': f'Unknown media category: {item!r}.',
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                if item not in seen:
+                    seen.add(item)
+                    categories.append(item)
+
+        return self._build_media_response(
+            request,
+            company_ids=parsed_ids,
+            categories=categories,
+            allow_empty_204=True,
+        )
 
 
 class MapLayoutView(APIView):

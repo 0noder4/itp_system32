@@ -1,3 +1,4 @@
+from collections.abc import Mapping
 from django.core.mail import EmailMultiAlternatives
 from django.conf import settings
 from django.contrib.auth.password_validation import validate_password
@@ -8,17 +9,17 @@ import re
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView
-from users.models import User, PasswordResetRequest, StaffInvitation, STAFF_ROLE_OPIEKUN
+from users.models import User, PasswordResetRequest, StaffInvitation, STAFF_ROLE_FR, STAFF_ROLE_OPIEKUN
 
 OPIEKUN_EMAIL_DOMAIN = "best.pw.edu.pl"
 
 
 def opiekun_username_from_email(email: str) -> str:
-    """Login opiekuna = lokalna część maila Best (przed @)."""
+    """Login opiekuna / FR = lokalna część maila Best (przed @)."""
     local, sep, domain = (email or "").strip().partition("@")
     if not sep or not local or domain.lower() != OPIEKUN_EMAIL_DOMAIN:
         raise serializers.ValidationError(
-            f"Opiekun musi podać adres e-mail @{OPIEKUN_EMAIL_DOMAIN}."
+            f"Wymagany jest adres e-mail @{OPIEKUN_EMAIL_DOMAIN}."
         )
     if User.objects.filter(username__iexact=local).exists():
         raise serializers.ValidationError(
@@ -217,10 +218,27 @@ def _validate_phone_number(value):
 
 
 class StaffInvitationSerializer(serializers.ModelSerializer):
+    role = serializers.ChoiceField(
+        choices=StaffInvitation.ROLE_CHOICES,
+        required=False,
+        default=STAFF_ROLE_OPIEKUN,
+    )
+
     class Meta:
         model = StaffInvitation
         fields = ("id", "email", "role", "language", "created_at", "expires_at", "is_accepted")
-        read_only_fields = ("id", "created_at", "expires_at", "is_accepted", "role")
+        read_only_fields = ("id", "created_at", "expires_at", "is_accepted")
+
+    def to_internal_value(self, data):
+        if isinstance(data, Mapping) and isinstance(data.get("email"), str):
+            raw = data["email"].strip()
+            if raw and "@" not in raw:
+                data = data.copy() if hasattr(data, "copy") else dict(data)
+                data["email"] = f"{raw}@{OPIEKUN_EMAIL_DOMAIN}"
+            elif raw != data["email"]:
+                data = data.copy() if hasattr(data, "copy") else dict(data)
+                data["email"] = raw
+        return super().to_internal_value(data)
 
     def validate_email(self, value):
         value = (value or "").strip()
@@ -252,7 +270,7 @@ class StaffInvitationSerializer(serializers.ModelSerializer):
         return value
 
     def create(self, validated_data):
-        validated_data['role'] = STAFF_ROLE_OPIEKUN
+        validated_data.setdefault('role', STAFF_ROLE_OPIEKUN)
         return super().create(validated_data)
 
 

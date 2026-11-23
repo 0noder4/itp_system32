@@ -115,6 +115,12 @@ class StaffInvitationFlowTests(TestCase):
             type="staff",
             staff_roles=["fr"],
         )
+        self.admin = User.objects.create_user(
+            username="admin-invite",
+            email="admin-invite@example.com",
+            password=self.password,
+            type="admin",
+        )
 
     def test_fr_can_invite_opiekun_and_register(self):
         from django.core import mail
@@ -182,3 +188,140 @@ class StaffInvitationFlowTests(TestCase):
             self.client.patch("/api/map-layout/", {"sync_days": True}, format="json").status_code,
             status.HTTP_403_FORBIDDEN,
         )
+
+    def test_invite_opiekun_accepts_local_part_without_domain(self):
+        from django.core import mail
+        from users.models import StaffInvitation
+
+        self.client.force_authenticate(self.fr)
+        create = self.client.post(
+            "/api/staff-invite/",
+            {"email": "mateusz.szot", "language": "pl"},
+            format="json",
+        )
+        self.assertEqual(create.status_code, status.HTTP_201_CREATED, create.data)
+        invite = StaffInvitation.objects.get(email="mateusz.szot@best.pw.edu.pl")
+        self.assertEqual(invite.role, "opiekun")
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("opiekun", mail.outbox[0].subject.lower())
+
+        self.client.force_authenticate(None)
+        register = self.client.post(
+            "/api/register/",
+            {
+                "token": str(invite.token),
+                "password": "StrongPass123!",
+                "first_name": "Mateusz",
+                "last_name": "Szot",
+                "phone_number": "+48123456789",
+            },
+            format="json",
+        )
+        self.assertEqual(register.status_code, status.HTTP_201_CREATED, register.data)
+        user = User.objects.get(email="mateusz.szot@best.pw.edu.pl")
+        self.assertEqual(user.username, "mateusz.szot")
+        self.assertEqual(user.type, "staff")
+        self.assertEqual(user.get_staff_roles(), {"opiekun"})
+
+    def test_admin_can_invite_fr_and_non_admin_fr_is_forbidden(self):
+        from django.core import mail
+        from users.models import StaffInvitation
+
+        self.client.force_authenticate(self.fr)
+        forbidden = self.client.post(
+            "/api/staff-invite/",
+            {"email": "nowy.fr", "role": "fr", "language": "pl"},
+            format="json",
+        )
+        self.assertEqual(forbidden.status_code, status.HTTP_403_FORBIDDEN)
+
+        self.client.force_authenticate(self.admin)
+        create = self.client.post(
+            "/api/staff-invite/",
+            {"email": "nowy.fr", "role": "fr", "language": "pl"},
+            format="json",
+        )
+        self.assertEqual(create.status_code, status.HTTP_201_CREATED, create.data)
+        invite = StaffInvitation.objects.get(email="nowy.fr@best.pw.edu.pl")
+        self.assertEqual(invite.role, "fr")
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("FR", mail.outbox[0].subject)
+        self.assertIn("członek zespołu FR", mail.outbox[0].body)
+
+        self.client.force_authenticate(None)
+        info = self.client.get("/api/register/", {"token": str(invite.token)})
+        self.assertEqual(info.status_code, status.HTTP_200_OK)
+        self.assertEqual(info.data["kind"], "staff")
+        self.assertEqual(info.data["role"], "fr")
+        self.assertEqual(info.data["username"], "nowy.fr")
+        self.assertEqual(info.data["email"], "nowy.fr@best.pw.edu.pl")
+
+        register = self.client.post(
+            "/api/register/",
+            {
+                "token": str(invite.token),
+                "password": "StrongPass123!",
+                "first_name": "Nowy",
+                "last_name": "FR",
+                "phone_number": "+48123456789",
+            },
+            format="json",
+        )
+        self.assertEqual(register.status_code, status.HTTP_201_CREATED, register.data)
+        user = User.objects.get(email="nowy.fr@best.pw.edu.pl")
+        self.assertEqual(user.username, "nowy.fr")
+        self.assertEqual(user.type, "staff")
+        self.assertEqual(user.get_staff_roles(), {"fr"})
+
+    def test_admin_can_invite_lg_and_tr_and_non_admin_is_forbidden(self):
+        from django.core import mail
+        from users.models import StaffInvitation
+
+        for role, local_part, expected_snippet in (
+            ("lg", "nowy.lg", "zespołu LG"),
+            ("tr", "nowy.tr", "zespołu TR"),
+        ):
+            mail.outbox.clear()
+            self.client.force_authenticate(self.fr)
+            forbidden = self.client.post(
+                "/api/staff-invite/",
+                {"email": local_part, "role": role, "language": "pl"},
+                format="json",
+            )
+            self.assertEqual(forbidden.status_code, status.HTTP_403_FORBIDDEN)
+
+            self.client.force_authenticate(self.admin)
+            create = self.client.post(
+                "/api/staff-invite/",
+                {"email": local_part, "role": role, "language": "pl"},
+                format="json",
+            )
+            self.assertEqual(create.status_code, status.HTTP_201_CREATED, create.data)
+            email = f"{local_part}@best.pw.edu.pl"
+            invite = StaffInvitation.objects.get(email=email)
+            self.assertEqual(invite.role, role)
+            self.assertEqual(len(mail.outbox), 1)
+            self.assertIn(role.upper(), mail.outbox[0].subject)
+            self.assertIn(expected_snippet, mail.outbox[0].body)
+
+            self.client.force_authenticate(None)
+            info = self.client.get("/api/register/", {"token": str(invite.token)})
+            self.assertEqual(info.status_code, status.HTTP_200_OK)
+            self.assertEqual(info.data["role"], role)
+
+            register = self.client.post(
+                "/api/register/",
+                {
+                    "token": str(invite.token),
+                    "password": "StrongPass123!",
+                    "first_name": "Test",
+                    "last_name": role.upper(),
+                    "phone_number": "+48123456789",
+                },
+                format="json",
+            )
+            self.assertEqual(register.status_code, status.HTTP_201_CREATED, register.data)
+            user = User.objects.get(email=email)
+            self.assertEqual(user.username, local_part)
+            self.assertEqual(user.type, "staff")
+            self.assertEqual(user.get_staff_roles(), {role})

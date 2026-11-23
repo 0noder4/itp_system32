@@ -72,7 +72,9 @@ class _StyleBook:
         self.xfs_xml: list[str] = [
             '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>',
         ]
-        self.xfs_by_key: dict[tuple[int, int], int] = {(0, 0): 0}
+        self.xfs_by_key: dict[tuple[int, int, int, bool, bool], int] = {
+            (0, 0, 0, False, False): 0,
+        }
 
     def fill_id(self, hex_color: str | None) -> int:
         normalized = _normalize_hex(hex_color)
@@ -89,10 +91,19 @@ class _StyleBook:
         )
         return idx
 
-    def style_id(self, fill_hex: str | None, is_bold: bool) -> int:
+    def style_id(
+        self,
+        fill_hex: str | None,
+        is_bold: bool,
+        *,
+        border: bool = False,
+        center: bool = False,
+        wrap: bool = False,
+    ) -> int:
         fid = self.fill_id(fill_hex)
         font_id = 1 if is_bold else 0
-        key = (font_id, fid)
+        bid = 1 if border else 0
+        key = (font_id, fid, bid, bool(center), bool(wrap))
         existing = self.xfs_by_key.get(key)
         if existing is not None:
             return existing
@@ -103,9 +114,22 @@ class _StyleBook:
             attrs += ' applyFont="1"'
         if fid:
             attrs += ' applyFill="1"'
-        self.xfs_xml.append(
-            f'<xf numFmtId="0" fontId="{font_id}" fillId="{fid}" borderId="0" xfId="0"{attrs}/>'
-        )
+        if bid:
+            attrs += ' applyBorder="1"'
+        if center or wrap:
+            align_parts = ['vertical="center"']
+            if center:
+                align_parts.append('horizontal="center"')
+            if wrap:
+                align_parts.append('wrapText="1"')
+            self.xfs_xml.append(
+                f'<xf numFmtId="0" fontId="{font_id}" fillId="{fid}" borderId="{bid}" xfId="0"{attrs} applyAlignment="1">'
+                f'<alignment {" ".join(align_parts)}/></xf>'
+            )
+        else:
+            self.xfs_xml.append(
+                f'<xf numFmtId="0" fontId="{font_id}" fillId="{fid}" borderId="{bid}" xfId="0"{attrs}/>'
+            )
         return idx
 
     def xml(self) -> str:
@@ -117,8 +141,15 @@ class _StyleBook:
             '<font><b/><sz val="11"/><color theme="1"/><name val="Calibri"/><family val="2"/></font>'
             '</fonts>'
             f'<fills count="{len(self.fill_xml)}">{"".join(self.fill_xml)}</fills>'
-            '<borders count="1">'
+            '<borders count="2">'
             '<border><left/><right/><top/><bottom/><diagonal/></border>'
+            '<border>'
+            '<left style="thin"><color rgb="FF94A3B8"/></left>'
+            '<right style="thin"><color rgb="FF94A3B8"/></right>'
+            '<top style="thin"><color rgb="FF94A3B8"/></top>'
+            '<bottom style="thin"><color rgb="FF94A3B8"/></bottom>'
+            '<diagonal/>'
+            '</border>'
             '</borders>'
             '<cellStyleXfs count="1">'
             '<xf numFmtId="0" fontId="0" fillId="0" borderId="0"/>'
@@ -134,7 +165,12 @@ def _build_sheet_xml(
     *,
     fills: list[list[str | None]] | None = None,
     bold: list[list[bool]] | None = None,
+    borders: list[list[bool]] | None = None,
+    centered: list[list[bool]] | None = None,
+    wrap_text: list[list[bool]] | None = None,
     col_widths: list[float] | None = None,
+    row_heights: dict[int, float] | None = None,
+    merges: list[str] | None = None,
     freeze_rows: int = 0,
     freeze_cols: int = 0,
 ) -> str:
@@ -162,7 +198,7 @@ def _build_sheet_xml(
                 w = float(width)
             except (TypeError, ValueError):
                 continue
-            w = max(4.0, min(60.0, w))
+            w = max(2.5, min(60.0, w))
             body.append(f'<col min="{index}" max="{index}" width="{w:.2f}" customWidth="1"/>')
         body.append('</cols>')
 
@@ -176,25 +212,49 @@ def _build_sheet_xml(
                 text = ''
             fill_hex = None
             is_bold = False
+            has_border = False
+            is_centered = False
+            is_wrapped = False
             if fills and r_index < len(fills) and c_index < len(fills[r_index]):
                 fill_hex = fills[r_index][c_index]
             if bold and r_index < len(bold) and c_index < len(bold[r_index]):
                 is_bold = bool(bold[r_index][c_index])
-            sid = styles.style_id(fill_hex, is_bold)
+            if borders and r_index < len(borders) and c_index < len(borders[r_index]):
+                has_border = bool(borders[r_index][c_index])
+            if centered and r_index < len(centered) and c_index < len(centered[r_index]):
+                is_centered = bool(centered[r_index][c_index])
+            if wrap_text and r_index < len(wrap_text) and c_index < len(wrap_text[r_index]):
+                is_wrapped = bool(wrap_text[r_index][c_index])
+            sid = styles.style_id(
+                fill_hex,
+                is_bold,
+                border=has_border,
+                center=is_centered,
+                wrap=is_wrapped,
+            )
             ref = f'{_col_name(c_index)}{r_index + 1}'
             style_attr = f' s="{sid}"' if sid else ''
             cells_xml.append(
                 f'<c r="{ref}"{style_attr} t="inlineStr">'
                 f'<is><t xml:space="preserve">{escape(str(text))}</t></is></c>'
             )
-        body.append(f'<row r="{r_index + 1}">{"".join(cells_xml)}</row>')
+        ht_attr = ''
+        if row_heights and r_index in row_heights:
+            ht_attr = f' ht="{float(row_heights[r_index]):.1f}" customHeight="1"'
+        body.append(f'<row r="{r_index + 1}"{ht_attr}>{"".join(cells_xml)}</row>')
     body.append('</sheetData>')
 
-    if rows and fills and len(rows) >= 2:
-        merges = _merge_ranges([str(c or '') for c in rows[0]])
-        if merges and fills[0]:
+    if merges is not None:
+        if merges:
             body.append(f'<mergeCells count="{len(merges)}">')
             for ref in merges:
+                body.append(f'<mergeCell ref="{ref}"/>')
+            body.append('</mergeCells>')
+    elif rows and fills and len(rows) >= 2:
+        auto_merges = _merge_ranges([str(c or '') for c in rows[0]])
+        if auto_merges and fills[0]:
+            body.append(f'<mergeCells count="{len(auto_merges)}">')
+            for ref in auto_merges:
                 body.append(f'<mergeCell ref="{ref}"/>')
             body.append('</mergeCells>')
 
@@ -203,7 +263,7 @@ def _build_sheet_xml(
 
 
 def build_xlsx_workbook(sheets: list[dict]) -> bytes:
-    """sheets: [{name, rows, fills?, bold?, col_widths?, freeze_rows?, freeze_cols?}, ...]"""
+    """sheets: [{name, rows, fills?, bold?, borders?, centered?, wrap_text?, col_widths?, row_heights?, merges?, freeze_rows?, freeze_cols?}, ...]"""
     if not sheets:
         sheets = [{'name': 'Arkusz', 'rows': [['']]}]
 
@@ -221,7 +281,12 @@ def build_xlsx_workbook(sheets: list[dict]) -> bytes:
                 rows,
                 fills=raw.get('fills'),
                 bold=raw.get('bold'),
+                borders=raw.get('borders'),
+                centered=raw.get('centered'),
+                wrap_text=raw.get('wrap_text'),
                 col_widths=raw.get('col_widths'),
+                row_heights=raw.get('row_heights'),
+                merges=raw.get('merges'),
                 freeze_rows=int(raw.get('freeze_rows') or 0),
                 freeze_cols=int(raw.get('freeze_cols') or 0),
             ),

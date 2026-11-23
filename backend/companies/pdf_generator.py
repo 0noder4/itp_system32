@@ -1242,21 +1242,6 @@ class OrderSummaryPDFGenerator:
             Paragraph(_esc(power_summary), self.cell_style),
         ])
 
-        # Arrival times
-        if final_data.arrival_time_day1 or final_data.arrival_time_day2:
-            day1_time = final_data.arrival_time_day1.strftime('%H:%M') if final_data.arrival_time_day1 else '—'
-            day2_time = final_data.arrival_time_day2.strftime('%H:%M') if final_data.arrival_time_day2 else '—'
-            arrival_text = self._t(
-                f"Day 1 ({system_settings.get_day1_display_en()}): {day1_time}; "
-                f"Day 2 ({system_settings.get_day2_display_en()}): {day2_time}",
-                f"Dzień 1 ({system_settings.get_day1_display_pl()}): {day1_time}; "
-                f"Dzień 2 ({system_settings.get_day2_display_pl()}): {day2_time}",
-            )
-            logistics_rows.append([
-                Paragraph(self._t('Arrival Times:', 'Godziny przyjazdu:'), self.cell_bold_style),
-                Paragraph(_esc(arrival_text), self.cell_style),
-            ])
-
         # Main representative
         if final_data.main_rep_name or final_data.main_rep_surname:
             rep_name = f"{final_data.main_rep_name} {final_data.main_rep_surname}".strip()
@@ -1450,6 +1435,7 @@ class OrderSummaryPDFGenerator:
         eq = summary['equipment']
         jw = summary['jobwall']
         ln = summary['lunches']
+        ex = summary['extra']
 
         heading = Paragraph(
             self._t('Order Cost Summary (Netto)', 'Zestawienie kosztów zamówienia (netto)'),
@@ -1519,12 +1505,21 @@ class OrderSummaryPDFGenerator:
                 Paragraph(_esc(ln_desc), self.cell_style),
                 Paragraph(f"{ln['cost']:.2f} PLN", self.cell_right_style),
             ],
-            [
-                Paragraph(self._t('Total (netto)', 'Suma łączna (netto)'), self.cell_bold_style),
-                '',
-                Paragraph(f"{summary['total_cost']:.2f} PLN", self.cell_right_bold_style),
-            ],
         ]
+        if ex['cost'] != Decimal('0.00') or ex['description']:
+            rows.append([
+                Paragraph(
+                    self._t('Additional Costs / Adjustments', 'Dodatkowe koszty / korekty'),
+                    self.cell_style,
+                ),
+                Paragraph(_esc(ex['description'] or '—'), self.cell_style),
+                Paragraph(f"{ex['cost']:.2f} PLN", self.cell_right_style),
+            ])
+        rows.append([
+            Paragraph(self._t('Total (netto)', 'Suma łączna (netto)'), self.cell_bold_style),
+            '',
+            Paragraph(f"{summary['total_cost']:.2f} PLN", self.cell_right_bold_style),
+        ])
 
         cost_table = Table(rows, colWidths=[5.4 * cm, 8.8 * cm, 3.8 * cm])
         cost_table.setStyle(TableStyle([

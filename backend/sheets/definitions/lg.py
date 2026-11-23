@@ -30,10 +30,9 @@ from .extras import (
     CARE_SLOT_LOAD,
     LG_EXTRA_ORDERS,
     MAIL1_LOGO,
+    MAIL3_ARRIVAL,
 )
 from .form_columns import (
-    ARRIVAL_DAY1,
-    ARRIVAL_DAY2,
     CARPET_CHOICE,
     CARPET_COLOR,
     COMPANY_EMAIL,
@@ -191,8 +190,7 @@ LG_SHEET = SheetDef(
                 CARE_CAR_REGISTRATION,
                 CARE_CAR_MAKE,
                 CARE_DRIVER,
-                ARRIVAL_DAY1,
-                ARRIVAL_DAY2,
+                MAIL3_ARRIVAL,
                 CARE_PICKUP,
                 CARE_PICKUP_TIME,
             ),

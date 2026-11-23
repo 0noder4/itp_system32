@@ -257,6 +257,7 @@ class CatalogueExportService:
                         "status": "missing",
                         "skip_reason": "company_not_found",
                         "changed_since_export": False,
+                        "content_published": False,
                         "can_remove": False,
                         "payload": None,
                     }
@@ -277,7 +278,20 @@ class CatalogueExportService:
             changed = True
             if pub and pub.payload_hash and not pub.last_error:
                 changed = pub.payload_hash != digest
-            status = "skipped" if skip else ("unchanged" if not changed else "ready")
+            is_draft_only = bool(
+                pub
+                and pub.last_exported_at
+                and not pub.content_published
+                and not pub.last_error
+            )
+            if skip:
+                status = "skipped"
+            elif is_draft_only:
+                status = "draft"
+            elif not changed:
+                status = "unchanged"
+            else:
+                status = "ready"
             can_remove = bool(
                 pub
                 and (
@@ -291,7 +305,8 @@ class CatalogueExportService:
                     "name": company.name,
                     "status": status,
                     "skip_reason": skip,
-                    "changed_since_export": bool(changed and not skip),
+                    "changed_since_export": bool((changed or is_draft_only) and not skip),
+                    "content_published": bool(pub and pub.content_published),
                     "last_exported_at": pub.last_exported_at.isoformat()
                     if pub and pub.last_exported_at
                     else None,
@@ -340,6 +355,7 @@ class CatalogueExportService:
                         "skipped": True,
                         "reason": item.get("skip_reason"),
                         "strapi_document_id": None,
+                        "published": False,
                     }
                 )
                 continue
@@ -352,6 +368,7 @@ class CatalogueExportService:
                         "skipped": True,
                         "reason": "unchanged",
                         "strapi_document_id": None,
+                        "published": False,
                     }
                 )
                 continue
@@ -372,6 +389,7 @@ class CatalogueExportService:
                         "skipped": False,
                         "reason": None,
                         "strapi_document_id": doc_id,
+                        "published": bool(publish_content),
                     }
                 )
             except (StrapiAPIError, OSError, ValueError) as exc:
@@ -389,6 +407,7 @@ class CatalogueExportService:
                         "skipped": False,
                         "reason": str(exc),
                         "strapi_document_id": None,
+                        "published": False,
                     }
                 )
 
@@ -520,6 +539,7 @@ class CatalogueExportService:
         pub.strapi_jobs = {}
         pub.payload_hash = ""
         pub.last_exported_at = None
+        pub.content_published = False
         pub.last_error = ""
         pub.save(
             update_fields=[
@@ -529,6 +549,7 @@ class CatalogueExportService:
                 "strapi_jobs",
                 "payload_hash",
                 "last_exported_at",
+                "content_published",
                 "last_error",
             ]
         )
@@ -595,8 +616,16 @@ class CatalogueExportService:
 
         pub.payload_hash = export_hash(payload, hall_map, logo_sha256=logo_digest)
         pub.last_exported_at = timezone.now()
+        pub.content_published = bool(publish_content)
         pub.last_error = ""
-        pub.save(update_fields=["payload_hash", "last_exported_at", "last_error"])
+        pub.save(
+            update_fields=[
+                "payload_hash",
+                "last_exported_at",
+                "content_published",
+                "last_error",
+            ]
+        )
         return document_id
 
     def _taxonomy_ids(self, client: StrapiClient, collection: str) -> dict[str, str]:

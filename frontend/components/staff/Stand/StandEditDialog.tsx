@@ -72,12 +72,14 @@ export function StandEditDialog({
 
   React.useEffect(() => {
     if (isOpen) {
+      const d1Num = day1Stand?.stand_number || "";
+      const d2Num = day2Stand?.stand_number || "";
       setFormData({
         day1: day1Stand || { stand_number: "", stand_size: "podstawowy" },
         day2: day2Stand || { stand_number: "", stand_size: "podstawowy" },
       });
       setActiveDay("day1");
-      setSyncDays(true);
+      setSyncDays(d1Num === d2Num);
     }
   }, [isOpen, day1Stand, day2Stand]);
 
@@ -122,7 +124,24 @@ export function StandEditDialog({
       ? formData.day1.stand_number
       : formData.day2.stand_number;
 
+  const clearDay = () => {
+    const empty = { stand_number: "", stand_size: "podstawowy" };
+    setFormData((prev) => {
+      if (syncDays) return { day1: empty, day2: empty };
+      return { ...prev, [activeDay]: empty };
+    });
+  };
+
   const pickBooth = (label: string) => {
+    if (
+      (!syncDays && formData[activeDay].stand_number === label) ||
+      (syncDays &&
+        formData.day1.stand_number === label &&
+        formData.day2.stand_number === label)
+    ) {
+      clearDay();
+      return;
+    }
     const taken = otherStands.find((s) => s.standNumber === label);
     if (taken) {
       toast.error(
@@ -138,14 +157,6 @@ export function StandEditDialog({
         return { day1: next, day2: { ...next } };
       }
       return { ...prev, [activeDay]: next };
-    });
-  };
-
-  const clearDay = () => {
-    const empty = { stand_number: "", stand_size: "podstawowy" };
-    setFormData((prev) => {
-      if (syncDays) return { day1: empty, day2: empty };
-      return { ...prev, [activeDay]: empty };
     });
   };
 
@@ -279,7 +290,7 @@ export function StandEditDialog({
             </TabsContent>
           </Tabs>
           <p className="text-xs text-muted-foreground">
-            Pomarańczowe = inne firmy. Niebieskie = wybrane dla tej firmy.
+            Pomarańczowe = inne firmy. Niebieskie = wybrane dla tej firmy (kliknij ponownie, aby odznaczyć).
           </p>
         </div>
 
