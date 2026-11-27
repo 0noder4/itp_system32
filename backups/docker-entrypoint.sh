@@ -23,12 +23,14 @@ CRONTAB_FILE="/etc/crontab"
 BACKUP_SCHEDULE="${BACKUP_SCHEDULE:-0 */6 * * *}"
 MEDIA_BACKUP_ENABLED="${MEDIA_BACKUP_ENABLED:-true}"
 MEDIA_BACKUP_SCHEDULE="${MEDIA_BACKUP_SCHEDULE:-30 2 * * *}"
+GDRIVE_EXPORTS_SYNC_SCHEDULE="${GDRIVE_EXPORTS_SYNC_SCHEDULE:-5 3 * * *}"
 
 {
     echo "${BACKUP_SCHEDULE} /usr/local/bin/backup.sh --db-only >> ${BACKUP_DIR}/cron.log 2>&1"
     if [ "$MEDIA_BACKUP_ENABLED" = "true" ]; then
         echo "${MEDIA_BACKUP_SCHEDULE} /usr/local/bin/backup.sh --media-only >> ${BACKUP_DIR}/cron.log 2>&1"
     fi
+    echo "${GDRIVE_EXPORTS_SYNC_SCHEDULE} /usr/local/bin/sync_gdrive.sh --exports >> ${BACKUP_DIR}/cron.log 2>&1"
 } > "$CRONTAB_FILE"
 chmod 644 "$CRONTAB_FILE"
 

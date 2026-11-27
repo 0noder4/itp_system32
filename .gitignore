@@ -33,6 +33,8 @@ backups/*.log
 backups/exports/
 backups/paczki/
 backups/.admin_email
+backups/secrets/
+*.service-account.json
 
 # ignore cursor rules
 .cursor/

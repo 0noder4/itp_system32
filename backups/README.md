@@ -23,17 +23,27 @@ Automatyczny system kopii zapasowych dla bazy MySQL, plików wgranych przez uży
    - Przed archiwizacją `mediafiles` skrypt mierzy bieżący rozmiar katalogu `/mediafiles` i wymaga co najmniej `rozmiar_mediafiles + BACKUP_MIN_FREE_GB`. Jeśli miejsca jest za mało, przerywa i wysyła alert e-mail.
    - Logi `/backups/backup.log` oraz `/backups/cron.log` są automatycznie przycinane do ostatnich 5000 linii.
 
-4. **Nocna paczka ratunkowa `.xlsx` (`scheduler`):**
+4. **Nocna paczka ratunkowa `.xlsx` + mapy PNG (`scheduler`):**
    - Raz dziennie w nocy (domyślnie `02:45` `Europe/Warsaw`) kontener `scheduler` uruchamia `python manage.py export_emergency_xlsx`.
-   - W `/backups/exports/YYYYMMDD_HHMMSS/` powstaje 5 zweryfikowanych plików `.xlsx`:
+   - W `/backups/exports/YYYYMMDD_HHMMSS/` powstaje **6 zweryfikowanych plików `.xlsx`** oraz podfolder **`mapy/`** z **10 widokami mapy hali PNG** (5 widoków × 2 dni):
      - `lg.xlsx` (wszystkie zakładki LG),
      - `fr.xlsx` (wszystkie zakładki FR),
      - `tr.xlsx` (warsztaty TR),
      - `opiekun.xlsx` (pełny widok opiekuna dla wszystkich firm),
-     - `wszystkie-arkusze.xlsx` (jeden plik zbiorczy z wszystkimi zakładkami).
+     - `mapa.xlsx` (mapa wizualna 2D + lista stoisk),
+     - `wszystkie-arkusze.xlsx` (jeden plik zbiorczy z wszystkimi zakładkami),
+     - `mapy/mapa-itp-dzien-{1|2}[...].png` (domyślny, `-rozmiary`, `-partnerzy`, `-rozmiary-partnerzy`, `-czysty`).
    - Retencja domyślna: `7` dni (`EXPORT_RETENTION_DAYS`), dla tagowanych `30` dni (`BACKUP_RETENTION_DAYS`).
 
-5. **Alerty e-mail WYŁĄCZNIE przy awarii:**
+5. **Synchronizacja off-site na Google Drive (`rclone` + `sync_gdrive.sh`):**
+   - Po udanym lokalnym backupie DB lub `mediafiles` (oraz o `03:05` po eksporcie `.xlsx` + mapek PNG), gdy `GDRIVE_SYNC_ENABLED=true`, skrypt `sync_gdrive.sh` synchronizuje dane na Dysk współdzielony Google (`itp-backups`) kontem usługi (`GDRIVE_SERVICE_ACCOUNT_FILE`):
+     - `baza-sql/` — zrzuty `.sql.gz`,
+     - `excele-ratunkowe/` — historia 7 dni + zawsze aktualny folder `najnowsze/`,
+     - `mediafiles/` — rozpakowane pliki firm (bez roboczych `sheet_file_drafts` i `sheet_file_backups`) + podfolder `mapy/` (10 aktualnych PNG),
+     - `mediafiles-archiwum-zmian/YYYY-MM-DD/` — automatyczny backup usuniętych/nadpisanych plików (`--backup-dir`, retencja `GDRIVE_MEDIA_ARCHIVE_RETENTION_DAYS=30` dni).
+   - Awaria sieci lub Google Drive nie przerywa lokalnego backupu na VPS — wysyła osobny alert e-mail.
+
+6. **Alerty e-mail WYŁĄCZNIE przy awarii:**
    - **Zero maili przy poprawnym wykonaniu** backupu lub eksportu `.xlsx`.
    - W razie błędu alert jest wysyłany przez skonfigurowane SMTP (`home.pl`) na adres `Settings.system_admin_email` z panelu Django Admin (z pominięciem domyślnego placeholdera `admin@example.com`).
    - Skrypt `backup.sh` po cichu zapisuje aktualny adres z tabeli `companies_settings` do `/backups/.admin_email`, dzięki czemu wyśle alert nawet wtedy, gdy padnie sama baza MySQL. Opcjonalnie można też ustawić fallback `BACKUP_ALERT_EMAIL` w `.env`.
@@ -57,14 +67,21 @@ Automatyczny system kopii zapasowych dla bazy MySQL, plików wgranych przez uży
 | `EMERGENCY_EXPORT_HOUR` | `2` | Godzina nocnego eksportu `.xlsx` (`Europe/Warsaw`) |
 | `EMERGENCY_EXPORT_MINUTE` | `45` | Minuta nocnego eksportu `.xlsx` (`Europe/Warsaw`) |
 | `EXPORT_RETENTION_DAYS` | `7` | Retencja folderów `.xlsx` (dni) |
+| `GDRIVE_SYNC_ENABLED` | `false` | Włącza automatyczną wysyłkę na Google Drive przez `rclone` |
+| `GDRIVE_SHARED_DRIVE_ID` | *(puste)* | ID Dysku współdzielonego Google (`0A...`) |
+| `GDRIVE_SERVICE_ACCOUNT_FILE` | `/secrets/gdrive-sa.json` | Ścieżka w kontenerze do klucza `.json` konta usługi |
+| `GDRIVE_EXPORTS_SYNC_SCHEDULE` | `5 3 * * *` | Cron wysyłki nocnych eksportów `.xlsx` i mapek PNG na Drive |
+| `GDRIVE_MEDIA_ARCHIVE_RETENTION_DAYS` | `30` | Retencja skasowanych/nadpisanych plików w `mediafiles-archiwum-zmian/` (dni) |
 
 ---
 
 ## Obsługa na VPS (komendy)
 
-### Sprawdzenie dostępnych kopii i logów
+### Sprawdzenie dostępnych kopii, połączenia z Google Drive i logów
 ```bash
 docker compose -f compose.prod.yml exec backup /usr/local/bin/restore.sh --list
+docker compose -f compose.prod.yml exec backup /usr/local/bin/sync_gdrive.sh --check
+docker compose -f compose.prod.yml exec backup /usr/local/bin/sync_gdrive.sh --all
 docker compose -f compose.prod.yml exec backup tail -n 50 /backups/backup.log
 ```
 

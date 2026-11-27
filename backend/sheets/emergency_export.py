@@ -1,4 +1,4 @@
-"""Nightly emergency .xlsx export for all staff sheets (4 per-team files + 1 combined workbook)."""
+"""Nightly emergency .xlsx + PNG map export for all staff sheets (5 sheet files + map .xlsx + 10 PNG maps)."""
 from __future__ import annotations
 
 from datetime import datetime, timedelta
@@ -13,11 +13,13 @@ from zoneinfo import ZoneInfo
 
 from django.conf import settings
 from django.core.mail import send_mail
+from PIL import Image
 
 from companies.models import Settings
 
 from .definitions import CATALOG
 from .map_export import build_map_sheet_entries
+from .map_png_export import build_map_png_files
 from .service import build_tab_payload, visible_columns
 from .values import present
 from .xlsx import build_xlsx_workbook
@@ -181,7 +183,7 @@ def export_emergency_xlsx(
     tagged_retention_days: int = 30,
     tag: str = '',
 ) -> Path:
-    """Write and verify all 5 emergency .xlsx files atomically, then prune expired directories."""
+    """Write and verify all emergency .xlsx files and PNG hall maps atomically, then prune expired directories."""
     root = Path(output_dir)
     root.mkdir(parents=True, exist_ok=True)
 
@@ -211,6 +213,16 @@ def export_emergency_xlsx(
                 bad_member = archive.testzip()
                 if bad_member is not None:
                     raise ValueError(f'Corrupt .xlsx archive {filename}: bad member {bad_member}')
+
+        map_files = build_map_png_files()
+        map_dir = tmp_dir / 'mapy'
+        map_dir.mkdir(parents=True, exist_ok=True)
+        for map_filename, png_bytes in map_files.items():
+            map_path = map_dir / map_filename
+            map_path.write_bytes(png_bytes)
+            with Image.open(map_path) as img:
+                img.verify()
+
         os.replace(tmp_dir, target_dir)
     except Exception:
         shutil.rmtree(tmp_dir, ignore_errors=True)

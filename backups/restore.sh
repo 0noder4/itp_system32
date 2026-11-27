@@ -163,11 +163,11 @@ fi
 if [[ "$SKIP_SAFETY_BACKUP" != "true" ]]; then
     echo "Creating automatic pre-restore safety backup..."
     if [[ -n "$DB_FILE" && -n "$MEDIA_FILE" ]]; then
-        /usr/local/bin/backup.sh --tag pre-restore
+        /usr/local/bin/backup.sh --tag pre-restore --no-sync
     elif [[ -n "$DB_FILE" ]]; then
-        /usr/local/bin/backup.sh --db-only --tag pre-restore
+        /usr/local/bin/backup.sh --db-only --tag pre-restore --no-sync
     else
-        /usr/local/bin/backup.sh --media-only --tag pre-restore
+        /usr/local/bin/backup.sh --media-only --tag pre-restore --no-sync
     fi
 fi
 

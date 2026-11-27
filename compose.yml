@@ -83,12 +83,15 @@ services:
       EXPORT_RETENTION_DAYS: ${EXPORT_RETENTION_DAYS:-7}
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
       EMERGENCY_EXPORT_DIR: /backups/exports
+      SKIP_MIGRATIONS: "true"
+      SKIP_COLLECTSTATIC: "true"
     env_file:
       - .env
     networks:
       - internal
     depends_on:
       - db
+      - backend
     volumes:
       - ./backend:/app
       - backups:/backups
@@ -169,9 +172,15 @@ services:
       EMAIL_USE_SSL: ${EMAIL_USE_SSL:-}
       DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-noreply@targipracy.org.pl}
       BACKUP_ALERT_EMAIL: ${BACKUP_ALERT_EMAIL:-}
+      GDRIVE_SYNC_ENABLED: ${GDRIVE_SYNC_ENABLED:-false}
+      GDRIVE_SHARED_DRIVE_ID: ${GDRIVE_SHARED_DRIVE_ID:-}
+      GDRIVE_SERVICE_ACCOUNT_FILE: ${GDRIVE_SERVICE_ACCOUNT_FILE:-/secrets/gdrive-sa.json}
+      GDRIVE_EXPORTS_SYNC_SCHEDULE: ${GDRIVE_EXPORTS_SYNC_SCHEDULE:-5 3 * * *}
+      GDRIVE_MEDIA_ARCHIVE_RETENTION_DAYS: ${GDRIVE_MEDIA_ARCHIVE_RETENTION_DAYS:-30}
     volumes:
       - backups:/backups
       - ./backend/mediafiles:/mediafiles:ro
+      - ./backups/secrets:/secrets:ro
     networks:
       - internal
     depends_on:

@@ -58,25 +58,50 @@ FRONTEND_BASE_URL=http://localhost:3000
 BACKEND_BASE_URL=http://localhost:8000
 API_URL=http://localhost:8000
 
-# DATABASE BACKUP CONFIGURATION
-BACKUP_SCHEDULE=0 2 * * *
+# DATABASE & MEDIA BACKUP CONFIGURATION
+BACKUP_SCHEDULE=0 */6 * * *
 BACKUP_RETENTION_DAYS=30
+MEDIA_BACKUP_ENABLED=true
+MEDIA_BACKUP_SCHEDULE=30 2 * * *
+MEDIA_BACKUP_RETENTION_DAYS=14
+BACKUP_MIN_FREE_GB=5
 BACKUP_ON_START=false
-TZ=UTC
+TZ=Europe/Warsaw
+# BACKUP_ALERT_EMAIL=
+
+# Nightly emergency .xlsx & PNG map export (5 sheet files + map .xlsx + 10 PNG maps, Europe/Warsaw)
+EMERGENCY_EXPORT_ENABLED=true
+EMERGENCY_EXPORT_HOUR=2
+EMERGENCY_EXPORT_MINUTE=45
+EXPORT_RETENTION_DAYS=7
+
+# Google Drive off-site sync via rclone (Service Account JSON in ./backups/secrets/gdrive-sa.json)
+GDRIVE_SYNC_ENABLED=false
+GDRIVE_SHARED_DRIVE_ID=
+GDRIVE_SERVICE_ACCOUNT_FILE=/secrets/gdrive-sa.json
+GDRIVE_EXPORTS_SYNC_SCHEDULE=5 3 * * *
+GDRIVE_MEDIA_ARCHIVE_RETENTION_DAYS=30
 
 # Invitation expiry reminder scheduler
 NOTIFICATIONS_HOUR=9
 NOTIFICATIONS_MINUTE=0
+
+# Strapi / targus website catalogue export
+STRAPI_URL=
+STRAPI_API_TOKEN=
+# STRAPI_CONNECT_TIMEOUT=10
+# STRAPI_READ_TIMEOUT=60
+# WEBSITE_EXPORT_BATCH_MAX=10
 ```
 
 ## 1) Konfiguracja projektu i obrazów
 
 ### `PROJECT_NAME`
-- **Gdzie**: `db`, `backend`, `frontend`, `mailpit`, `backup` (w nazwach kontenerów).
+- **Gdzie**: `db`, `backend`, `scheduler`, `frontend`, `mailpit`, `backup` (w nazwach kontenerów).
 - **Po co**: prefiks nazw kontenerów (`${PROJECT_NAME}_db`, `${PROJECT_NAME}_backend` itd.), ułatwia identyfikację wielu stacków na jednym hoście.
 
 ### `ENV`
-- **Gdzie**: `backend`, `frontend`.
+- **Gdzie**: `backend`, `scheduler`, `frontend`.
 - **Po co**: wybór trybu buildu i uruchomienia (`development` / `production`) dla lokalnego stacka.
 
 ### `FRONTEND_VERSION`
@@ -84,37 +109,37 @@ NOTIFICATIONS_MINUTE=0
 - **Po co**: kontrola wersji obrazu Dockera frontendu.
 
 ### `BACKEND_VERSION`
-- **Gdzie**: `backend` (tag obrazu), dodatkowo skrypt build/push backendu.
+- **Gdzie**: `backend`, `scheduler` (tag obrazu), dodatkowo skrypt build/push backendu.
 - **Po co**: kontrola wersji obrazu Dockera backendu (build/push/deploy konkretnej wersji).
 
 ### `DOCKER_REGISTRY`
-- **Gdzie**: `backend` i `frontend` w środowisku produkcyjnym (adres rejestru obrazów), dodatkowo skrypt build/push backendu.
+- **Gdzie**: `backend`, `scheduler` i `frontend` w środowisku produkcyjnym (adres rejestru obrazów), dodatkowo skrypty build/push.
 - **Po co**: wskazuje rejestr obrazów dla środowiska produkcyjnego (np. Docker Hub/private registry).
 
 ## 2) Konfiguracja Django / backend
 
 ### `DJANGO_SECRET_KEY`
-- **Gdzie**: `backend`.
+- **Gdzie**: `backend`, `scheduler`.
 - **Po co**: klucz kryptograficzny Django (sesje, podpisy, bezpieczeństwo aplikacji).
 
 ### `DEBUG`
-- **Gdzie**: `backend`.
+- **Gdzie**: `backend`, `scheduler`.
 - **Po co**: tryb debugowania Django i zachowanie startowe kontenera backendu.
 
 ### `DJANGO_LOGLEVEL`
-- **Gdzie**: `backend`.
+- **Gdzie**: `backend`, `scheduler`.
 - **Po co**: deklaratywny poziom logowania backendu (obecnie nie jest aktywnie konsumowany w `settings.py`, ale jest przygotowany pod konfigurację logowania).
 
 ### `DJANGO_ALLOWED_HOSTS`
-- **Gdzie**: `backend`.
+- **Gdzie**: `backend`, `scheduler`.
 - **Po co**: lista hostów dopuszczonych przez Django (`ALLOWED_HOSTS`), ochrona przed Host Header attacks.
 
 ### `CSRF_TRUSTED_ORIGINS`
-- **Gdzie**: `backend` (głównie produkcja).
+- **Gdzie**: `backend`, `scheduler` (głównie produkcja).
 - **Po co**: lista zaufanych originów dla CSRF (szczególnie panel admin i operacje state-changing).
 
 ### `CORS_ALLOWED_ORIGINS`
-- **Gdzie**: `backend` (głównie produkcja).
+- **Gdzie**: `backend`, `scheduler` (głównie produkcja).
 - **Po co**: lista originów frontendu, które mogą wykonywać requesty cross-origin do API.
 
 ## 3) Konfiguracja e-mail
@@ -124,49 +149,49 @@ NOTIFICATIONS_MINUTE=0
 - Dostęp do skrzynki oraz danych logowania ma sekretarz.
 
 ### `EMAIL_HOST`
-- **Gdzie**: `backend`.
+- **Gdzie**: `backend`, `scheduler`, `backup`.
 - **Po co**: adres serwera SMTP (w dev zwykle `mailpit`, w produkcji serwer SMTP z `home.pl`).
 
 ### `EMAIL_PORT`
-- **Gdzie**: `backend`.
+- **Gdzie**: `backend`, `scheduler`, `backup`.
 - **Po co**: port serwera SMTP (np. `1025` dla Mailpit, `587` TLS, `465` SSL).
 
 ### `EMAIL_HOST_USER`
-- **Gdzie**: `backend`, `mailpit` (autoryzacja UI w dev).
+- **Gdzie**: `backend`, `scheduler`, `backup`, `mailpit` (autoryzacja UI w dev).
 - **Po co**: użytkownik SMTP; może być też fallbackiem dla adresu nadawcy (w produkcji login konta na `home.pl`).
 
 ### `EMAIL_HOST_PASSWORD`
-- **Gdzie**: `backend`, `mailpit` (autoryzacja UI w dev).
+- **Gdzie**: `backend`, `scheduler`, `backup`, `mailpit` (autoryzacja UI w dev).
 - **Po co**: hasło SMTP (w produkcji hasło do konta na `home.pl`).
 
 ### `EMAIL_USE_SSL`
-- **Gdzie**: `backend`.
+- **Gdzie**: `backend`, `scheduler`, `backup`.
 - **Po co**: wymuszenie połączenia SMTP przez SSL.
 
 ### `EMAIL_USE_TLS`
-- **Gdzie**: `backend`.
+- **Gdzie**: `backend`, `scheduler`, `backup`.
 - **Po co**: włączenie TLS (STARTTLS) dla SMTP.
 
 ### `DEFAULT_FROM_EMAIL`
-- **Gdzie**: `backend`.
+- **Gdzie**: `backend`, `scheduler`, `backup`.
 - **Po co**: domyślny adres nadawcy e-mail.
 
 ## 4) Konfiguracja bazy danych
 
 ### `DATABASE_HOST`
-- **Gdzie**: `backend`, `backup`.
+- **Gdzie**: `backend`, `scheduler`, `backup`.
 - **Po co**: host serwera bazy (w Dockerze zwykle nazwa usługi `db`).
 
 ### `DATABASE_NAME`
-- **Gdzie**: `db`, `backend`, `backup`.
+- **Gdzie**: `db`, `backend`, `scheduler`, `backup`.
 - **Po co**: nazwa bazy aplikacyjnej.
 
 ### `DATABASE_USER`
-- **Gdzie**: `db`, `backend` (jako `DATABASE_USERNAME`).
+- **Gdzie**: `db`, `backend`, `scheduler` (jako `DATABASE_USERNAME`).
 - **Po co**: użytkownik bazy danych tworzony w kontenerze MySQL i przekazywany do backendu.
 
 ### `DATABASE_PASSWORD`
-- **Gdzie**: `db`, `backend`.
+- **Gdzie**: `db`, `backend`, `scheduler`.
 - **Po co**: hasło użytkownika aplikacyjnego bazy.
 
 ### `DATABASE_ROOT_PASSWORD`
@@ -174,21 +199,21 @@ NOTIFICATIONS_MINUTE=0
 - **Po co**: hasło konta root MySQL oraz fallback dla mechanizmu backupu.
 
 ### `DATABASE_PORT`
-- **Gdzie**: `backend`, `backup`.
+- **Gdzie**: `backend`, `scheduler`, `backup`.
 - **Po co**: port serwera MySQL.
 
 ### `DATABASE_ENGINE`
-- **Gdzie**: `backend`.
+- **Gdzie**: `backend`, `scheduler`.
 - **Po co**: wybór silnika bazy (`mysql` / `sqlite3` itp.) w konfiguracji Django.
 
 ## 5) URL-e aplikacji
 
 ### `FRONTEND_BASE_URL`
-- **Gdzie**: `backend`.
+- **Gdzie**: `backend`, `scheduler`.
 - **Po co**: bazowy adres frontendu używany do budowy linków w e-mailach (np. reset hasła, rejestracja).
 
 ### `BACKEND_BASE_URL`
-- **Gdzie**: `backend`.
+- **Gdzie**: `backend`, `scheduler`.
 - **Po co**: bazowy adres backendu używany np. do pełnych URL-i zasobów statycznych w e-mailach.
 
 ### `API_URL`
@@ -227,11 +252,19 @@ NOTIFICATIONS_MINUTE=0
 
 ### `EMERGENCY_EXPORT_ENABLED` / `EMERGENCY_EXPORT_HOUR` / `EMERGENCY_EXPORT_MINUTE` / `EXPORT_RETENTION_DAYS`
 - **Gdzie**: `scheduler`.
-- **Po co**: nocny eksport 5 arkuszy `.xlsx` (`lg`, `fr`, `tr`, `opiekun`, `wszystkie-arkusze`) do `/backups/exports/` według zegara `Europe/Warsaw` (domyślnie `true`, `2:45`, retencja `7` dni).
+- **Po co**: nocny eksport 6 plików `.xlsx` (`lg`, `fr`, `tr`, `opiekun`, `mapa`, `wszystkie-arkusze`) oraz podfolderu `mapy/` z 10 widokami mapy hali `.png` do `/backups/exports/` według zegara `Europe/Warsaw` (domyślnie `true`, `2:45`, retencja `7` dni).
+
+### `GDRIVE_SYNC_ENABLED` / `GDRIVE_SHARED_DRIVE_ID` / `GDRIVE_SERVICE_ACCOUNT_FILE`
+- **Gdzie**: `backup`.
+- **Po co**: automatyczna wysyłka backupów przez `rclone` na Dysk współdzielony Google Drive (`baza-sql/`, `excele-ratunkowe/`, `mediafiles/` z podfolderem `mapy/` oraz wersjonowane `mediafiles-archiwum-zmian/`). Klucz JSON montuje się w `./backups/secrets/gdrive-sa.json:/secrets/gdrive-sa.json:ro` (katalog `./backups/secrets:/secrets:ro`).
+
+### `GDRIVE_EXPORTS_SYNC_SCHEDULE` / `GDRIVE_MEDIA_ARCHIVE_RETENTION_DAYS`
+- **Gdzie**: `backup`.
+- **Po co**: harmonogram crona wysyłki nocnych eksportów `.xlsx` + mapek PNG na Drive (domyślnie `5 3 * * *`) oraz liczba dni trzymania starych wersji plików w `mediafiles-archiwum-zmian/` (domyślnie `30`).
 
 ### `NOTIFICATIONS_HOUR`
 - **Gdzie**: `scheduler`.
-- **Po co**: godzina (0–23, zegar Europe/Warsaw), o której command `send_invitation_expiry_reminders` ma się uruchomić raz dziennie. Domyślnie `9`.
+- **Po co**: godzina (0–23, zegar Europe/Warsaw), o której uruchamiane są raz dziennie komendy `send_invitation_expiry_reminders` i `auto_reject_missing_fire_certs`. Domyślnie `9`.
 
 ### `NOTIFICATIONS_MINUTE`
 - **Gdzie**: `scheduler`.
@@ -259,6 +292,8 @@ NOTIFICATIONS_MINUTE=0
 
 W `backend/backend/settings.py` backend odczytuje nazwę użytkownika DB jako `DATABASE_USERNAME`, a w `.env.example` występuje `DATABASE_USER`. Mapowanie między tymi nazwami robi Docker Compose (`DATABASE_USERNAME: ${DATABASE_USER}`), więc konfiguracja jest poprawna.
 
+Zmienne techniczne kontenera `scheduler` (`SKIP_MIGRATIONS`, `SKIP_COLLECTSTATIC`, `EMERGENCY_EXPORT_DIR`) są ustawione bezpośrednio w `compose.yml` i `compose.prod.yml`, więc nie trzeba ich dopisywać do `.env`.
+
 ## Uwaga bezpieczeństwa (backupy)
 
-Backupy z kontenera `backup` są zapisywane lokalnie na VPS. W celu ograniczenia ryzyka utraty danych należy okresowo przenosić je na inną, niezależną maszynę (off-site backup).
+Backupy z kontenera `backup` są zapisywane lokalnie na VPS oraz (po włączeniu `GDRIVE_SYNC_ENABLED=true`) synchronizowane automatycznie na Dysk współdzielony Google Drive. Klucza Service Account (`backups/secrets/gdrive-sa.json`) nie wolno commitować do Gita.

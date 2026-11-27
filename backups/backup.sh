@@ -2,20 +2,22 @@
 set -euo pipefail
 
 # Database + mediafiles backup script with dynamic disk guard and failure-only SMTP alerts.
-# Usage: ./backup.sh [--db-only | --media-only] [--tag <label>]
+# Usage: ./backup.sh [--db-only | --media-only] [--tag <label>] [--no-sync]
 
 RUN_DB=true
 RUN_MEDIA=true
+RUN_SYNC=true
 RAW_TAG=""
 CURRENT_STAGE="inicjalizacja"
 TMP_FILES=()
 
 usage() {
     cat <<'EOF'
-Usage: backup.sh [--db-only | --media-only] [--tag <label>]
+Usage: backup.sh [--db-only | --media-only] [--tag <label>] [--no-sync]
   --db-only     Run only MySQL backup
   --media-only  Run only mediafiles backup
   --tag <label> Add a tag suffix (e.g. pre-deploy, pre-restore)
+  --no-sync     Skip Google Drive off-site sync after local backup
 EOF
 }
 
@@ -27,6 +29,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --media-only)
             RUN_DB=false
+            shift
+            ;;
+        --no-sync)
+            RUN_SYNC=false
             shift
             ;;
         --tag)
@@ -343,6 +349,18 @@ if [[ "$RUN_MEDIA" == "true" ]]; then
     find "$BACKUP_DIR" -maxdepth 1 -regextype posix-extended \
         -regex ".*/mediafiles_[0-9]{8}_[0-9]{6}_.+\\.tar\\.gz" \
         -type f -mtime +"$RETENTION_DAYS" -delete
+fi
+
+if [[ "$RUN_SYNC" == "true" && "${GDRIVE_SYNC_ENABLED:-false}" =~ ^[Tt][Rr][Uu][Ee]$ ]]; then
+    CURRENT_STAGE="sync-google-drive"
+    sync_args=()
+    [[ "$RUN_DB" == "true" ]] && sync_args+=(--db)
+    [[ "$RUN_MEDIA" == "true" ]] && sync_args+=(--media)
+    if [[ ${#sync_args[@]} -gt 0 ]]; then
+        if ! /usr/local/bin/sync_gdrive.sh "${sync_args[@]}"; then
+            log "WARNING: Google Drive sync failed (local backup succeeded; alert sent by sync_gdrive.sh)"
+        fi
+    fi
 fi
 
 trim_log "$LOG_FILE"

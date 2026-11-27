@@ -46,13 +46,17 @@ while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
   sleep 1
 done
 
-# Run migrations
-echo "Running migrations..."
-python manage.py migrate --noinput
+# Run migrations (skip on auxiliary containers like scheduler so backend is the sole migrator)
+if [ "${SKIP_MIGRATIONS:-false}" != "true" ]; then
+    echo "Running migrations..."
+    python manage.py migrate --noinput
+else
+    echo "Skipping migrations (SKIP_MIGRATIONS=true)."
+fi
 
 # Collect static files (important for production with volumes)
-# Skip in development if DEBUG=True to speed up startup
-if [ "${DEBUG:-False}" != "True" ]; then
+# Skip in development if DEBUG=True or on auxiliary containers
+if [ "${DEBUG:-False}" != "True" ] && [ "${SKIP_COLLECTSTATIC:-false}" != "true" ]; then
     echo "Collecting static files..."
     python manage.py collectstatic --noinput
 fi

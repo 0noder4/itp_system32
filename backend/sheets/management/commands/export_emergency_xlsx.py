@@ -19,7 +19,7 @@ def _env_int(name: str, default: int) -> int:
 
 
 class Command(BaseCommand):
-    help = 'Export all staff sheets to nightly emergency .xlsx files (4 team files + 1 combined workbook).'
+    help = 'Export all staff sheets to nightly emergency .xlsx files and PNG hall map views.'
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -75,6 +75,10 @@ class Command(BaseCommand):
             raise CommandError(f'Emergency .xlsx export failed: {exc}') from exc
 
         files = sorted(p.name for p in target_dir.iterdir() if p.is_file())
+        map_dir = target_dir / 'mapy'
+        map_files = sorted(p.name for p in map_dir.iterdir() if p.is_file()) if map_dir.is_dir() else []
         self.stdout.write(
-            self.style.SUCCESS(f'Emergency .xlsx export saved to {target_dir} ({", ".join(files)})')
+            self.style.SUCCESS(
+                f'Emergency .xlsx export saved to {target_dir} ({", ".join(files)}; mapy: {len(map_files)} PNG)'
+            )
         )

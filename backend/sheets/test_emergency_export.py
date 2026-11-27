@@ -10,6 +10,7 @@ from django.core import mail
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import TestCase
+from PIL import Image
 
 from companies.models import Company, Feedback, MapLayout, Settings, Stand, Workshop
 
@@ -196,5 +197,47 @@ class EmergencyXlsxExportTests(TestCase):
             ):
                 with self.assertRaises(CommandError):
                     call_command('export_emergency_xlsx', output_dir=tmpdir)
+
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_export_creates_ten_valid_map_png_views(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            call_command('export_emergency_xlsx', output_dir=tmpdir, retention_days=7)
+
+            export_dirs = [p for p in Path(tmpdir).iterdir() if p.is_dir()]
+            self.assertEqual(len(export_dirs), 1)
+            map_dir = export_dirs[0] / 'mapy'
+            self.assertTrue(map_dir.is_dir())
+
+            expected_sizes = {
+                'mapa-itp-dzien-1.png': (2140, 1192),
+                'mapa-itp-dzien-1-rozmiary.png': (2140, 1276),
+                'mapa-itp-dzien-1-partnerzy.png': (2140, 1276),
+                'mapa-itp-dzien-1-rozmiary-partnerzy.png': (2140, 1276),
+                'mapa-itp-dzien-1-czysty.png': (2140, 1192),
+                'mapa-itp-dzien-2.png': (2140, 1192),
+                'mapa-itp-dzien-2-rozmiary.png': (2140, 1276),
+                'mapa-itp-dzien-2-partnerzy.png': (2140, 1276),
+                'mapa-itp-dzien-2-rozmiary-partnerzy.png': (2140, 1276),
+                'mapa-itp-dzien-2-czysty.png': (2140, 1192),
+            }
+            actual_files = {p.name for p in map_dir.iterdir() if p.is_file()}
+            self.assertEqual(actual_files, set(expected_sizes))
+
+            for filename, expected_dim in expected_sizes.items():
+                path = map_dir / filename
+                with Image.open(path) as img:
+                    img.verify()
+                with Image.open(path) as img:
+                    self.assertEqual(img.size, expected_dim, filename)
+
+            self.assertNotEqual(
+                (map_dir / 'mapa-itp-dzien-1-partnerzy.png').read_bytes(),
+                (map_dir / 'mapa-itp-dzien-1-czysty.png').read_bytes(),
+            )
+            self.assertNotEqual(
+                (map_dir / 'mapa-itp-dzien-1.png').read_bytes(),
+                (map_dir / 'mapa-itp-dzien-1-czysty.png').read_bytes(),
+            )
 
         self.assertEqual(len(mail.outbox), 0)
