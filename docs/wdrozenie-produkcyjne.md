@@ -6,7 +6,7 @@ Dokument opisuje podstawowe informacje o środowisku produkcyjnym oraz sposób d
 
 - Produkcja działa na serwerze VPS w usłudze `home.pl`.
 - Aplikacja jest uruchamiana kontenerowo (Docker Compose).
-- Na serwerze działa stack usług aplikacji (`frontend`, `backend`, `db`, `backup`).
+- Na serwerze działa stack usług aplikacji (`frontend`, `backend`, `scheduler`, `db`, `backup`).
 
 ## Dostęp do serwera
 
@@ -113,7 +113,7 @@ Możesz też zaktualizować cały stack: `docker compose -f compose.prod.yml pul
 - Przed buildem frontendu upewnij się, że `API_URL` w `.env` na maszynie buildującej wskazuje **produkcyjny** adres API (wartość jest „wypiekana” w obrazie Next.js).
 - Po każdej zmianie wersji obrazu zwiększ tag (`BACKEND_VERSION` / `FRONTEND_VERSION`) lub nadpisz istniejący tag świadomie — na VPS musi być ten sam tag co w rejestrze.
 - Obrazy `db` i `backup` na produkcji są budowane lokalnie na VPS lub z publicznych obrazów bazowych; do rejestru projektu trafiają głównie `backend` i `frontend`.
-- Usługa `scheduler` (przypomnienia e-mail) bierze obraz **backendu**. Po podmianie obrazu API zawsze rób też recreate `scheduler`, inaczej zostaje na starym digescie.
+- Usługa `scheduler` (przypomnienia e-mail, `auto_reject_missing_fire_certs` oraz nocny eksport `.xlsx`) bierze obraz **backendu**. Po podmianie obrazu API zawsze rób też recreate `scheduler`, inaczej zostaje na starym digescie.
 
 ## Podstawowe kroki wdrożenia
 
@@ -143,7 +143,7 @@ docker compose -f compose.prod.yml ps
 - Konto e-mail dla produkcji znajduje się na `home.pl`.
 - Dostęp do skrzynki i danych logowania ma sekretarz.
 - Wartości `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `EMAIL_USE_TLS`/`EMAIL_USE_SSL` w `.env` muszą odpowiadać konfiguracji SMTP z `home.pl`.
-- `DEFAULT_FROM_EMAIL` powinien być skrzynką / domeną zgodną z kontem SMTP (`EMAIL_HOST_USER`), np. `no-reply@targipracy.org.pl`.
+- `DEFAULT_FROM_EMAIL` powinien być skrzynką / domeną zgodną z kontem SMTP (`EMAIL_HOST_USER`), np. `noreply@targipracy.org.pl`.
 - SPF dla domeny nadawcy zwykle już przechodzi przez home.pl. W nagłówkach Gmail często brakuje DKIM — to osobny temat do panelu home.pl / DNS, nie do kodu aplikacji.
 - Treść maila ma znaczenie: pierwsze zaproszenie firmy powinno brzmieć podobnie do przypomnienia o wygaśnięciu (konkretny subject, krótki body). Generyczne „Company Invitation” / „You have been invited” częściej ląduje w Spam przy tym samym From/SPF.
 
@@ -153,7 +153,7 @@ docker compose -f compose.prod.yml ps
   - **Baza MySQL:** co 6 godzin (`BACKUP_SCHEDULE=0 */6 * * *`, retencja `30` dni, test `gzip -t`).
   - **`mediafiles`:** raz dziennie w nocy (`MEDIA_BACKUP_SCHEDULE=30 2 * * *`, retencja `14` dni, wolumen montowany `:ro`, test `tar -tzf`).
   - **Bezpiecznik dysku:** przed każdym przebiegiem skrypt sprawdza minimalny zapas miejsca (`BACKUP_MIN_FREE_GB=5`, dla mediów dodatkowo + rozmiar `mediafiles`).
-- Raz dziennie w nocy (`02:45` `Europe/Warsaw`) kontener `scheduler` generuje również paczkę ratunkową `.xlsx` (4 pliki per zespół + 1 zbiorczy) do `/backups/exports/` (`EXPORT_RETENTION_DAYS=7`).
+- Raz dziennie w nocy (`02:45` `Europe/Warsaw`) kontener `scheduler` generuje również paczkę ratunkową `.xlsx` (6 plików: 4 per zespół `lg`/`fr`/`tr`/`opiekun`, `mapa.xlsx` ze spłaszczoną mapą hali i listą stoisk oraz 1 plik zbiorczy `wszystkie-arkusze.xlsx`) do `/backups/exports/` (`EXPORT_RETENTION_DAYS=7`).
 - **Alerty e-mail (wyłącznie przy błędzie):** w razie niepowodzenia backupu lub eksportu `.xlsx` system wysyła powiadomienie przez SMTP na adres `Settings.system_admin_email` ustawiony w Django Admin.
 - Backupy na produkcji zapisywane są bezpośrednio do katalogu `./backups/paczki/` na VPS (montowanego jako `/backups` w kontenerach `backup` i `scheduler`), dzięki czemu można je pobierać bezpośrednio przez SFTP, jednak do czasu wdrożenia automatycznego off-site nie mogą być traktowane jako jedyne źródło odtwarzania.
 

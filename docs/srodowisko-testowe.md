@@ -69,13 +69,20 @@ docker compose exec backend python manage.py migrate
 ## 4. Dane testowe i scenariusze e-mail
 
 - Maile zaproszeniowe i przypomnienia o wygasaniu: [`localhost:8025`](http://localhost:8025).
-- Ręczne odpalenie przypomnień o wygasających zaproszeniach:
+- Ręczne odpalenie przypomnień o wygasających zaproszeniach lub kontroli certyfikatów ppoż.:
 
 ```bash
 docker compose exec backend python manage.py send_invitation_expiry_reminders
+docker compose exec backend python manage.py auto_reject_missing_fire_certs --dry-run
 ```
 
-Harmonogram automatyczny: usługa `scheduler` (godzina `NOTIFICATIONS_HOUR`/`NOTIFICATIONS_MINUTE` w strefie Europe/Warsaw). Konfiguracja progów dni i ważności linku: panel Django Admin → Companies → Settings → Invitation settings (`0` wyłącza przypomnienia).
+Harmonogram automatyczny: usługa `scheduler` uruchamia codziennie `send_invitation_expiry_reminders` i `auto_reject_missing_fire_certs` o godzinie `NOTIFICATIONS_HOUR`:`NOTIFICATIONS_MINUTE` (zegar `Europe/Warsaw`), a w nocy o `EMERGENCY_EXPORT_HOUR`:`EMERGENCY_EXPORT_MINUTE` (domyślnie `2:45`) eksport ratunkowy `export_emergency_xlsx`. Konfiguracja progów dni i ważności linku: panel Django Admin -> Companies -> Ustawienia systemu -> Zaproszenia i przypomnienia (`0` wyłącza przypomnienia).
+
+Testy automatyczne backendu uruchomisz poleceniem:
+
+```bash
+docker compose exec backend python manage.py test
+```
 
 ### Konfiguracja konta produkcyjnego (SMTP)
 

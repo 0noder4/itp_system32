@@ -14,7 +14,8 @@ Bez tego firma pojawia się w podglądzie jako pominięta.
 
 - Lista firm → zaznacz → **Eksportuj na stronę** → podgląd → potwierdzenie.
 - Przy potwierdzeniu: przełącznik **„Opublikuj firmę i oferty od razu”** (domyślnie włączony) oraz osobny przełącznik mapy hali.
-- **Usuń ze strony** — widoczne, gdy firma była już eksportowana (`can_remove`). Usuwa firmę i oferty z Strapi (publiczny katalog i drafty); lokalny tracking w `WebsitePublication` jest czyszczony.
+- System rozróżnia status **„Szkic w Strapi”** od pełnej publikacji na stronie (`WebsitePublication.content_published`), co widać w dialogu eksportu, przy usuwaniu szkicu oraz w arkuszu `FR → Katalog i Jobwall`.
+- **Usuń ze strony** (lub usunięcie samego szkicu) — widoczne, gdy firma była już eksportowana (`can_remove`). Usuwa firmę i oferty z Strapi (publiczny katalog i drafty); lokalny tracking w `WebsitePublication` jest czyszczony.
 - W UI dla FR Strapi nazywamy „panelem admina strony”.
 - Podgląd odwzorowuje kartę firmy z katalogu Targus (`CompanyDetails`) i stronę oferty (`JobDetails`): te same fonty (`frontend/public/fonts/website/`), style (`WebsiteExport/sitePreview.module.scss`), Markdown (`react-markdown`) i rysowanie mapy (`SiteHallMap`, port `HallMap.tsx`). Przy zmianie wyglądu strony zaktualizuj też te pliki.
 - Oferty pracy z etapu 4 są w podglądzie (klikalne jak na stronie) i są eksportowane razem z firmą (ta sama flaga publish/draft).
@@ -39,7 +40,7 @@ Tylko `admin` / `staff`. Brak `STRAPI_URL` / `STRAPI_API_TOKEN` → `503`.
 
 ## Dane w system32
 
-Model `WebsitePublication` (1:1 z firmą): `strapi_document_id`, `strapi_logo_id`, `strapi_logo_sha256`, `strapi_jobs`, hash payloadu, czas ostatniego eksportu, ostatni błąd.
+Model `WebsitePublication` (1:1 z firmą): `strapi_document_id`, `strapi_logo_id`, `strapi_logo_sha256`, `strapi_jobs`, `content_published`, hash payloadu, czas ostatniego eksportu, ostatni błąd.
 
 Zasady synchronizacji:
 
@@ -63,4 +64,4 @@ Uwaga: w Custom API Token **nie ma** osobnego checkboxa `publish` — Content AP
 
 ## Poza zakresem (na później)
 
-Eksport ogłoszeń Jobwall / E-JobWall — osobny flow.
+Oferty pracy z etapu 4 (`Jobwall`) są już eksportowane do Strapi razem z firmą. Poza zakresem zostaje jedynie ewentualny osobny eksport pod fizyczne ekrany / listę E-JobWall, jeśli będzie potrzebny niezależnie od katalogu na stronie.

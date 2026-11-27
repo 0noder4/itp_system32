@@ -9,8 +9,9 @@ Silnik jest w `backend/sheets/`. Frontend (`/panel/staff/sheets`) sam rysuje to,
 | `sheets/registry.py` | Typy kolumny, zakładki i arkusza. Nie edytować przy dokładaniu kolumny. |
 | `sheets/definitions/common.py` | Kolumny wspólne (nazwa, pakiet, FR, opiekun, stoiska, statusy etapów). |
 | `sheets/definitions/<arkusz>.py` | Jeden plik na arkusz. |
-| `sheets/definitions/__init__.py` | Lista arkuszy w `CATALOG`. |
+| `sheets/definitions/__init__.py` | Lista arkuszy w `CATALOG` (`lg`, `fr`, `tr`, `opiekun`). |
 | `sheets/coverage.py` | Pola formularza jeszcze bez kolumny (`NOT_YET_MAPPED`) albo świadomie pominięte. |
+| `sheets/emergency_export.py` | Nocny generator plików `.xlsx` z arkuszami i mapą hali (`mapa.xlsx`, `wszystkie-arkusze.xlsx`). |
 | `frontend` | Nic nie zmieniać, dopóki nie dochodzi nowy rodzaj komórki. |
 
 ## Kolumna
@@ -65,7 +66,7 @@ Dla kolumn `system` z setterem meta API wystawia `can_draft` i `can_commit` (adm
 
 Przepływ:
 
-1. **`mode=draft`** — upsert `SheetCellDraft` (`company` + `column_key`). Formularz firmy **nie** zmienia się. W payloadzie zakładki komórka pokazuje draft (jeśli jest), a mapa `drafts` ma klucz `` `${companyId}|${columnKey}` ``.
+1. **`mode=draft`** — upsert `SheetCellDraft` (`company` + `column_key`). Formularz firmy **nie** zmienia się. W payloadzie zakładki komórka pokazuje draft (jeśli jest), a mapa `drafts` ma klucz `` `${companyId}|${columnKey}` ``. Odrzucenie draftu bez zmiany formularza idzie przez `POST .../cells/discard/`.
 2. **`mode=commit`** — setter zapisuje wartość w modelu firmy, powstaje / zostaje `SheetCellFormOverride` z **pierwszym** `previous_value` (kolejne commity go nie nadpisują), draft znika, audit w `SheetCellChange`.
 3. **`POST .../cells/file/`** — multipart dla grafik. `mode=draft` trzyma plik w `sheet_file_drafts/` i w `SheetCellDraft` (formularz bez zmian; komórka pokazuje nazwę pliku roboczego). `mode=commit` zapisuje wybrany plik albo bieżący draft na `FileField`. Przed podmianą kopia starego pliku trafia do `sheet_file_backups/` jako `{path, name}` w `previous_value` — przywrócenie wgrywa ją z powrotem pod oryginalną nazwą, nie pod nazwą kopii.
 4. **`POST .../cells/restore/`** — body `{cells: [{company_id, column_key}]}`; setter wraca do `previous_value`, kasuje override i ewentualny draft.
@@ -76,10 +77,18 @@ W panelu: **Edytuj** pod **Komentarz**. Klik komórki otwiera dialog (pola listy
 
 Modele: `SheetCellDraft`, `SheetCellFormOverride` (oba CASCADE na `Company`).
 
+## Własne kolumny, komentarze i eksport
+
+- **Własne kolumny i kategorie:** `SheetCustomColumn` (typy `text`, `longtext` oraz `file_link` z wieloma załącznikami przez `POST .../cells/media/` i flagą `hidden_for_all`) oraz `SheetCustomGroup` (kolor kategorii, przenoszenie kolumn w `SheetLayoutDefault.column_groups_by_tab`). Endpointy: `columns/` i `groups/`.
+- **Komentarze i propozycje zmian:** `SheetCellComment` i `SheetNotification` obsługują wątki na komórkach, `@wzmianki` (dzwonek w nagłówku staff) oraz propozycje nowej wartości komórki do akceptacji lub odrzucenia (`comments/`, `notifications/`).
+- **Obiady Beściaków i goście ręczni:** oprócz kont staff (`StaffMeal`) zakładka obsługuje osoby bez konta w systemie (`StaffMealGuest`, endpointy `guests/`), z historią zmian w `StaffMealChange`.
+- **Terminy maili:** `GET /api/sheets/mail-deadlines/` zwraca orientacyjne daty z `Settings.mail_1_send_by`..`mail_5_send_by`.
+- **Eksport:** z poziomu zakładki działają `GET .../xlsx/` (kolory i zamrożenia jak w siatce) oraz `GET .../media/` (paczka ZIP z plikami). Nocny generator `emergency_export.py` zapisuje 4 pliki zespołów (`lg.xlsx`, `fr.xlsx`, `tr.xlsx`, `opiekun.xlsx`), `mapa.xlsx` oraz zbiorczy `wszystkie-arkusze.xlsx`.
+
 ## Jak sprawdzić
 
 ```bash
-docker exec system_32_backend python manage.py test sheets
+docker compose exec backend python manage.py test sheets
 ```
 
 Potem na `http://localhost:3000` zalogować konto z właściwą rolą i otworzyć Arkusze. Rola bez `fr` nie wchodzi do Panelu FR; sam TR i Opiekun nie wchodzą też na Mapę.
